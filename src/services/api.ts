@@ -9,7 +9,9 @@ class ApiService {
   private baseURL: string;
 
   constructor() {
-    this.baseURL = process.env.API_BASE_URL || 'http://192.168.1.3:8000';
+    // Determine the appropriate base URL based on environment
+    this.baseURL = this.determineBaseURL();
+    
     this.api = axios.create({
       baseURL: this.baseURL,
       timeout: parseInt(process.env.API_TIMEOUT || '120000'), // Increased to 2 minutes
@@ -73,6 +75,37 @@ class ApiService {
         return Promise.reject(error);
       }
     );
+  }
+
+  private determineBaseURL(): string {
+    // Priority order for API URL:
+    // 1. Environment variable
+    // 2. Development fallback
+    // 3. Production fallback
+    
+    const envURL = process.env.API_BASE_URL;
+    if (envURL) {
+      console.log('Using API URL from environment:', envURL);
+      return envURL;
+    }
+
+    // Check if we're in development mode
+    if (__DEV__) {
+      // For development, try different common local IPs
+      const localURLs = [
+        'http://192.168.1.3:8000',
+        'http://10.0.2.2:8000', // Android emulator
+        'http://localhost:8000',
+        'http://127.0.0.1:8000'
+      ];
+      
+      console.log('Development mode detected, using local URL:', localURLs[0]);
+      return localURLs[0];
+    }
+
+    // For production builds, use a default URL that can be updated via Profile Settings
+    console.warn('Production build detected. Please configure API URL in Profile Settings.');
+    return 'http://192.168.1.3:8000'; // Default fallback
   }
 
   // Health check endpoint

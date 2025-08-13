@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Cricket Coach",
+    "name": "CrickCoach AI",
     "slug": "cricket-coach-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -41,7 +41,7 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "79e6e45c-32d6-4d27-bb86-43572c61e5e2"
+        "projectId": "01877c6e-b14b-4152-a4c1-b80a9de867d5"
       }
     }
   }
