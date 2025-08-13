@@ -103,9 +103,9 @@ class ApiService {
       return localURLs[0];
     }
 
-    // For production builds, use a default URL that can be updated via Profile Settings
-    console.warn('Production build detected. Please configure API URL in Profile Settings.');
-    return 'http://192.168.1.3:8000'; // Default fallback
+    // For production builds, use the correct IP address
+    console.log('Production build detected, using configured IP address.');
+    return 'http://192.168.1.3:8000'; // Your current IP address
   }
 
   // Health check endpoint
