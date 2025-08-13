@@ -1,42 +1,48 @@
 {
   "expo": {
-    "name": "CrickCoach",
-    "slug": "CrickCoach",
+    "name": "Cricket Coach",
+    "slug": "cricket-coach-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "crickcoach",
-    "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app needs access to camera to record cricket videos for analysis.",
+        "NSPhotoLibraryUsageDescription": "This app needs access to photo library to select cricket videos for analysis.",
+        "NSMicrophoneUsageDescription": "This app needs access to microphone to record cricket videos."
+      }
     },
     "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      },
-      "edgeToEdgeEnabled": true
-    },
-    "web": {
-      "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
+      "package": "com.saksham_5.cricketcoachmobile"
     },
     "plugins": [
-      "expo-router",
       [
-        "expo-splash-screen",
+        "expo-image-picker",
         {
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 200,
-          "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "photosPermission": "The app accesses your photos to let you select cricket videos for analysis."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Cricket Coach to access your camera to record cricket videos."
         }
       ]
     ],
-    "experiments": {
-      "typedRoutes": true
+    "extra": {
+      "eas": {
+        "projectId": "79e6e45c-32d6-4d27-bb86-43572c61e5e2"
+      }
     }
   }
 }

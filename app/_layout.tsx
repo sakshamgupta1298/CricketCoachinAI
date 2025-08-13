@@ -1,29 +1,64 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { Provider as PaperProvider } from 'react-native-paper';
 import 'react-native-reanimated';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import Toast from 'react-native-toast-message';
 
-import { useColorScheme } from '@/hooks/useColorScheme';
+// Import context
+import { AuthProvider } from '../src/context/AuthContext';
+import { UploadProvider } from '../src/context/UploadContext';
+
+// Import theme
+import { theme } from '../src/theme';
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-  });
-
-  if (!loaded) {
-    // Async font loading only occurs in development.
-    return null;
-  }
-
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <PaperProvider theme={theme}>
+        <AuthProvider>
+          <UploadProvider>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+              }}
+              initialRouteName="landing"
+            >
+              <Stack.Screen 
+                name="landing" 
+                options={{ 
+                  headerShown: false,
+                  gestureEnabled: false,
+                }} 
+              />
+              <Stack.Screen 
+                name="login" 
+                options={{ 
+                  headerShown: false,
+                  gestureEnabled: false,
+                }} 
+              />
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen 
+                name="results" 
+                options={{
+                  headerShown: true,
+                  title: 'Analysis Results',
+                  headerBackTitle: 'Back',
+                }}
+              />
+              <Stack.Screen 
+                name="training-plan" 
+                options={{
+                  headerShown: false,
+                }}
+              />
+            </Stack>
+            <Toast />
+            <StatusBar style="auto" />
+          </UploadProvider>
+        </AuthProvider>
+      </PaperProvider>
+    </SafeAreaProvider>
   );
 }
