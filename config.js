@@ -4,19 +4,19 @@
 const config = {
   // Development configuration
   development: {
-    API_BASE_URL: 'http://192.168.1.3:8000',
+    API_BASE_URL: 'https://3aa56a9df386.ngrok-free.app',
     API_TIMEOUT: 120000,
   },
   
   // Production configuration
   production: {
-    API_BASE_URL: 'http://192.168.1.3:8000', // Change this to your production server
+    API_BASE_URL: 'https://3aa56a9df386.ngrok-free.app', // Using ngrok for now
     API_TIMEOUT: 120000,
   },
   
   // Test configuration
   test: {
-    API_BASE_URL: 'http://10.0.2.2:8000', // Android emulator
+    API_BASE_URL: 'https://3aa56a9df386.ngrok-free.app', // Using ngrok
     API_TIMEOUT: 120000,
   }
 };
