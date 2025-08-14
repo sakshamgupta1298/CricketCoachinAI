@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios, { AxiosInstance, AxiosResponse } from 'axios';
+import axios, { AxiosInstance } from 'axios';
 import * as FileSystem from 'expo-file-system';
 import { Platform } from 'react-native';
+import { currentConfig } from '../../config';
 import { AnalysisResult, ApiResponse, UploadFormData } from '../types';
 
 class ApiService {
@@ -54,21 +55,17 @@ class ApiService {
 
     // Response interceptor
     this.api.interceptors.response.use(
-      (response: AxiosResponse) => {
-        console.log('📥 [API_RESPONSE] Received response:', response.status, response.config.url);
-        console.log('📄 [API_RESPONSE] Response headers:', JSON.stringify(response.headers, null, 2));
-        console.log('📋 [API_RESPONSE] Response data:', JSON.stringify(response.data, null, 2));
+      (response) => {
+        console.log('✅ [API_RESPONSE] Response received:', response.status, response.config.url);
         return response;
       },
       (error) => {
-        console.error('❌ [API_RESPONSE] Response interceptor error:', error.response?.status, error.message);
-        console.error('📋 [API_RESPONSE] Complete error object:', JSON.stringify(error, null, 2));
-        console.error('🔍 [API_RESPONSE] Error stack trace:', error.stack);
+        console.error('❌ [API_RESPONSE] Response interceptor error:', error);
         return Promise.reject(error);
       }
     );
 
-    // JSON API interceptors
+    // JSON API request interceptor
     this.jsonApi.interceptors.request.use(
       (config) => {
         console.log('📤 [JSON_API_REQUEST] Making JSON request:', config.method?.toUpperCase(), config.url);
@@ -85,20 +82,18 @@ class ApiService {
       },
       (error) => {
         console.error('❌ [JSON_API_REQUEST] Request interceptor error:', error);
-        console.error('📋 [JSON_API_REQUEST] Error details:', JSON.stringify(error, null, 2));
         return Promise.reject(error);
       }
     );
 
+    // JSON API response interceptor
     this.jsonApi.interceptors.response.use(
-      (response: AxiosResponse) => {
-        console.log('📥 [JSON_API_RESPONSE] Received JSON response:', response.status, response.config.url);
-        console.log('📄 [JSON_API_RESPONSE] Response headers:', JSON.stringify(response.headers, null, 2));
-        console.log('📋 [JSON_API_RESPONSE] Response data:', JSON.stringify(response.data, null, 2));
+      (response) => {
+        console.log('✅ [JSON_API_RESPONSE] JSON response received:', response.status, response.config.url);
         return response;
       },
       (error) => {
-        console.error('❌ [JSON_API_RESPONSE] Response interceptor error:', error.response?.status, error.message);
+        console.error('❌ [JSON_API_RESPONSE] Response interceptor error:', error, error.message);
         console.error('📋 [JSON_API_RESPONSE] Complete error object:', JSON.stringify(error, null, 2));
         console.error('🔍 [JSON_API_RESPONSE] Error stack trace:', error.stack);
         return Promise.reject(error);
@@ -107,42 +102,15 @@ class ApiService {
   }
 
   private determineBaseURL(): string {
-    // Priority order for API URL:
-    // 1. Environment variable
-    // 2. Development fallback
-    // 3. Production fallback
-    
+    // Use the configuration from config.js
     console.log('🔍 [API] Determining base URL...');
     console.log('🔧 [API] __DEV__:', __DEV__);
     console.log('📱 [API] Platform:', Platform.OS);
     
-    const envURL = process.env.API_BASE_URL;
-    if (envURL) {
-      console.log('✅ [API] Using API URL from environment:', envURL);
-      return envURL;
-    }
-
-    // Check if we're in development mode
-    if (__DEV__) {
-      console.log('🔧 [API] Development mode detected');
-      // For development, try different common local IPs
-      const localURLs = [
-        'http://192.168.1.3:8000',
-        'http://10.0.2.2:8000', // Android emulator
-        'http://localhost:8000',
-        'http://127.0.0.1:8000'
-      ];
-      
-      console.log('📱 [API] Using local URL:', localURLs[0]);
-      return localURLs[0];
-    }
-
-    // For production builds, ALWAYS use the correct IP address
-    console.log('🚀 [API] Production build detected, using configured IP address.');
-    const productionURL = 'http://192.168.1.3:8000';
-    console.log('🌐 [API] Production URL:', productionURL);
-    console.log('⚠️ [API] IMPORTANT: This URL is hardcoded for production builds');
-    return productionURL;
+    // Use the currentConfig from config.js
+    const configURL = currentConfig.API_BASE_URL;
+    console.log('✅ [API] Using API URL from config:', configURL);
+    return configURL;
   }
 
   // Health check endpoint
