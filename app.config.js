@@ -2,7 +2,7 @@
 export default ({ config }) => ({
   ...config,
   name: 'CrickCoach AI',
-  slug: 'crickcoach-ai',
+  slug: 'cricket-coach-mobile',
   version: '1.0.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
