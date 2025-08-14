@@ -115,7 +115,6 @@ class ApiService {
     console.log('🔍 [API] Determining base URL...');
     console.log('🔧 [API] __DEV__:', __DEV__);
     console.log('📱 [API] Platform:', Platform.OS);
-    console.log('🌐 [API] Note: Using HTTP (not HTTPS) for local development');
     
     const envURL = process.env.API_BASE_URL;
     if (envURL) {
@@ -143,7 +142,6 @@ class ApiService {
     const productionURL = 'http://192.168.1.3:8000';
     console.log('🌐 [API] Production URL:', productionURL);
     console.log('⚠️ [API] IMPORTANT: This URL is hardcoded for production builds');
-    console.log('⚠️ [API] IMPORTANT: Using HTTP protocol - ensure cleartext traffic is allowed');
     return productionURL;
   }
 
@@ -238,7 +236,7 @@ class ApiService {
         data.append('batter_side', formData.batter_side);
       } else if (formData.player_type === 'bowler') {
         if (formData.bowler_side) {
-          data.append('bowler_side', formData.bowler_side);
+        data.append('bowler_side', formData.bowler_side);
         }
         if (formData.bowler_type) {
           data.append('bowler_type', formData.bowler_type);
