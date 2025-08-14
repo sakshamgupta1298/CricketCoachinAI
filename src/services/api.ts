@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import * as FileSystem from 'expo-file-system';
+import { Platform } from 'react-native';
 import { AnalysisResult, ApiResponse, UploadFormData } from '../types';
 
 class ApiService {
@@ -83,14 +84,17 @@ class ApiService {
     // 2. Development fallback
     // 3. Production fallback
     
+    console.log('🔍 [API] Determining base URL...');
+    
     const envURL = process.env.API_BASE_URL;
     if (envURL) {
-      console.log('Using API URL from environment:', envURL);
+      console.log('✅ [API] Using API URL from environment:', envURL);
       return envURL;
     }
 
     // Check if we're in development mode
     if (__DEV__) {
+      console.log('🔧 [API] Development mode detected');
       // For development, try different common local IPs
       const localURLs = [
         'http://192.168.1.3:8000',
@@ -99,24 +103,42 @@ class ApiService {
         'http://127.0.0.1:8000'
       ];
       
-      console.log('Development mode detected, using local URL:', localURLs[0]);
+      console.log('📱 [API] Using local URL:', localURLs[0]);
       return localURLs[0];
     }
 
     // For production builds, use the correct IP address
-    console.log('Production build detected, using configured IP address.');
-    return 'http://192.168.1.3:8000'; // Your current IP address
+    console.log('🚀 [API] Production build detected, using configured IP address.');
+    const productionURL = 'http://192.168.1.3:8000';
+    console.log('🌐 [API] Production URL:', productionURL);
+    return productionURL;
   }
 
   // Health check endpoint
   async healthCheck(): Promise<ApiResponse> {
     try {
+      console.log('🏥 [HEALTH] Starting health check...');
+      console.log('🌐 [HEALTH] API Base URL:', this.baseURL);
+      console.log('📡 [HEALTH] Making request to:', `${this.baseURL}/api/health`);
+      
       const response = await this.api.get('/api/health');
+      
+      console.log('✅ [HEALTH] Health check successful!');
+      console.log('📊 [HEALTH] Response status:', response.status);
+      console.log('📄 [HEALTH] Response data:', response.data);
+      
       return {
         success: true,
         data: response.data,
       };
     } catch (error: any) {
+      console.error('❌ [HEALTH] Health check failed!');
+      console.error('🚨 [HEALTH] Error type:', error.constructor.name);
+      console.error('📡 [HEALTH] Error message:', error.message);
+      console.error('🌐 [HEALTH] Request URL:', error.config?.url);
+      console.error('📊 [HEALTH] Response status:', error.response?.status);
+      console.error('📄 [HEALTH] Response data:', error.response?.data);
+      
       return {
         success: false,
         error: error.response?.data?.message || error.message,
@@ -332,13 +354,35 @@ class ApiService {
   // Authentication Methods
   async login(credentials: { username: string; password: string }): Promise<ApiResponse<any>> {
     try {
+      console.log('🔐 [LOGIN] Starting login process...');
+      console.log('👤 [LOGIN] Username:', credentials.username);
+      console.log('🌐 [LOGIN] API Base URL:', this.baseURL);
+      console.log('📡 [LOGIN] Making request to:', `${this.baseURL}/api/auth/login`);
+      
       const response = await this.jsonApi.post('/api/auth/login', credentials);
+      
+      console.log('✅ [LOGIN] Login successful!');
+      console.log('📊 [LOGIN] Response status:', response.status);
+      console.log('🔑 [LOGIN] Token received:', response.data.token ? 'Yes' : 'No');
+      
       return {
         success: true,
         data: response.data,
       };
     } catch (error: any) {
-      console.error('Login Error:', error);
+      console.error('❌ [LOGIN] Login failed!');
+      console.error('🚨 [LOGIN] Error type:', error.constructor.name);
+      console.error('📡 [LOGIN] Error message:', error.message);
+      console.error('🌐 [LOGIN] Request URL:', error.config?.url);
+      console.error('📊 [LOGIN] Response status:', error.response?.status);
+      console.error('📄 [LOGIN] Response data:', error.response?.data);
+      console.error('🔧 [LOGIN] Error config:', {
+        method: error.config?.method,
+        baseURL: error.config?.baseURL,
+        timeout: error.config?.timeout,
+        headers: error.config?.headers
+      });
+      
       return {
         success: false,
         error: error.response?.data?.error || error.message,
@@ -572,6 +616,26 @@ class ApiService {
     } catch (error) {
       console.error('Error initializing auth:', error);
     }
+  }
+
+  // Initialize API service and log configuration
+  initialize(): void {
+    console.log('🚀 [APP] Initializing API Service...');
+    console.log('🌐 [APP] Base URL:', this.baseURL);
+    console.log('🔧 [APP] Development mode:', __DEV__);
+    console.log('📱 [APP] Platform:', Platform.OS);
+    console.log('📦 [APP] API timeout:', this.api.defaults.timeout);
+    
+    // Test the API configuration
+    this.healthCheck().then(response => {
+      if (response.success) {
+        console.log('✅ [APP] API health check passed');
+      } else {
+        console.log('❌ [APP] API health check failed:', response.error);
+      }
+    }).catch(error => {
+      console.log('🚨 [APP] API health check error:', error.message);
+    });
   }
 }
 

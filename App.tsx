@@ -1,14 +1,12 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
-import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Provider as PaperProvider } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 
 // Import screens
-import CameraScreen from './src/screens/CameraScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
@@ -17,66 +15,70 @@ import UploadScreen from './src/screens/UploadScreen';
 
 // Import components
 import CustomTabBar from './src/components/CustomTabBar';
-import LoadingOverlay from './src/components/LoadingOverlay';
 
 // Import context
 import { AuthProvider } from './src/context/AuthContext';
 import { UploadProvider } from './src/context/UploadContext';
 
+// Import services
+import apiService from './src/services/api';
+
 // Import theme
 import { theme } from './src/theme';
 
-const Stack = createStackNavigator();
-const Tab = createBottomTabNavigator();
+const Stack = createBottomTabNavigator();
 
 function TabNavigator() {
   return (
-    <Tab.Navigator
+    <Stack.Navigator
       tabBar={props => <CustomTabBar {...props} />}
       screenOptions={{
         headerShown: false,
       }}
     >
-      <Tab.Screen 
+      <Stack.Screen 
         name="Home" 
         component={HomeScreen}
         options={{
           tabBarLabel: 'Home',
         }}
       />
-      <Tab.Screen 
+      <Stack.Screen 
         name="Upload" 
         component={UploadScreen}
         options={{
           tabBarLabel: 'Upload',
         }}
       />
-      <Tab.Screen 
-        name="Camera" 
-        component={CameraScreen}
-        options={{
-          tabBarLabel: 'Camera',
-        }}
-      />
-      <Tab.Screen 
+      <Stack.Screen 
         name="History" 
         component={HistoryScreen}
         options={{
           tabBarLabel: 'History',
         }}
       />
-      <Tab.Screen 
+      <Stack.Screen 
         name="Profile" 
         component={ProfileScreen}
         options={{
           tabBarLabel: 'Profile',
         }}
       />
-    </Tab.Navigator>
+    </Stack.Navigator>
   );
 }
 
 export default function App() {
+  useEffect(() => {
+    console.log('🚀 [APP] CrickCoach App starting...');
+    console.log('🔧 [APP] Development mode:', __DEV__);
+    
+    // Initialize API service
+    apiService.initialize();
+    
+    console.log('✅ [APP] App initialization complete');
+  }, []);
+
   return (
     <SafeAreaProvider>
       <PaperProvider theme={theme}>
@@ -95,12 +97,10 @@ export default function App() {
                   options={{
                     headerShown: true,
                     title: 'Analysis Results',
-                    headerBackTitle: 'Back',
                   }}
                 />
               </Stack.Navigator>
             </NavigationContainer>
-            <LoadingOverlay />
             <Toast />
             <StatusBar style="auto" />
           </UploadProvider>

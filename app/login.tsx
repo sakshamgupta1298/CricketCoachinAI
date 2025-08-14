@@ -18,7 +18,17 @@ export default function LoginScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
 
   const handleSubmit = async () => {
+    console.log('🚀 [LOGIN_SCREEN] Submit button pressed');
+    console.log('📝 [LOGIN_SCREEN] Form data:', {
+      isLogin,
+      username,
+      email: isLogin ? 'N/A' : email,
+      passwordLength: password.length,
+      confirmPasswordLength: confirmPassword.length
+    });
+    
     if (!username || !password) {
+      console.log('❌ [LOGIN_SCREEN] Validation failed: Missing username or password');
       Toast.show({
         type: 'error',
         text1: 'Error',
@@ -28,6 +38,7 @@ export default function LoginScreen() {
     }
 
     if (!isLogin && !email) {
+      console.log('❌ [LOGIN_SCREEN] Validation failed: Missing email for registration');
       Toast.show({
         type: 'error',
         text1: 'Error',
@@ -37,6 +48,7 @@ export default function LoginScreen() {
     }
 
     if (!isLogin && password !== confirmPassword) {
+      console.log('❌ [LOGIN_SCREEN] Validation failed: Passwords do not match');
       Toast.show({
         type: 'error',
         text1: 'Error',
@@ -46,6 +58,7 @@ export default function LoginScreen() {
     }
 
     if (!isLogin && password.length < 6) {
+      console.log('❌ [LOGIN_SCREEN] Validation failed: Password too short');
       Toast.show({
         type: 'error',
         text1: 'Error',
@@ -54,19 +67,34 @@ export default function LoginScreen() {
       return;
     }
 
+    console.log('✅ [LOGIN_SCREEN] Validation passed, starting authentication...');
     setLoading(true);
+    
     try {
       let response;
       
       if (isLogin) {
+        console.log('🔐 [LOGIN_SCREEN] Attempting login...');
         response = await apiService.login({ username, password });
       } else {
+        console.log('📝 [LOGIN_SCREEN] Attempting registration...');
         response = await apiService.register({ username, email, password });
       }
 
+      console.log('📊 [LOGIN_SCREEN] Authentication response:', {
+        success: response.success,
+        hasError: !!response.error,
+        errorMessage: response.error
+      });
+
       if (response.success) {
+        console.log('✅ [LOGIN_SCREEN] Authentication successful!');
+        console.log('💾 [LOGIN_SCREEN] Storing auth data...');
+        
         // Store token and user data
         await apiService.storeAuthData(response.data.token, response.data.user);
+        
+        console.log('🎉 [LOGIN_SCREEN] Auth data stored, showing success toast');
         
         Toast.show({
           type: 'success',
@@ -74,23 +102,32 @@ export default function LoginScreen() {
           text2: isLogin ? 'Login successful!' : 'Registration successful!',
         });
 
+        console.log('🏠 [LOGIN_SCREEN] Navigating to home page...');
         // Navigate to home page
         router.replace('/(tabs)/home');
       } else {
+        console.log('❌ [LOGIN_SCREEN] Authentication failed:', response.error);
         Toast.show({
           type: 'error',
           text1: 'Error',
           text2: response.error || 'Authentication failed',
         });
       }
-    } catch (error) {
-      console.error('Authentication error:', error);
+    } catch (error: any) {
+      console.error('🚨 [LOGIN_SCREEN] Authentication error:', error);
+      console.error('📡 [LOGIN_SCREEN] Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+      
       Toast.show({
         type: 'error',
         text1: 'Error',
         text2: 'Network error. Please try again.',
       });
     } finally {
+      console.log('🏁 [LOGIN_SCREEN] Authentication process completed');
       setLoading(false);
     }
   };
