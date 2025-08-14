@@ -33,11 +33,21 @@ class ApiService {
     // Request interceptor
     this.api.interceptors.request.use(
       (config) => {
-        console.log('API Request:', config.method?.toUpperCase(), config.url);
+        console.log('📤 [API_REQUEST] Making request:', config.method?.toUpperCase(), config.url);
+        console.log('🔧 [API_REQUEST] Request config:', {
+          method: config.method?.toUpperCase(),
+          url: config.url,
+          baseURL: config.baseURL,
+          fullURL: (config.baseURL || '') + (config.url || ''),
+          timeout: config.timeout,
+          headers: config.headers,
+          data: config.data
+        });
         return config;
       },
       (error) => {
-        console.error('API Request Error:', error);
+        console.error('❌ [API_REQUEST] Request interceptor error:', error);
+        console.error('📋 [API_REQUEST] Error details:', JSON.stringify(error, null, 2));
         return Promise.reject(error);
       }
     );
@@ -45,11 +55,15 @@ class ApiService {
     // Response interceptor
     this.api.interceptors.response.use(
       (response: AxiosResponse) => {
-        console.log('API Response:', response.status, response.config.url);
+        console.log('📥 [API_RESPONSE] Received response:', response.status, response.config.url);
+        console.log('📄 [API_RESPONSE] Response headers:', JSON.stringify(response.headers, null, 2));
+        console.log('📋 [API_RESPONSE] Response data:', JSON.stringify(response.data, null, 2));
         return response;
       },
       (error) => {
-        console.error('API Response Error:', error.response?.status, error.message);
+        console.error('❌ [API_RESPONSE] Response interceptor error:', error.response?.status, error.message);
+        console.error('📋 [API_RESPONSE] Complete error object:', JSON.stringify(error, null, 2));
+        console.error('🔍 [API_RESPONSE] Error stack trace:', error.stack);
         return Promise.reject(error);
       }
     );
@@ -57,22 +71,36 @@ class ApiService {
     // JSON API interceptors
     this.jsonApi.interceptors.request.use(
       (config) => {
-        console.log('JSON API Request:', config.method?.toUpperCase(), config.url);
+        console.log('📤 [JSON_API_REQUEST] Making JSON request:', config.method?.toUpperCase(), config.url);
+        console.log('🔧 [JSON_API_REQUEST] Request config:', {
+          method: config.method?.toUpperCase(),
+          url: config.url,
+          baseURL: config.baseURL,
+          fullURL: (config.baseURL || '') + (config.url || ''),
+          timeout: config.timeout,
+          headers: config.headers,
+          data: config.data
+        });
         return config;
       },
       (error) => {
-        console.error('JSON API Request Error:', error);
+        console.error('❌ [JSON_API_REQUEST] Request interceptor error:', error);
+        console.error('📋 [JSON_API_REQUEST] Error details:', JSON.stringify(error, null, 2));
         return Promise.reject(error);
       }
     );
 
     this.jsonApi.interceptors.response.use(
       (response: AxiosResponse) => {
-        console.log('JSON API Response:', response.status, response.config.url);
+        console.log('📥 [JSON_API_RESPONSE] Received JSON response:', response.status, response.config.url);
+        console.log('📄 [JSON_API_RESPONSE] Response headers:', JSON.stringify(response.headers, null, 2));
+        console.log('📋 [JSON_API_RESPONSE] Response data:', JSON.stringify(response.data, null, 2));
         return response;
       },
       (error) => {
-        console.error('JSON API Response Error:', error.response?.status, error.message);
+        console.error('❌ [JSON_API_RESPONSE] Response interceptor error:', error.response?.status, error.message);
+        console.error('📋 [JSON_API_RESPONSE] Complete error object:', JSON.stringify(error, null, 2));
+        console.error('🔍 [JSON_API_RESPONSE] Error stack trace:', error.stack);
         return Promise.reject(error);
       }
     );
@@ -85,6 +113,8 @@ class ApiService {
     // 3. Production fallback
     
     console.log('🔍 [API] Determining base URL...');
+    console.log('🔧 [API] __DEV__:', __DEV__);
+    console.log('📱 [API] Platform:', Platform.OS);
     
     const envURL = process.env.API_BASE_URL;
     if (envURL) {
@@ -107,10 +137,11 @@ class ApiService {
       return localURLs[0];
     }
 
-    // For production builds, use the correct IP address
+    // For production builds, ALWAYS use the correct IP address
     console.log('🚀 [API] Production build detected, using configured IP address.');
     const productionURL = 'http://192.168.1.3:8000';
     console.log('🌐 [API] Production URL:', productionURL);
+    console.log('⚠️ [API] IMPORTANT: This URL is hardcoded for production builds');
     return productionURL;
   }
 
@@ -120,12 +151,20 @@ class ApiService {
       console.log('🏥 [HEALTH] Starting health check...');
       console.log('🌐 [HEALTH] API Base URL:', this.baseURL);
       console.log('📡 [HEALTH] Making request to:', `${this.baseURL}/api/health`);
+      console.log('🔧 [HEALTH] Request config:', {
+        method: 'GET',
+        url: '/api/health',
+        baseURL: this.baseURL,
+        timeout: this.api.defaults.timeout,
+        headers: this.api.defaults.headers
+      });
       
       const response = await this.api.get('/api/health');
       
       console.log('✅ [HEALTH] Health check successful!');
       console.log('📊 [HEALTH] Response status:', response.status);
-      console.log('📄 [HEALTH] Response data:', response.data);
+      console.log('📄 [HEALTH] Response headers:', JSON.stringify(response.headers, null, 2));
+      console.log('📋 [HEALTH] Response data:', JSON.stringify(response.data, null, 2));
       
       return {
         success: true,
@@ -138,6 +177,37 @@ class ApiService {
       console.error('🌐 [HEALTH] Request URL:', error.config?.url);
       console.error('📊 [HEALTH] Response status:', error.response?.status);
       console.error('📄 [HEALTH] Response data:', error.response?.data);
+      
+      // Log complete error details
+      console.error('📋 [HEALTH] Complete error object:', JSON.stringify(error, null, 2));
+      console.error('🔍 [HEALTH] Error stack trace:', error.stack);
+      
+      // Log network-specific details
+      if (error.code) {
+        console.error('🌐 [HEALTH] Network error code:', error.code);
+      }
+      if (error.errno) {
+        console.error('🌐 [HEALTH] Network errno:', error.errno);
+      }
+      if (error.syscall) {
+        console.error('🌐 [HEALTH] Network syscall:', error.syscall);
+      }
+      if (error.hostname) {
+        console.error('🌐 [HEALTH] Network hostname:', error.hostname);
+      }
+      if (error.port) {
+        console.error('🌐 [HEALTH] Network port:', error.port);
+      }
+      
+      // Log request details
+      console.error('📤 [HEALTH] Request details:', {
+        method: error.config?.method?.toUpperCase(),
+        url: error.config?.url,
+        baseURL: error.config?.baseURL,
+        fullURL: error.config?.baseURL + error.config?.url,
+        timeout: error.config?.timeout,
+        headers: error.config?.headers
+      });
       
       return {
         success: false,
@@ -358,12 +428,22 @@ class ApiService {
       console.log('👤 [LOGIN] Username:', credentials.username);
       console.log('🌐 [LOGIN] API Base URL:', this.baseURL);
       console.log('📡 [LOGIN] Making request to:', `${this.baseURL}/api/auth/login`);
+      console.log('📋 [LOGIN] Request payload:', JSON.stringify(credentials, null, 2));
+      console.log('🔧 [LOGIN] Request config:', {
+        method: 'POST',
+        url: '/api/auth/login',
+        baseURL: this.baseURL,
+        timeout: this.jsonApi.defaults.timeout,
+        headers: this.jsonApi.defaults.headers
+      });
       
       const response = await this.jsonApi.post('/api/auth/login', credentials);
       
       console.log('✅ [LOGIN] Login successful!');
       console.log('📊 [LOGIN] Response status:', response.status);
+      console.log('📄 [LOGIN] Response headers:', JSON.stringify(response.headers, null, 2));
       console.log('🔑 [LOGIN] Token received:', response.data.token ? 'Yes' : 'No');
+      console.log('📋 [LOGIN] Response data:', JSON.stringify(response.data, null, 2));
       
       return {
         success: true,
@@ -380,7 +460,41 @@ class ApiService {
         method: error.config?.method,
         baseURL: error.config?.baseURL,
         timeout: error.config?.timeout,
-        headers: error.config?.headers
+        headers: error.config?.headers,
+        url: error.config?.url,
+        data: error.config?.data
+      });
+      
+      // Log complete error details
+      console.error('📋 [LOGIN] Complete error object:', JSON.stringify(error, null, 2));
+      console.error('🔍 [LOGIN] Error stack trace:', error.stack);
+      
+      // Log network-specific details
+      if (error.code) {
+        console.error('🌐 [LOGIN] Network error code:', error.code);
+      }
+      if (error.errno) {
+        console.error('🌐 [LOGIN] Network errno:', error.errno);
+      }
+      if (error.syscall) {
+        console.error('🌐 [LOGIN] Network syscall:', error.syscall);
+      }
+      if (error.hostname) {
+        console.error('🌐 [LOGIN] Network hostname:', error.hostname);
+      }
+      if (error.port) {
+        console.error('🌐 [LOGIN] Network port:', error.port);
+      }
+      
+      // Log request details
+      console.error('📤 [LOGIN] Request details:', {
+        method: error.config?.method?.toUpperCase(),
+        url: error.config?.url,
+        baseURL: error.config?.baseURL,
+        fullURL: error.config?.baseURL + error.config?.url,
+        timeout: error.config?.timeout,
+        headers: error.config?.headers,
+        data: error.config?.data
       });
       
       return {
@@ -636,6 +750,90 @@ class ApiService {
     }).catch(error => {
       console.log('🚨 [APP] API health check error:', error.message);
     });
+    
+    // Test network connectivity
+    this.testConnectivity().then(response => {
+      if (response.success) {
+        console.log('✅ [APP] Network connectivity test passed');
+      } else {
+        console.log('❌ [APP] Network connectivity test failed:', response.error);
+        console.log('⚠️ [APP] This might indicate a network configuration issue');
+      }
+    }).catch(error => {
+      console.log('🚨 [APP] Network connectivity test error:', error.message);
+    });
+  }
+
+  // Test network connectivity
+  async testConnectivity(): Promise<ApiResponse> {
+    try {
+      console.log('🌐 [CONNECTIVITY] Testing network connectivity...');
+      console.log('📡 [CONNECTIVITY] Target URL:', this.baseURL);
+      console.log('🔧 [CONNECTIVITY] Request config:', {
+        method: 'GET',
+        url: '/api/health',
+        baseURL: this.baseURL,
+        timeout: 10000,
+        headers: this.api.defaults.headers
+      });
+      
+      const response = await this.api.get('/api/health', {
+        timeout: 10000, // 10 second timeout
+      });
+      
+      console.log('✅ [CONNECTIVITY] Network test successful!');
+      console.log('📊 [CONNECTIVITY] Response status:', response.status);
+      console.log('📄 [CONNECTIVITY] Response headers:', JSON.stringify(response.headers, null, 2));
+      console.log('📋 [CONNECTIVITY] Response data:', JSON.stringify(response.data, null, 2));
+      
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error: any) {
+      console.error('❌ [CONNECTIVITY] Network test failed!');
+      console.error('🚨 [CONNECTIVITY] Error type:', error.constructor.name);
+      console.error('📡 [CONNECTIVITY] Error message:', error.message);
+      console.error('🌐 [CONNECTIVITY] Request URL:', error.config?.url);
+      console.error('📊 [CONNECTIVITY] Response status:', error.response?.status);
+      console.error('📄 [CONNECTIVITY] Response data:', error.response?.data);
+      
+      // Log complete error details
+      console.error('📋 [CONNECTIVITY] Complete error object:', JSON.stringify(error, null, 2));
+      console.error('🔍 [CONNECTIVITY] Error stack trace:', error.stack);
+      
+      // Log network-specific details
+      if (error.code) {
+        console.error('🌐 [CONNECTIVITY] Network error code:', error.code);
+      }
+      if (error.errno) {
+        console.error('🌐 [CONNECTIVITY] Network errno:', error.errno);
+      }
+      if (error.syscall) {
+        console.error('🌐 [CONNECTIVITY] Network syscall:', error.syscall);
+      }
+      if (error.hostname) {
+        console.error('🌐 [CONNECTIVITY] Network hostname:', error.hostname);
+      }
+      if (error.port) {
+        console.error('🌐 [CONNECTIVITY] Network port:', error.port);
+      }
+      
+      // Log request details
+      console.error('📤 [CONNECTIVITY] Request details:', {
+        method: error.config?.method?.toUpperCase(),
+        url: error.config?.url,
+        baseURL: error.config?.baseURL,
+        fullURL: error.config?.baseURL + error.config?.url,
+        timeout: error.config?.timeout,
+        headers: error.config?.headers
+      });
+      
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+      };
+    }
   }
 }
 
