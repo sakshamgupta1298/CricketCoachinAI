@@ -2,9 +2,10 @@
 // This script helps verify that the ngrok tunnel is working properly
 
 const testEndpoints = [
-  'https://3aa56a9df386.ngrok-free.app/api/health',
-  'http://192.168.1.3:8000/api/health', // Fallback to local
-  'http://localhost:8000/api/health'    // Fallback to localhost
+  'https://7ffc0e8d88a6.ngrok-free.app/api/health',
+  'http://192.168.1.11:8000/api/health', // Current system IP
+  'http://192.168.1.3:8000/api/health',  // Old IP (for reference)
+  'http://localhost:8000/api/health'     // Localhost
 ];
 
 async function testConnectivity() {
@@ -39,9 +40,12 @@ async function testConnectivity() {
   
   console.log('🏁 Connectivity test completed!');
   console.log('\n📱 For your mobile app:');
-  console.log('   - Use the ngrok URL: https://3aa56a9df386.ngrok-free.app');
+  console.log('   - Use the ngrok URL: https://7ffc0e8d88a6.ngrok-free.app');
   console.log('   - No more cleartext traffic issues!');
   console.log('   - Works from any network');
+  console.log('\n💡 System Information:');
+  console.log('   - Current IP: 192.168.1.11');
+  console.log('   - Old IP (192.168.1.3) is no longer valid');
 }
 
 // Run the test if this script is executed directly

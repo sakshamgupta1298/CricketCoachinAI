@@ -19,7 +19,7 @@ This document explains how to use ngrok to solve the cleartext traffic issue and
 
 ### API Base URL
 ```
-https://3aa56a9df386.ngrok-free.app
+https://7ffc0e8d88a6.ngrok-free.app
 ```
 
 ### Updated Files
@@ -75,7 +75,7 @@ If ngrok restarts and gives you a new URL:
 
 ### What Changed
 - **Before**: `http://192.168.1.3:8000`
-- **After**: `https://3aa56a9df386.ngrok-free.app`
+- **After**: `https://7ffc0e8d88a6.ngrok-free.app`
 
 ### Removed Configuration
 - ❌ `usesCleartextTraffic: true`
@@ -109,7 +109,7 @@ If ngrok restarts and gives you a new URL:
 ## 📊 Testing Results
 
 ```
-✅ SUCCESS: https://3aa56a9df386.ngrok-free.app/api/health
+✅ SUCCESS: https://7ffc0e8d88a6.ngrok-free.app/api/health
    Status: 200
    Response: {
      "message": "Cricket Coach API is running",

@@ -4,19 +4,19 @@
 const config = {
   // Development configuration
   development: {
-    API_BASE_URL: 'https://3aa56a9df386.ngrok-free.app',
+    API_BASE_URL: 'https://7ffc0e8d88a6.ngrok-free.app',
     API_TIMEOUT: 120000,
   },
   
   // Production configuration
   production: {
-    API_BASE_URL: 'https://3aa56a9df386.ngrok-free.app', // Using ngrok for now
+    API_BASE_URL: 'https://7ffc0e8d88a6.ngrok-free.app', // Using ngrok for now
     API_TIMEOUT: 120000,
   },
   
   // Test configuration
   test: {
-    API_BASE_URL: 'https://3aa56a9df386.ngrok-free.app', // Using ngrok
+    API_BASE_URL: 'https://7ffc0e8d88a6.ngrok-free.app', // Using ngrok
     API_TIMEOUT: 120000,
   }
 };
