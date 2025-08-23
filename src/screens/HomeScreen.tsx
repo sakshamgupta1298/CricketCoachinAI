@@ -1,199 +1,136 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { LinearGradient } from 'expo-linear-gradient';
-import {
-    ScrollView,
-    StyleSheet,
-    TouchableOpacity,
-    View,
-} from 'react-native';
-import {
-    Button,
-    Card,
-    Surface,
-    Text,
-    useTheme,
-} from 'react-native-paper';
-import { borderRadius, colors, shadows, spacing } from '../theme';
+import React from 'react';
+import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Button } from '../components/ui/Button';
+import { Card } from '../components/ui/Card';
+import { Colors, Spacing, Typography } from '../design/DesignSystem';
+import { RootStackParamList } from '../navigation/AppNavigator';
 
-type RootStackParamList = {
-  Main: undefined;
-  Results: { result: any };
-};
+const { width } = Dimensions.get('window');
 
-type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Main'>;
+type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Home'>;
 
-const HomeScreen: React.FC = () => {
-  const theme = useTheme();
+export const HomeScreen: React.FC = () => {
   const navigation = useNavigation<HomeScreenNavigationProp>();
 
-  const features = [
-    {
-      id: 1,
-      title: 'Batting Analysis',
-      description: 'Analyze your cricket shots with AI-powered biomechanics',
-      icon: '🏏',
-      color: colors.cricket.green,
-    },
-    {
-      id: 2,
-      title: 'Bowling Analysis',
-      description: 'Get detailed feedback on your bowling technique',
-      icon: '🎯',
-      color: colors.cricket.blue,
-    },
-    {
-      id: 3,
-      title: 'Real-time Feedback',
-      description: 'Instant analysis and improvement suggestions',
-      icon: '⚡',
-      color: colors.cricket.orange,
-    },
-    {
-      id: 4,
-      title: 'Progress Tracking',
-      description: 'Monitor your improvement over time',
-      icon: '📈',
-      color: colors.cricket.yellow,
-    },
-  ];
+  const handleBattingAnalysis = () => {
+    navigation.navigate('VideoCapture');
+  };
 
-  const quickActions = [
-    {
-      title: 'Upload Video',
-      subtitle: 'Select from gallery',
-      icon: '📤',
-      action: () => navigation.navigate('Upload' as any),
-    },
-    {
-      title: 'Record Video',
-      subtitle: 'Use camera',
-      icon: '📷',
-      action: () => navigation.navigate('Camera' as any),
-    },
-    {
-      title: 'View History',
-      subtitle: 'Past analyses',
-      icon: '📋',
-      action: () => navigation.navigate('History' as any),
-    },
-  ];
+  const handleBowlingAnalysis = () => {
+    navigation.navigate('VideoCapture');
+  };
+
+  const handleProfile = () => {
+    // TODO: Navigate to profile screen
+    console.log('Profile pressed');
+  };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {/* Header */}
-      <LinearGradient
-        colors={[theme.colors.primary, theme.colors.primaryContainer]}
-        style={styles.header}
-      >
-        <View style={styles.headerContent}>
+    <LinearGradient
+      colors={[Colors.background.light, Colors.background.lightSecondary]}
+      style={styles.container}
+    >
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Header */}
+        <View style={styles.header}>
           <Text style={styles.welcomeText}>Welcome to</Text>
-          <Text style={styles.appTitle}>Cricket Coach</Text>
-          <Text style={styles.subtitle}>
-            AI-powered cricket technique analysis
-          </Text>
+          <Text style={styles.title}>CrickCoach</Text>
+          <Text style={styles.subtitle}>Your Personal AI Cricket Coach</Text>
         </View>
-      </LinearGradient>
 
-      {/* Quick Actions */}
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
-          Quick Actions
-        </Text>
-        <View style={styles.quickActions}>
-          {quickActions.map((action, index) => (
-            <TouchableOpacity
-              key={index}
-              style={[styles.actionCard, { backgroundColor: theme.colors.surface }]}
-              onPress={action.action}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.actionIcon}>{action.icon}</Text>
-              <Text style={[styles.actionTitle, { color: theme.colors.onSurface }]}>
-                {action.title}
-              </Text>
-              <Text style={[styles.actionSubtitle, { color: theme.colors.onSurfaceVariant }]}>
-                {action.subtitle}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
-      {/* Features */}
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
-          Features
-        </Text>
-        {features.map((feature) => (
-          <Card
-            key={feature.id}
-            style={[styles.featureCard, { backgroundColor: theme.colors.surface }]}
-            mode="outlined"
-          >
-            <Card.Content style={styles.featureContent}>
-              <View style={styles.featureHeader}>
-                <Text style={styles.featureIcon}>{feature.icon}</Text>
-                <View style={styles.featureText}>
-                  <Text style={[styles.featureTitle, { color: theme.colors.onSurface }]}>
-                    {feature.title}
+        {/* Main Analysis Cards */}
+        <View style={styles.cardsContainer}>
+          {/* Batting Analysis Card */}
+          <TouchableOpacity onPress={handleBattingAnalysis} style={styles.cardWrapper}>
+            <Card variant="elevated" style={styles.analysisCard}>
+              <LinearGradient
+                colors={[Colors.primary[500], Colors.primary[600]]}
+                style={styles.cardGradient}
+              >
+                <View style={styles.cardContent}>
+                  <View style={styles.cardIcon}>
+                    <Text style={styles.iconText}>🏏</Text>
+                  </View>
+                  <Text style={styles.cardTitle}>Batting Analysis</Text>
+                  <Text style={styles.cardDescription}>
+                    Analyze your batting technique, stance, and shot execution
                   </Text>
-                  <Text style={[styles.featureDescription, { color: theme.colors.onSurfaceVariant }]}>
-                    {feature.description}
-                  </Text>
+                  <View style={styles.cardAction}>
+                    <Text style={styles.actionText}>Start Analysis</Text>
+                    <Ionicons name="arrow-forward" size={20} color={Colors.text.inverse} />
+                  </View>
                 </View>
+              </LinearGradient>
+            </Card>
+          </TouchableOpacity>
+
+          {/* Bowling Analysis Card */}
+          <TouchableOpacity onPress={handleBowlingAnalysis} style={styles.cardWrapper}>
+            <Card variant="elevated" style={styles.analysisCard}>
+              <LinearGradient
+                colors={[Colors.secondary[500], Colors.secondary[600]]}
+                style={styles.cardGradient}
+              >
+                <View style={styles.cardContent}>
+                  <View style={styles.cardIcon}>
+                    <Text style={styles.iconText}>🎯</Text>
+                  </View>
+                  <Text style={styles.cardTitle}>Bowling Analysis</Text>
+                  <Text style={styles.cardDescription}>
+                    Perfect your bowling action, line, length, and variations
+                  </Text>
+                  <View style={styles.cardAction}>
+                    <Text style={styles.actionText}>Start Analysis</Text>
+                    <Ionicons name="arrow-forward" size={20} color={Colors.text.inverse} />
+                  </View>
+                </View>
+              </LinearGradient>
+            </Card>
+          </TouchableOpacity>
+        </View>
+
+        {/* Quick Actions */}
+        <View style={styles.quickActions}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <View style={styles.actionButtons}>
+            <Button
+              title="View History"
+              onPress={() => {}}
+              variant="outline"
+              size="md"
+              style={styles.actionButton}
+            />
+            <Button
+              title="Settings"
+              onPress={() => {}}
+              variant="outline"
+              size="md"
+              style={styles.actionButton}
+            />
+          </View>
+        </View>
+
+        {/* Profile Section */}
+        <View style={styles.profileSection}>
+          <TouchableOpacity onPress={handleProfile} style={styles.profileCard}>
+            <View style={styles.profileInfo}>
+              <View style={styles.profileAvatar}>
+                <Text style={styles.avatarText}>👤</Text>
               </View>
-            </Card.Content>
-          </Card>
-        ))}
-      </View>
-
-      {/* How it works */}
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
-          How it works
-        </Text>
-        <Surface style={[styles.howItWorks, { backgroundColor: theme.colors.surface }]}>
-          <View style={styles.step}>
-            <View style={[styles.stepNumber, { backgroundColor: theme.colors.primary }]}>
-              <Text style={styles.stepNumberText}>1</Text>
+              <View style={styles.profileDetails}>
+                <Text style={styles.profileName}>Player Profile</Text>
+                <Text style={styles.profileSubtitle}>Manage your settings and preferences</Text>
+              </View>
             </View>
-            <Text style={[styles.stepText, { color: theme.colors.onSurface }]}>
-              Record or upload your cricket video
-            </Text>
-          </View>
-          <View style={styles.step}>
-            <View style={[styles.stepNumber, { backgroundColor: theme.colors.primary }]}>
-              <Text style={styles.stepNumberText}>2</Text>
-            </View>
-            <Text style={[styles.stepText, { color: theme.colors.onSurface }]}>
-              AI analyzes your technique and biomechanics
-            </Text>
-          </View>
-          <View style={styles.step}>
-            <View style={[styles.stepNumber, { backgroundColor: theme.colors.primary }]}>
-              <Text style={styles.stepNumberText}>3</Text>
-            </View>
-            <Text style={[styles.stepText, { color: theme.colors.onSurface }]}>
-              Get detailed feedback and improvement tips
-            </Text>
-          </View>
-        </Surface>
-      </View>
-
-      {/* CTA Button */}
-      <View style={styles.section}>
-        <Button
-          mode="contained"
-          onPress={() => navigation.navigate('Upload' as any)}
-          style={styles.ctaButton}
-          contentStyle={styles.ctaButtonContent}
-          labelStyle={styles.ctaButtonLabel}
-        >
-          Start Analysis
-        </Button>
-      </View>
-    </ScrollView>
+            <Ionicons name="chevron-forward" size={24} color={Colors.text.secondary} />
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </LinearGradient>
   );
 };
 
@@ -201,129 +138,144 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.xxl,
-    paddingHorizontal: spacing.lg,
+  scrollView: {
+    flex: 1,
   },
-  headerContent: {
+  header: {
+    padding: Spacing.lg,
+    paddingTop: Spacing['2xl'],
     alignItems: 'center',
   },
   welcomeText: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginBottom: spacing.xs,
+    fontSize: Typography.fontSize.lg,
+    color: Colors.text.secondary,
+    marginBottom: Spacing.xs,
   },
-  appTitle: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: 'white',
-    marginBottom: spacing.sm,
+  title: {
+    fontSize: Typography.fontSize['4xl'],
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.text.primary,
+    marginBottom: Spacing.sm,
   },
   subtitle: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: Typography.fontSize.base,
+    color: Colors.text.secondary,
     textAlign: 'center',
   },
-  section: {
-    padding: spacing.lg,
+  cardsContainer: {
+    padding: Spacing.lg,
+    gap: Spacing.lg,
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: spacing.md,
+  cardWrapper: {
+    marginBottom: Spacing.lg,
+  },
+  analysisCard: {
+    overflow: 'hidden',
+  },
+  cardGradient: {
+    padding: Spacing.xl,
+  },
+  cardContent: {
+    alignItems: 'center',
+  },
+  cardIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.lg,
+  },
+  iconText: {
+    fontSize: 40,
+  },
+  cardTitle: {
+    fontSize: Typography.fontSize['2xl'],
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.text.inverse,
+    marginBottom: Spacing.sm,
+    textAlign: 'center',
+  },
+  cardDescription: {
+    fontSize: Typography.fontSize.base,
+    color: Colors.text.inverse,
+    textAlign: 'center',
+    marginBottom: Spacing.xl,
+    opacity: 0.9,
+    lineHeight: Typography.lineHeight.normal * Typography.fontSize.base,
+  },
+  cardAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  actionText: {
+    fontSize: Typography.fontSize.lg,
+    fontWeight: Typography.fontWeight.semibold,
+    color: Colors.text.inverse,
   },
   quickActions: {
+    padding: Spacing.lg,
+  },
+  sectionTitle: {
+    fontSize: Typography.fontSize.xl,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.text.primary,
+    marginBottom: Spacing.lg,
+  },
+  actionButtons: {
     flexDirection: 'row',
+    gap: Spacing.md,
+  },
+  actionButton: {
+    flex: 1,
+  },
+  profileSection: {
+    padding: Spacing.lg,
+    paddingBottom: Spacing['2xl'],
+  },
+  profileCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  actionCard: {
-    flex: 1,
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
-    ...shadows.small,
-  },
-  actionIcon: {
-    fontSize: 24,
-    marginBottom: spacing.xs,
-  },
-  actionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: spacing.xs,
-  },
-  actionSubtitle: {
-    fontSize: 12,
-    textAlign: 'center',
-  },
-  featureCard: {
-    marginBottom: spacing.md,
-    ...shadows.small,
-  },
-  featureContent: {
-    padding: spacing.md,
-  },
-  featureHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  featureIcon: {
-    fontSize: 32,
-    marginRight: spacing.md,
-  },
-  featureText: {
-    flex: 1,
-  },
-  featureTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: spacing.xs,
-  },
-  featureDescription: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  howItWorks: {
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
-    ...shadows.small,
-  },
-  step: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  stepNumber: {
-    width: 32,
-    height: 32,
+    padding: Spacing.lg,
+    backgroundColor: Colors.background.light,
     borderRadius: 16,
-    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  profileInfo: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginRight: spacing.md,
-  },
-  stepNumberText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  stepText: {
-    fontSize: 16,
     flex: 1,
   },
-  ctaButton: {
-    borderRadius: borderRadius.lg,
-    marginTop: spacing.md,
+  profileAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: Colors.primary[100],
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.md,
   },
-  ctaButtonContent: {
-    paddingVertical: spacing.md,
+  avatarText: {
+    fontSize: 24,
   },
-  ctaButtonLabel: {
-    fontSize: 18,
-    fontWeight: '600',
+  profileDetails: {
+    flex: 1,
   },
-});
-
-export default HomeScreen; 
+  profileName: {
+    fontSize: Typography.fontSize.lg,
+    fontWeight: Typography.fontWeight.semibold,
+    color: Colors.text.primary,
+    marginBottom: Spacing.xs,
+  },
+  profileSubtitle: {
+    fontSize: Typography.fontSize.sm,
+    color: Colors.text.secondary,
+  },
+}); 
