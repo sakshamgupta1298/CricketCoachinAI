@@ -226,12 +226,14 @@ class ApiService {
         'Content-Type': 'multipart/form-data',
         'Authorization': `Bearer ${token.substring(0, 20)}...` // Log partial token for security
       });
+      console.log('⏱️ [UPLOAD] Timeout set to 10 minutes');
 
       const response = await this.api.post('/api/upload', data, {
         headers: {
           'Content-Type': 'multipart/form-data',
           'Authorization': `Bearer ${token}`,
         },
+        timeout: 600000, // 10 minutes timeout
         onUploadProgress: (progressEvent) => {
           if (progressEvent.total) {
             const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
@@ -260,6 +262,22 @@ class ApiService {
         return {
           success: false,
           error: 'Authentication failed. Please login again.',
+        };
+      }
+      
+      // Handle timeout errors
+      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        return {
+          success: false,
+          error: 'Upload timed out. The video is being processed in the background. Please check your results later.',
+        };
+      }
+      
+      // Handle network errors
+      if (error.message.includes('Network Error') || error.code === 'ERR_NETWORK') {
+        return {
+          success: false,
+          error: 'Network connection lost. The video may have been uploaded successfully. Please check your results.',
         };
       }
       
