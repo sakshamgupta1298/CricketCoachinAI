@@ -4,20 +4,20 @@
 const config = {
   // Development configuration
   development: {
-    API_BASE_URL: 'https://b0a929210c19.ngrok-free.app',
-    API_TIMEOUT: 120000,
+    API_BASE_URL: 'https://766855a5614b.ngrok-free.app',
+    API_TIMEOUT: 300000, // 5 minutes for video uploads
   },
   
   // Production configuration
   production: {
-    API_BASE_URL: 'https://b0a929210c19.ngrok-free.app', // Using ngrok for now
-    API_TIMEOUT: 120000,
+    API_BASE_URL: 'https://766855a5614b.ngrok-free.app', // Using ngrok for now
+    API_TIMEOUT: 300000, // 5 minutes for video uploads
   },
   
   // Test configuration
   test: {
-    API_BASE_URL: 'https://b0a929210c19.ngrok-free.app', // Using ngrok
-    API_TIMEOUT: 120000,
+    API_BASE_URL: 'https://766855a5614b.ngrok-free.app', // Using ngrok
+    API_TIMEOUT: 300000, // 5 minutes for video uploads
   }
 };
 
