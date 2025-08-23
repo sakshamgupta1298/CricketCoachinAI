@@ -187,6 +187,16 @@ class ApiService {
   // Upload video for analysis
   async uploadVideo(formData: UploadFormData): Promise<ApiResponse<AnalysisResult>> {
     try {
+      // Ensure we have the authentication token
+      const token = await this.getStoredToken();
+      if (!token) {
+        console.error('No authentication token found');
+        return {
+          success: false,
+          error: 'Authentication required. Please login first.',
+        };
+      }
+
       // Create FormData for file upload
       const data = new FormData();
       
@@ -211,9 +221,16 @@ class ApiService {
         }
       }
 
+      console.log('📤 [UPLOAD] Making upload request with token');
+      console.log('🔧 [UPLOAD] Request headers:', {
+        'Content-Type': 'multipart/form-data',
+        'Authorization': `Bearer ${token.substring(0, 20)}...` // Log partial token for security
+      });
+
       const response = await this.api.post('/api/upload', data, {
         headers: {
           'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${token}`,
         },
         onUploadProgress: (progressEvent) => {
           if (progressEvent.total) {
@@ -223,19 +240,29 @@ class ApiService {
         },
       });
 
+      console.log('✅ [UPLOAD] Upload successful');
       return {
         success: true,
         data: response.data,
       };
     } catch (error: any) {
-      console.error('Upload Error:', error);
-      console.error('Error details:', {
+      console.error('❌ [UPLOAD] Upload Error:', error);
+      console.error('📋 [UPLOAD] Error details:', {
         message: error.message,
         code: error.code,
         response: error.response?.data,
         status: error.response?.status,
         config: error.config
       });
+      
+      // Handle specific error cases
+      if (error.response?.status === 401) {
+        return {
+          success: false,
+          error: 'Authentication failed. Please login again.',
+        };
+      }
+      
       return {
         success: false,
         error: error.response?.data?.error || error.message,

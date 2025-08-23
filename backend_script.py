@@ -128,7 +128,7 @@ CHECKPOINT_PATH = "C:\\Users\\Saksham Gupta\\Desktop\\cricket_shot_predection\\p
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # OpenAI client
-client = OpenAI(api_key="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")
+client = OpenAI(api_key="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")
 
 # Transform for video frames
 transform = T.Compose([
