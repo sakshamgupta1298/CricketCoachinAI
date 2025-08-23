@@ -9,7 +9,7 @@ node test_connectivity.js
 echo.
 
 echo [2/4] Configuration Summary:
-echo ✅ Using ngrok URL: https://7ffc0e8d88a6.ngrok-free.app
+echo ✅ Using ngrok URL: https://b0a929210c19.ngrok-free.app
 echo ✅ HTTPS (no cleartext traffic issues)
 echo ✅ Works from any network
 echo ✅ No special Android configuration needed
@@ -32,7 +32,7 @@ echo.
 echo ========================================
 echo Important Notes:
 echo ========================================
-echo 🔗 Ngrok URL: https://7ffc0e8d88a6.ngrok-free.app
+echo 🔗 Ngrok URL: https://b0a929210c19.ngrok-free.app
 echo ⚠️  Keep ngrok running: ngrok http 8000
 echo 📱 Works on any device/network
 echo 🔒 HTTPS - no security issues

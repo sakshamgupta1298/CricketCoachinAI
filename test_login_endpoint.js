@@ -1,6 +1,6 @@
 // Test login endpoint specifically
 const testLoginEndpoint = async () => {
-  const baseURL = 'https://7ffc0e8d88a6.ngrok-free.app';
+  const baseURL = 'https://b0a929210c19.ngrok-free.app';
   const endpoints = [
     '/api/auth/login',
     '/api/login',
