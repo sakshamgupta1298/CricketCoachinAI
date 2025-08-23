@@ -182,6 +182,13 @@ def cleanup_old_files(folder, max_age_hours=24):
 def predict_shot(video_path, model):
     cap = cv2.VideoCapture(video_path)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    
+    # Check if video has frames
+    if total_frames <= 0:
+        print(f"Error: Video file has no frames or is corrupted: {video_path}")
+        cap.release()
+        return 'coverdrive'  # Default fallback
+    
     indices = sorted(torch.randperm(total_frames)[:32].tolist()) if total_frames >= 32 else list(range(total_frames)) + [total_frames - 1] * (32 - total_frames)
 
     frames, current_idx, idx_set = [], 0, set(indices)
@@ -198,15 +205,29 @@ def predict_shot(video_path, model):
         current_idx += 1
     cap.release()
 
-    frames = torch.stack(frames).permute(1, 0, 2, 3)
-    fast_pathway = frames
-    slow_pathway = frames[:, ::4, :, :]
-    inputs = [slow_pathway.unsqueeze(0), fast_pathway.unsqueeze(0)]
+    # Check if we extracted any frames
+    if not frames:
+        print(f"Error: No frames extracted from video: {video_path}")
+        return 'coverdrive'  # Default fallback
+    
+    # Check if we have enough frames
+    if len(frames) < 1:
+        print(f"Error: Insufficient frames extracted: {len(frames)}")
+        return 'coverdrive'  # Default fallback
 
-    with torch.no_grad():
-        outputs = model([inp for inp in inputs])
-        _, pred = torch.max(outputs, 1)
-    return ['coverdrive', 'pull_shot'][pred.item()]
+    try:
+        frames = torch.stack(frames).permute(1, 0, 2, 3)
+        fast_pathway = frames
+        slow_pathway = frames[:, ::4, :, :]
+        inputs = [slow_pathway.unsqueeze(0), fast_pathway.unsqueeze(0)]
+
+        with torch.no_grad():
+            outputs = model([inp for inp in inputs])
+            _, pred = torch.max(outputs, 1)
+        return ['coverdrive', 'pull_shot'][pred.item()]
+    except Exception as e:
+        print(f"Error in shot prediction: {str(e)}")
+        return 'coverdrive'  # Default fallback
 
 def get_feedback_from_gpt_for_bowling(keypoint_csv_path, bowler_type='fast_bowler'):
     print("bowling:", bowler_type)
@@ -845,21 +866,37 @@ def api_upload_file():
                 model = get_shot_prediction_model()
                 print("Model ready for prediction")
                 print("Predicting shot type...")
-                shot_type = predict_shot(filepath, model)
-                print(f"Shot type predicted: {shot_type}")
+                try:
+                    shot_type = predict_shot(filepath, model)
+                    print(f"Shot type predicted: {shot_type}")
+                except Exception as e:
+                    print(f"Error in shot prediction: {str(e)}")
+                    shot_type = 'coverdrive'  # Default fallback
                 
                 print("Extracting pose keypoints...")
-                keypoints_path = extract_pose_keypoints(filepath, 'batting')
-                print("Keypoints extracted")
+                try:
+                    keypoints_path = extract_pose_keypoints(filepath, 'batting')
+                    print("Keypoints extracted")
+                except Exception as e:
+                    print(f"Error in keypoint extraction: {str(e)}")
+                    return jsonify({'error': f'Error extracting pose keypoints: {str(e)}'}), 500
                 
                 batter_side = request.form.get('batter_side', 'right')
                 print("Computing features...")
-                summary_path = compute_features(keypoints_path, batter_side, 'batting')
-                print("Features computed")
+                try:
+                    summary_path = compute_features(keypoints_path, batter_side, 'batting')
+                    print("Features computed")
+                except Exception as e:
+                    print(f"Error in feature computation: {str(e)}")
+                    return jsonify({'error': f'Error computing features: {str(e)}'}), 500
                 
                 print("Getting GPT feedback...")
-                gpt_feedback = get_feedback_from_gpt(shot_type, keypoints_path)
-                print("GPT feedback received")
+                try:
+                    gpt_feedback = get_feedback_from_gpt(shot_type, keypoints_path)
+                    print("GPT feedback received")
+                except Exception as e:
+                    print(f"Error in GPT feedback: {str(e)}")
+                    gpt_feedback = "Unable to generate feedback at this time."
                 
                 results = {
                     'success': True,
@@ -874,9 +911,13 @@ def api_upload_file():
                 
                 # Generate and save report
                 print("Generating report...")
-                report_path = generate_report(results, 'batsman', shot_type, batter_side, None, None, filename)
-                results['report_path'] = report_path
-                print(f"Report saved to: {report_path}")
+                try:
+                    report_path = generate_report(results, 'batsman', shot_type, batter_side, None, None, filename)
+                    results['report_path'] = report_path
+                    print(f"Report saved to: {report_path}")
+                except Exception as e:
+                    print(f"Error generating report: {str(e)}")
+                    results['report_path'] = None
                 
                 # Save results as JSON for later retrieval
                 results_file = os.path.join(UPLOAD_FOLDER, f"results_{filename}.json")
@@ -887,18 +928,30 @@ def api_upload_file():
             else:
                 # Bowling analysis
                 print("Extracting pose keypoints for bowling...")
-                keypoints_path = extract_pose_keypoints(filepath, 'bowling')
-                print("Keypoints extracted")
+                try:
+                    keypoints_path = extract_pose_keypoints(filepath, 'bowling')
+                    print("Keypoints extracted")
+                except Exception as e:
+                    print(f"Error in keypoint extraction: {str(e)}")
+                    return jsonify({'error': f'Error extracting pose keypoints: {str(e)}'}), 500
                 
                 bowler_side = request.form.get('bowler_side', 'right')
                 bowler_type = request.form.get('bowler_type', 'fast_bowler') # Default to fast bowler
                 print("Computing bowling features...")
-                summary_path = compute_features(keypoints_path, bowler_side, 'bowling')
-                print("Features computed")
+                try:
+                    summary_path = compute_features(keypoints_path, bowler_side, 'bowling')
+                    print("Features computed")
+                except Exception as e:
+                    print(f"Error in feature computation: {str(e)}")
+                    return jsonify({'error': f'Error computing features: {str(e)}'}), 500
                 
                 print("Getting GPT feedback for bowling...")
-                gpt_feedback = get_feedback_from_gpt_for_bowling(keypoints_path, bowler_type)
-                print("GPT feedback received")
+                try:
+                    gpt_feedback = get_feedback_from_gpt_for_bowling(keypoints_path, bowler_type)
+                    print("GPT feedback received")
+                except Exception as e:
+                    print(f"Error in GPT feedback: {str(e)}")
+                    gpt_feedback = "Unable to generate feedback at this time."
                 
                 results = {
                     'success': True,
@@ -913,9 +966,13 @@ def api_upload_file():
                 
                 # Generate and save report
                 print("Generating bowling report...")
-                report_path = generate_report(results, 'bowler', None, None, bowler_side, bowler_type, filename)
-                results['report_path'] = report_path
-                print(f"Report saved to: {report_path}")
+                try:
+                    report_path = generate_report(results, 'bowler', None, None, bowler_side, bowler_type, filename)
+                    results['report_path'] = report_path
+                    print(f"Report saved to: {report_path}")
+                except Exception as e:
+                    print(f"Error generating report: {str(e)}")
+                    results['report_path'] = None
                 
                 # Save results as JSON for later retrieval
                 results_file = os.path.join(UPLOAD_FOLDER, f"results_{filename}.json")
