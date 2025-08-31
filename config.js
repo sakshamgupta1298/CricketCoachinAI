@@ -4,19 +4,19 @@
 const config = {
   // Development configuration
   development: {
-    API_BASE_URL: 'https://766855a5614b.ngrok-free.app',
+    API_BASE_URL: 'http://206.189.141.194:3000',
     API_TIMEOUT: 600000, // 10 minutes for video uploads and processing
   },
   
   // Production configuration
   production: {
-    API_BASE_URL: 'https://766855a5614b.ngrok-free.app', // Using ngrok for now
+    API_BASE_URL: 'http://206.189.141.194:3000', // Digital Ocean droplet
     API_TIMEOUT: 600000, // 10 minutes for video uploads and processing
   },
   
   // Test configuration
   test: {
-    API_BASE_URL: 'https://766855a5614b.ngrok-free.app', // Using ngrok
+    API_BASE_URL: 'http://206.189.141.194:3000', // Digital Ocean droplet
     API_TIMEOUT: 600000, // 10 minutes for video uploads and processing
   }
 };

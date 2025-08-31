@@ -1,6 +1,6 @@
 // Test upload with the new ngrok URL
 const testUploadWithNewURL = async () => {
-  const baseURL = 'https://766855a5614b.ngrok-free.app';
+  const baseURL = 'http://206.189.141.194:3000';
   
   console.log('🔍 Testing upload with new ngrok URL...\n');
   console.log('🌐 Base URL:', baseURL);

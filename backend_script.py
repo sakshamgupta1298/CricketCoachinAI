@@ -128,7 +128,7 @@ CHECKPOINT_PATH = "C:\\Users\\Saksham Gupta\\Desktop\\cricket_shot_predection\\p
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # OpenAI client
-client = OpenAI(api_key="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")
+client = OpenAI(api_key="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")
 
 # Transform for video frames
 transform = T.Compose([
@@ -1580,4 +1580,5 @@ if __name__ == '__main__':
     initialize_models()
     
     # Start the Flask server
-    app.run(debug=True, host='0.0.0.0', port=8000) 
+    port = int(os.environ.get('FLASK_PORT', 3000))
+    app.run(debug=True, host='0.0.0.0', port=port) 

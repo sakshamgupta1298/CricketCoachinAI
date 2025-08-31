@@ -5,15 +5,15 @@ const debugAppConfig = () => {
   // Simulate the config loading logic
   const config = {
     development: {
-      API_BASE_URL: 'https://766855a5614b.ngrok-free.app',
+      API_BASE_URL: 'http://206.189.141.194:3000',
       API_TIMEOUT: 300000,
     },
     production: {
-      API_BASE_URL: 'https://766855a5614b.ngrok-free.app',
+      API_BASE_URL: 'http://206.189.141.194:3000',
       API_TIMEOUT: 300000,
     },
     test: {
-      API_BASE_URL: 'https://766855a5614b.ngrok-free.app',
+      API_BASE_URL: 'http://206.189.141.194:3000',
       API_TIMEOUT: 300000,
     }
   };
@@ -40,7 +40,7 @@ const debugAppConfig = () => {
   
   console.log('\n✅ Expected Request:');
   console.log('   Method: POST');
-  console.log('   URL: https://766855a5614b.ngrok-free.app/api/upload');
+  console.log('   URL: http://206.189.141.194:3000/api/upload');
   console.log('   Headers: Authorization: Bearer <token>');
   
   console.log('\n❌ If you see /upload instead of /api/upload:');

@@ -4,28 +4,36 @@
     "slug": "cricket-coach-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.saksham5.cricketcoachmobile",
       "infoPlist": {
-        "NSCameraUsageDescription": "This app needs access to camera to record cricket videos for analysis.",
-        "NSPhotoLibraryUsageDescription": "This app needs access to photo library to select cricket videos for analysis.",
-        "NSMicrophoneUsageDescription": "This app needs access to microphone to record cricket videos."
+        "NSCameraUsageDescription": "This app needs access to the camera to record cricket videos for analysis.",
+        "NSPhotoLibraryUsageDescription": "This app needs access to the photo library to select cricket videos for analysis.",
+        "NSMicrophoneUsageDescription": "This app needs access to the microphone to record cricket videos."
       }
     },
     "android": {
+      "package": "com.saksham5.cricketcoachmobile",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#FFFFFF"
+      },
       "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.INTERNET",
-        "android.permission.ACCESS_NETWORK_STATE"
+        "CAMERA",
+        "RECORD_AUDIO",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE"
       ],
-      "package": "com.saksham_5.cricketcoachmobile"
+      "edgeToEdgeEnabled": true,
+      "usesCleartextTraffic": true  
     },
     "plugins": [
       [
@@ -44,7 +52,8 @@
     "extra": {
       "eas": {
         "projectId": "79e6e45c-32d6-4d27-bb86-43572c61e5e2"
-      }
+      },
+      "apiUrl": "http://206.189.141.194:3000"
     }
   }
 }

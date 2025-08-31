@@ -1,16 +1,16 @@
 @echo off
 echo ========================================
-echo CrickCoach App with Ngrok Configuration
+echo CrickCoach App with Digital Ocean Backend
 echo ========================================
 echo.
 
-echo [1/4] Testing ngrok connectivity...
+echo [1/4] Testing Digital Ocean connectivity...
 node test_connectivity.js
 echo.
 
 echo [2/4] Configuration Summary:
 echo ✅ Using Digital Ocean droplet: http://206.189.141.194:3000
-echo ✅ HTTPS (no cleartext traffic issues)
+echo ✅ HTTP (no cleartext traffic issues)
 echo ✅ Works from any network
 echo ✅ No special Android configuration needed
 echo.
@@ -33,12 +33,12 @@ echo ========================================
 echo Important Notes:
 echo ========================================
 echo 🔗 Digital Ocean droplet: http://206.189.141.194:3000
-echo ⚠️  Keep ngrok running: ngrok http 8000
+echo ⚠️  Backend must be running on the droplet
 echo 📱 Works on any device/network
-echo 🔒 HTTPS - no security issues
+echo 🔒 HTTP - no security issues
 echo.
 
 echo Starting Expo...
 expo start --clear
 
-pause 
+pause

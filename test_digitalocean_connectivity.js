@@ -1,16 +1,19 @@
-// Test connectivity script for CrickCoach app
-// This script helps verify that the ngrok tunnel is working properly
-
-const testEndpoints = [
-  'http://206.189.141.194:3000/api/health', // Digital Ocean droplet
-  'http://192.168.1.11:3000/api/health', // Current system IP
-  'http://192.168.1.3:3000/api/health',  // Old IP (for reference)
-  'http://localhost:3000/api/health'     // Localhost
-];
-
-async function testConnectivity() {
-  console.log('🔍 Testing connectivity to backend endpoints...\n');
+// Test connectivity to Digital Ocean droplet
+const testDigitalOceanConnectivity = async () => {
+  const baseURL = 'http://206.189.141.194:3000';
   
+  console.log('🔍 Testing Digital Ocean Droplet Connectivity...\n');
+  console.log('🌐 Base URL:', baseURL);
+  console.log('📍 Droplet IP: 206.189.141.194');
+  console.log('🔌 Port: 3000');
+  console.log('');
+
+  const testEndpoints = [
+    `${baseURL}/api/health`,
+    `${baseURL}/api/auth/login`,
+    `${baseURL}/api/upload`
+  ];
+
   for (const endpoint of testEndpoints) {
     try {
       console.log(`📡 Testing: ${endpoint}`);
@@ -19,7 +22,7 @@ async function testConnectivity() {
         headers: {
           'Content-Type': 'application/json',
         },
-        timeout: 10000 // Increased timeout for ngrok
+        timeout: 10000
       });
       
       if (response.ok) {
@@ -38,24 +41,27 @@ async function testConnectivity() {
     }
   }
   
-  console.log('🏁 Connectivity test completed!');
+  console.log('🏁 Digital Ocean connectivity test completed!');
   console.log('\n📱 For your mobile app:');
-  console.log('   - Use the Digital Ocean droplet: http://206.189.141.194:3000');
-  console.log('   - No more cleartext traffic issues!');
+  console.log('   - Use the Digital Ocean URL: http://206.189.141.194:3000');
+  console.log('   - No more ngrok dependency!');
   console.log('   - Works from any network');
+  console.log('   - More stable and reliable');
   console.log('\n💡 System Information:');
-  console.log('   - Current IP: 192.168.1.11');
-  console.log('   - Old IP (192.168.1.3) is no longer valid');
-}
+  console.log('   - Droplet IP: 206.189.141.194');
+  console.log('   - Backend Port: 3000');
+  console.log('   - Protocol: HTTP');
+  console.log('   - Status: Ready for deployment');
+};
 
 // Run the test if this script is executed directly
 if (typeof window !== 'undefined') {
   // Browser environment
-  testConnectivity();
+  testDigitalOceanConnectivity();
 } else {
   // Node.js environment
   const fetch = require('node-fetch');
-  testConnectivity();
+  testDigitalOceanConnectivity();
 }
 
-module.exports = { testConnectivity }; 
+module.exports = { testDigitalOceanConnectivity };
