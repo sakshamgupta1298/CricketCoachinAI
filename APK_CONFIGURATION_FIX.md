@@ -1,19 +1,19 @@
 # 🔧 APK Configuration Fix Guide
 
 ## 🚨 **Issue Identified**
-The APK is not able to connect to the backend because of network security configuration issues. The backend is running on Digital Ocean (`206.189.141.194:3000`) but the APK's network security settings were only configured for local development.
+The APK is not able to connect to the backend because of network security configuration issues. The backend is running on Digital Ocean (`206.189.141.194:3000`) but the APK's network security settings were blocking connections.
 
 ## ✅ **Fixes Applied**
 
-### 1. **Updated Network Security Plugin**
-- **File**: `plugins/network-security.js`
-- **Change**: Added Digital Ocean IP (`206.189.141.194`) to allowed domains
-- **Impact**: Allows HTTP connections to the production backend
-
-### 2. **Updated App Configuration**
+### 1. **Simplified Network Security Configuration**
 - **File**: `app.json`
-- **Change**: Added network security plugin to the plugins array
-- **Impact**: Ensures the network security configuration is applied during build
+- **Change**: Removed `networkSecurityConfig` reference and kept only `usesCleartextTraffic: true`
+- **Impact**: Allows HTTP connections to all domains (including Digital Ocean backend)
+
+### 2. **Updated Network Security Plugin**
+- **File**: `plugins/network-security.js`
+- **Change**: Added Digital Ocean IP (`206.189.141.194`) to iOS allowed domains
+- **Impact**: Ensures iOS also allows connections to the production backend
 
 ### 3. **Verified API Configuration**
 - **File**: `config.js`
@@ -29,8 +29,8 @@ The APK is not able to connect to the backend because of network security config
 
 ### **APK Configuration**
 - ✅ **API Base URL**: `http://206.189.141.194:3000`
-- ✅ **Network Security**: Updated to allow Digital Ocean IP
 - ✅ **Cleartext Traffic**: Enabled for HTTP connections
+- ✅ **Network Security**: Simplified to allow all HTTP traffic
 - ✅ **Permissions**: Internet and network state permissions included
 
 ## 🛠️ **Next Steps**
@@ -87,8 +87,8 @@ adb logcat | findstr "LOGIN API HEALTH APP CONNECTIVITY"
 ### **If APK Still Can't Connect:**
 
 1. **Check Network Security Config**
-   - Verify the network security plugin is included in app.json
-   - Ensure the Digital Ocean IP is in the allowed domains
+   - Verify `usesCleartextTraffic: true` is set in app.json
+   - Ensure the network security plugin is included
 
 2. **Verify Backend Accessibility**
    ```bash
