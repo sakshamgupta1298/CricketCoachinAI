@@ -1592,5 +1592,9 @@ if __name__ == '__main__':
     initialize_models()
     
     # Start the Flask server
-    # port = int(os.environ.get('FLASK_PORT', 3000))
-    app.run(debug=True, host='0.0.0.0', port=3000) 
+    port = int(os.environ.get('FLASK_PORT', 3000))
+    
+    
+    # Server environment - disable debug mode and reloader
+    app.run(debug=False, host='0.0.0.0', port=port, use_reloader=False)
+    
