@@ -20,7 +20,18 @@
       "infoPlist": {
         "NSCameraUsageDescription": "This app needs access to the camera to record cricket videos for analysis.",
         "NSPhotoLibraryUsageDescription": "This app needs access to the photo library to select cricket videos for analysis.",
-        "NSMicrophoneUsageDescription": "This app needs access to the microphone to record cricket videos."
+        "NSMicrophoneUsageDescription": "This app needs access to the microphone to record cricket videos.",
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true,
+          "NSExceptionDomains": {
+            "206.189.141.194": {
+              "NSExceptionAllowsInsecureHTTPLoads": true,
+              "NSExceptionMinimumTLSVersion": "1.0",
+              "NSExceptionRequiresForwardSecrecy": false,
+              "NSIncludesSubdomains": true
+            }
+          }
+        }
       }
     },
     "android": {
@@ -40,7 +51,16 @@
         "ACCESS_NETWORK_STATE"
       ],
       "edgeToEdgeEnabled": true,
-      "usesCleartextTraffic": true  
+      "usesCleartextTraffic": true,
+      "networkSecurityConfig": {
+        "domain-config": [
+          {
+            "domain": "206.189.141.194",
+            "cleartextTrafficPermitted": true,
+            "trust-anchors": ["system"]
+          }
+        ]
+      }
     },
     "plugins": [
       [

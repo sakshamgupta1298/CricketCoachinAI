@@ -1,0 +1,21 @@
+[Unit]
+Description=CrickCoach Backend Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/CricketCoachinAI
+Environment=PATH=/root/CricketCoachinAI/myenv/bin:/usr/bin:/usr/local/bin
+Environment=FLASK_ENV=production
+Environment=FLASK_DEBUG=0
+ExecStart=/root/CricketCoachinAI/start_backend.sh
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+KillMode=mixed
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

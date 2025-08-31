@@ -1,52 +1,54 @@
-// Debug script to check what configuration the app is using
-const debugAppConfig = () => {
-  console.log('🔍 Debugging App Configuration...\n');
+// Debug configuration for troubleshooting network issues
+const debugConfig = {
+  // Test different URLs
+  testUrls: [
+    'http://206.189.141.194:3000',
+    'https://206.189.141.194:3000', // Try HTTPS if available
+    'http://localhost:3000', // For local testing
+  ],
   
-  // Simulate the config loading logic
-  const config = {
-    development: {
-      API_BASE_URL: 'http://206.189.141.194:3000',
-      API_TIMEOUT: 300000,
-    },
-    production: {
-      API_BASE_URL: 'http://206.189.141.194:3000',
-      API_TIMEOUT: 300000,
-    },
-    test: {
-      API_BASE_URL: 'http://206.189.141.194:3000',
-      API_TIMEOUT: 300000,
-    }
-  };
-
-  // Simulate __DEV__ environment
-  const __DEV__ = true; // Assume development mode
+  // Network timeout settings
+  timeouts: {
+    short: 5000,    // 5 seconds
+    medium: 15000,  // 15 seconds
+    long: 60000,    // 1 minute
+  },
   
-  const getEnvironment = () => {
-    if (__DEV__) {
-      return 'development';
-    }
-    return 'production';
-  };
-
-  const currentConfig = config[getEnvironment()];
+  // Debug logging
+  enableDebugLogging: true,
   
-  console.log('📋 Current Configuration:');
-  console.log('   Environment:', getEnvironment());
-  console.log('   API_BASE_URL:', currentConfig.API_BASE_URL);
-  console.log('   API_TIMEOUT:', currentConfig.API_TIMEOUT);
-  
-  console.log('\n🔗 Full Upload URL:');
-  console.log('   ', currentConfig.API_BASE_URL + '/api/upload');
-  
-  console.log('\n✅ Expected Request:');
-  console.log('   Method: POST');
-  console.log('   URL: http://206.189.141.194:3000/api/upload');
-  console.log('   Headers: Authorization: Bearer <token>');
-  
-  console.log('\n❌ If you see /upload instead of /api/upload:');
-  console.log('   1. App needs to be rebuilt');
-  console.log('   2. Check for cached configuration');
-  console.log('   3. Verify the API service is using the latest code');
+  // Retry settings
+  retryAttempts: 3,
+  retryDelay: 1000, // 1 second
 };
 
-debugAppConfig();
+// Function to test network connectivity
+export const testNetworkConnectivity = async () => {
+  console.log('🔍 Testing network connectivity...');
+  
+  for (const url of debugConfig.testUrls) {
+    try {
+      console.log(`📡 Testing: ${url}`);
+      const response = await fetch(`${url}/api/health`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        timeout: debugConfig.timeouts.short,
+      });
+      
+      if (response.ok) {
+        console.log(`✅ Success: ${url}`);
+        return { success: true, url };
+      } else {
+        console.log(`⚠️ Response not OK: ${url} - ${response.status}`);
+      }
+    } catch (error) {
+      console.log(`❌ Failed: ${url} - ${error.message}`);
+    }
+  }
+  
+  return { success: false, error: 'All URLs failed' };
+};
+
+export default debugConfig;

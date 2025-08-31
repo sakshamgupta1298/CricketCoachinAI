@@ -110,6 +110,15 @@ class ApiService {
     // Use the currentConfig from config.js
     const configURL = currentConfig.API_BASE_URL;
     console.log('✅ [API] Using API URL from config:', configURL);
+    
+    // Add additional logging for debugging
+    console.log('🌐 [API] Full URL will be:', configURL);
+    console.log('📱 [API] Platform details:', {
+      platform: Platform.OS,
+      version: Platform.Version,
+      isDev: __DEV__
+    });
+    
     return configURL;
   }
 
