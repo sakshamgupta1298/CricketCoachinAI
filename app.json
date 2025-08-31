@@ -15,15 +15,7 @@
         "NSPhotoLibraryUsageDescription": "This app needs access to photo library to select cricket videos for analysis.",
         "NSMicrophoneUsageDescription": "This app needs access to microphone to record cricket videos.",
         "NSAppTransportSecurity": {
-          "NSAllowsArbitraryLoads": true,
-          "NSExceptionDomains": {
-            "206.189.141.194": {
-              "NSExceptionAllowsInsecureHTTPLoads": true,
-              "NSExceptionMinimumTLSVersion": "1.0",
-              "NSExceptionRequiresForwardSecrecy": false,
-              "NSIncludesSubdomains": true
-            }
-          }
+          "NSAllowsArbitraryLoads": true
         }
       }
     },
@@ -39,19 +31,7 @@
         "INTERNET",
         "ACCESS_NETWORK_STATE"
       ],
-      "usesCleartextTraffic": true,
-      "networkSecurityConfig": {
-        "domain-config": [
-          {
-            "domain": "206.189.141.194",
-            "cleartextTrafficPermitted": true,
-            "trust-anchors": ["system"]
-          }
-        ],
-        "base-config": {
-          "cleartextTrafficPermitted": true
-        }
-      }
+      "usesCleartextTraffic": true
     },
     "web": {
       "bundler": "metro",
