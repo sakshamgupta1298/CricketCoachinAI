@@ -70,14 +70,6 @@
         {
           "cameraPermission": "Allow Cricket Coach to access your camera to record cricket videos."
         }
-      ],
-      [
-        "expo-build-properties",
-        {
-          "android": {
-            "usesCleartextTraffic": true
-          }
-        }
       ]
     ],
     "experiments": {
