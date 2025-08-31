@@ -34,8 +34,13 @@ JWT_EXPIRATION_HOURS = 24
 # Database Configuration
 DATABASE_PATH = 'cricket_coach.db'
 
-# Enable CORS for mobile app
-CORS(app, origins=['*'])
+# Enable CORS for mobile app with more specific configuration
+CORS(app, 
+     origins=['*'],
+     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+     allow_headers=['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'User-Agent'],
+     supports_credentials=False,  # Changed to False to avoid conflicts with wildcard origins
+     max_age=86400)
 
 # Database Functions
 def init_database():
@@ -1136,7 +1141,11 @@ def list_files():
 
 @app.route('/api/health', methods=['GET'])
 def api_health():
-    return jsonify({'status': 'healthy', 'message': 'Cricket Coach API is running'})
+    response = jsonify({'status': 'healthy', 'message': 'Cricket Coach API is running'})
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
 
 @app.route('/api/history', methods=['GET'])
 @require_auth
@@ -1396,7 +1405,11 @@ def register():
                 }
             }
             print("Registration successful, returning response")
-            return jsonify(response_data)
+            response = jsonify(response_data)
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+            response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+            return response
             
         except sqlite3.IntegrityError as e:
             conn.close()
@@ -1474,7 +1487,11 @@ def login():
             }
         }
         print("Login successful, returning response")
-        return jsonify(response_data)
+        response = jsonify(response_data)
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+        return response
         
     except Exception as e:
         print(f"Login error: {str(e)}")

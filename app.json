@@ -4,23 +4,16 @@
     "slug": "cricket-coach-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "automatic",
-    "icon": "./assets/images/icon.png",
-    "splash": {
-      "image": "./assets/images/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
+    "userInterfaceStyle": "light",
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.saksham5.cricketcoachmobile",
       "infoPlist": {
-        "NSCameraUsageDescription": "This app needs access to the camera to record cricket videos for analysis.",
-        "NSPhotoLibraryUsageDescription": "This app needs access to the photo library to select cricket videos for analysis.",
-        "NSMicrophoneUsageDescription": "This app needs access to the microphone to record cricket videos.",
+        "NSCameraUsageDescription": "This app needs access to camera to record cricket videos for analysis.",
+        "NSPhotoLibraryUsageDescription": "This app needs access to photo library to select cricket videos for analysis.",
+        "NSMicrophoneUsageDescription": "This app needs access to microphone to record cricket videos.",
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true,
           "NSExceptionDomains": {
@@ -35,13 +28,9 @@
       }
     },
     "android": {
-      "package": "com.saksham5.cricketcoachmobile",
+      "package": "com.saksham_5.cricketcoachmobile",
       "versionCode": 1,
-      "icon": "./assets/images/icon.png",
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/images/icon.png",
-        "backgroundColor": "#FFFFFF"
-      },
+      "edgeToEdgeEnabled": true,
       "permissions": [
         "CAMERA",
         "RECORD_AUDIO",
@@ -50,7 +39,6 @@
         "INTERNET",
         "ACCESS_NETWORK_STATE"
       ],
-      "edgeToEdgeEnabled": true,
       "usesCleartextTraffic": true,
       "networkSecurityConfig": {
         "domain-config": [
@@ -59,8 +47,16 @@
             "cleartextTrafficPermitted": true,
             "trust-anchors": ["system"]
           }
-        ]
+        ],
+        "base-config": {
+          "cleartextTrafficPermitted": true
+        }
       }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
       [
@@ -74,13 +70,23 @@
         {
           "cameraPermission": "Allow Cricket Coach to access your camera to record cricket videos."
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
       ]
     ],
+    "experiments": {
+      "typedRoutes": true
+    },
     "extra": {
       "eas": {
         "projectId": "79e6e45c-32d6-4d27-bb86-43572c61e5e2"
-      },
-      "apiUrl": "http://206.189.141.194:3000"
+      }
     }
   }
 }
