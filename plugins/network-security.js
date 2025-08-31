@@ -26,6 +26,24 @@ const withNetworkSecurity = (config) => {
           NSExceptionMinimumTLSVersion: '1.0',
           NSExceptionRequiresForwardSecrecy: false,
           NSIncludesSubdomains: true
+        },
+        '192.168.1.3': {
+          NSExceptionAllowsInsecureHTTPLoads: true,
+          NSExceptionMinimumTLSVersion: '1.0',
+          NSExceptionRequiresForwardSecrecy: false,
+          NSIncludesSubdomains: true
+        },
+        '10.0.2.2': {
+          NSExceptionAllowsInsecureHTTPLoads: true,
+          NSExceptionMinimumTLSVersion: '1.0',
+          NSExceptionRequiresForwardSecrecy: false,
+          NSIncludesSubdomains: true
+        },
+        'localhost': {
+          NSExceptionAllowsInsecureHTTPLoads: true,
+          NSExceptionMinimumTLSVersion: '1.0',
+          NSExceptionRequiresForwardSecrecy: false,
+          NSIncludesSubdomains: true
         }
       }
     };

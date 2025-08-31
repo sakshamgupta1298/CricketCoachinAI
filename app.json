@@ -31,7 +31,8 @@
         "INTERNET",
         "ACCESS_NETWORK_STATE"
       ],
-      "usesCleartextTraffic": true
+      "usesCleartextTraffic": true,
+      "networkSecurityConfig": "@xml/network_security_config"
     },
     "web": {
       "bundler": "metro",
@@ -50,7 +51,8 @@
         {
           "cameraPermission": "Allow Cricket Coach to access your camera to record cricket videos."
         }
-      ]
+      ],
+      "./plugins/network-security.js"
     ],
     "experiments": {
       "typedRoutes": true
