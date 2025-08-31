@@ -21,6 +21,7 @@ import jwt
 import bcrypt
 import sqlite3
 from functools import wraps
+import gdown
 
 app = Flask(__name__)
 app.secret_key = 'cricket_shot_prediction_secret_key'
@@ -121,7 +122,18 @@ keypoints_names = ["nose", "left_eye", "right_eye", "left_ear", "right_ear", "le
 # Configuration
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'mp4', 'avi', 'mov', 'mkv'}
-CHECKPOINT_PATH = "C:\\Users\\Saksham Gupta\\Desktop\\cricket_shot_predection\\pytorchvideo\\slowfast_cricket.pth"
+
+# Model configuration
+MODEL_PATH = "slowfast_cricket.pth"
+FILE_ID = "1SRsNEUv4a4FLisMZGM0-BH1J4RlqT0HN"
+DOWNLOAD_URL = f"https://drive.google.com/uc?id={FILE_ID}"
+
+# Automatically download the model if it's missing
+if not os.path.exists(MODEL_PATH):
+    print("Model not found locally. Downloading from Google Drive...")
+    gdown.download(DOWNLOAD_URL, MODEL_PATH, quiet=False)
+
+CHECKPOINT_PATH = MODEL_PATH
 # BATTER_SIDE = "right"
 
 # Create upload folder if it doesn't exist
