@@ -4,6 +4,10 @@ Flask
 Flask-CORS
 Werkzeug
 
+# Production WSGI Server
+gunicorn
+gevent
+
 # Authentication and security
 PyJWT
 bcrypt

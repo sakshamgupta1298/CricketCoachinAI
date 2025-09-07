@@ -9,7 +9,7 @@ import json
 
 def test_cors_headers():
     """Test CORS headers with mobile app-like requests"""
-    base_url = "http://206.189.141.194:3000"
+    base_url = "http://165.232.184.91:3000"
     
     print("🔍 Testing CORS Headers and Mobile App Connectivity")
     print("=" * 60)

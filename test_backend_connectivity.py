@@ -12,7 +12,7 @@ def test_backend_connectivity():
     """Test if the backend is accessible"""
     
     # Backend URL from your config
-    base_url = "http://206.189.141.194:3000"
+    base_url = "http://165.232.184.91:3000"
     
     print("🔍 Testing CrickCoach Backend Connectivity...")
     print(f"🌐 Target URL: {base_url}")

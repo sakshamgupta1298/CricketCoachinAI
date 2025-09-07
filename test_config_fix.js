@@ -6,7 +6,7 @@ const testConfigFix = async () => {
   // Test 1: Verify backend is accessible
   console.log('1️⃣ Testing backend accessibility...');
   try {
-    const response = await fetch('http://206.189.141.194:3000/api/health');
+    const response = await fetch('http://165.232.184.91:3000/api/health');
     if (response.ok) {
       console.log('✅ Backend is accessible');
       const data = await response.json();
@@ -21,7 +21,7 @@ const testConfigFix = async () => {
   // Test 2: Test authentication endpoint
   console.log('\n2️⃣ Testing authentication endpoint...');
   try {
-    const response = await fetch('http://206.189.141.194:3000/api/auth/login', {
+    const response = await fetch('http://165.232.184.91:3000/api/auth/login', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -40,7 +40,7 @@ const testConfigFix = async () => {
   // Test 3: Test with different headers
   console.log('\n3️⃣ Testing with different headers...');
   try {
-    const response = await fetch('http://206.189.141.194:3000/api/health', {
+    const response = await fetch('http://165.232.184.91:3000/api/health', {
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -58,7 +58,7 @@ const testConfigFix = async () => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
     
-    const response = await fetch('http://206.189.141.194:3000/api/health', {
+    const response = await fetch('http://165.232.184.91:3000/api/health', {
       signal: controller.signal
     });
     

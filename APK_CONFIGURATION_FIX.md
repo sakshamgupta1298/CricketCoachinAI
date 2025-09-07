@@ -1,7 +1,7 @@
 # 🔧 APK Configuration Fix Guide
 
 ## 🚨 **Issue Identified**
-The APK is not able to connect to the backend because of network security configuration issues. The backend is running on Digital Ocean (`206.189.141.194:3000`) but the APK's network security settings were blocking connections.
+The APK is not able to connect to the backend because of network security configuration issues. The backend is running on Digital Ocean (`165.232.184.91:3000`) but the APK's network security settings were blocking connections.
 
 ## ✅ **Fixes Applied**
 
@@ -17,18 +17,18 @@ The APK is not able to connect to the backend because of network security config
 
 ### 3. **Verified API Configuration**
 - **File**: `config.js`
-- **Status**: ✅ Correctly configured to use `http://206.189.141.194:3000`
+- **Status**: ✅ Correctly configured to use `http://165.232.184.91:3000`
 - **Impact**: API service will use the correct backend URL
 
 ## 🔍 **Configuration Details**
 
 ### **Backend Status**
-- ✅ **Backend Running**: `http://206.189.141.194:3000`
+- ✅ **Backend Running**: `http://165.232.184.91:3000`
 - ✅ **Health Check**: Responding with status 200
 - ✅ **Authentication**: Login/Register endpoints working
 
 ### **APK Configuration**
-- ✅ **API Base URL**: `http://206.189.141.194:3000`
+- ✅ **API Base URL**: `http://165.232.184.91:3000`
 - ✅ **Cleartext Traffic**: Enabled for HTTP connections
 - ✅ **Network Security**: Simplified to allow all HTTP traffic
 - ✅ **Permissions**: Internet and network state permissions included
@@ -67,7 +67,7 @@ adb logcat | findstr "LOGIN API HEALTH APP CONNECTIVITY"
 ### **✅ Success Indicators**
 ```
 🚀 [APP] Initializing API Service...
-🌐 [APP] Base URL: http://206.189.141.194:3000
+🌐 [APP] Base URL: http://165.232.184.91:3000
 ✅ [APP] API health check passed
 ✅ [APP] Network connectivity test passed
 🔐 [LOGIN] Starting login process...
@@ -98,7 +98,7 @@ adb logcat | findstr "LOGIN API HEALTH APP CONNECTIVITY"
 3. **Test from Device**
    ```bash
    # Test connectivity from your phone
-   curl http://206.189.141.194:3000/api/health
+   curl http://165.232.184.91:3000/api/health
    ```
 
 4. **Check Firewall Settings**

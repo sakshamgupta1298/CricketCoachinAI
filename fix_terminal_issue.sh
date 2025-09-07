@@ -46,8 +46,8 @@ sleep 10
 echo "🧪 Testing backend connectivity..."
 if curl -f http://localhost:3000/api/health > /dev/null 2>&1; then
     echo "✅ Backend is running successfully!"
-    echo "🌐 External URL: http://206.189.141.194:3000"
-    echo "📊 Health check: http://206.189.141.194:3000/api/health"
+    echo "🌐 External URL: http://165.232.184.91:3000"
+    echo "📊 Health check: http://165.232.184.91:3000/api/health"
     
     # Set up the systemd service
     echo "🔧 Setting up systemd service..."

@@ -52,10 +52,10 @@ class NetworkDebugger {
     this.log('Testing backend connectivity...');
     
     const testUrls = [
-      'http://206.189.141.194:3000',
-      'https://206.189.141.194:3000',
-      'http://206.189.141.194:3000/api/health',
-      'https://206.189.141.194:3000/api/health'
+      'http://165.232.184.91:3000',
+      'https://165.232.184.91:3000',
+      'http://165.232.184.91:3000/api/health',
+      'https://165.232.184.91:3000/api/health'
     ];
 
     for (const url of testUrls) {
@@ -100,7 +100,7 @@ class NetworkDebugger {
   async testAPIEndpoints() {
     this.log('Testing specific API endpoints...');
     
-    const baseUrl = 'http://206.189.141.194:3000';
+    const baseUrl = 'http://165.232.184.91:3000';
     const endpoints = [
       '/api/health',
       '/api/auth/register',
@@ -141,7 +141,7 @@ class NetworkDebugger {
   async testHTTPMethods() {
     this.log('Testing different HTTP methods...');
     
-    const baseUrl = 'http://206.189.141.194:3000/api/health';
+    const baseUrl = 'http://165.232.184.91:3000/api/health';
     const methods = ['GET', 'POST', 'OPTIONS'];
 
     for (const method of methods) {
@@ -171,7 +171,7 @@ class NetworkDebugger {
     this.log('Testing CORS and headers...');
     
     try {
-      const response = await fetch('http://206.189.141.194:3000/api/health', {
+      const response = await fetch('http://165.232.184.91:3000/api/health', {
         method: 'OPTIONS',
         headers: {
           'Origin': 'https://example.com',
@@ -278,11 +278,11 @@ class NetworkDebugger {
       recommendations.push('🔴 No successful connections - Check backend status and network configuration');
     }
     
-    if (this.testResults['http://206.189.141.194:3000']?.success && !this.testResults['https://206.189.141.194:3000']?.success) {
+    if (this.testResults['http://165.232.184.91:3000']?.success && !this.testResults['https://165.232.184.91:3000']?.success) {
       recommendations.push('🟡 HTTP works but HTTPS fails - Consider setting up SSL certificates');
     }
     
-    if (this.testResults['http://206.189.141.194:3000']?.success && !this.testResults['http://206.189.141.194:3000/api/health']?.success) {
+    if (this.testResults['http://165.232.184.91:3000']?.success && !this.testResults['http://165.232.184.91:3000/api/health']?.success) {
       recommendations.push('🟡 Base URL works but API endpoints fail - Check API routing');
     }
     

@@ -9,7 +9,7 @@ node test_connectivity.js
 echo.
 
 echo [2/4] Configuration Summary:
-echo ✅ Using Digital Ocean droplet: http://206.189.141.194:3000
+echo ✅ Using Digital Ocean droplet: http://165.232.184.91:3000
 echo ✅ HTTP (no cleartext traffic issues)
 echo ✅ Works from any network
 echo ✅ No special Android configuration needed
@@ -32,7 +32,7 @@ echo.
 echo ========================================
 echo Important Notes:
 echo ========================================
-echo 🔗 Digital Ocean droplet: http://206.189.141.194:3000
+echo 🔗 Digital Ocean droplet: http://165.232.184.91:3000
 echo ⚠️  Backend must be running on the droplet
 echo 📱 Works on any device/network
 echo 🔒 HTTP - no security issues

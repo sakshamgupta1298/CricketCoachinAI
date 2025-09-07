@@ -56,7 +56,7 @@ Test that your backend is running:
 
 ```bash
 # Test health endpoint
-curl http://206.189.141.194:3000/api/health
+curl http://165.232.184.91:3000/api/health
 
 # Check service status
 ssh root@206.189.141.194 'sudo systemctl status crickcoach-backend'
@@ -65,7 +65,7 @@ ssh root@206.189.141.194 'sudo systemctl status crickcoach-backend'
 ## Step 4: Update Mobile App Configuration
 
 Your mobile app is already configured to use the new Digital Ocean URL. The configuration files have been updated to use:
-- `http://206.189.141.194:3000`
+- `http://165.232.184.91:3000`
 
 ## Configuration Files Updated
 
@@ -119,7 +119,7 @@ ssh root@206.189.141.194 '/opt/crickcoach-backend/backup.sh'
 ## Nginx Configuration
 
 Nginx is configured as a reverse proxy:
-- **Direct access**: `http://206.189.141.194:3000`
+- **Direct access**: `http://165.232.184.91:3000`
 - **Via nginx**: `http://206.189.141.194` (port 80)
 
 Nginx configuration includes:
@@ -182,7 +182,7 @@ If you need to scale:
 If you encounter issues:
 1. Check the logs: `ssh root@206.189.141.194 'sudo journalctl -u crickcoach-backend -f'`
 2. Check monitoring logs: `ssh root@206.189.141.194 'tail -f /var/log/crickcoach-backend/monitor.log'`
-3. Verify connectivity: `curl http://206.189.141.194:3000/api/health`
+3. Verify connectivity: `curl http://165.232.184.91:3000/api/health`
 
 ## Next Steps
 
