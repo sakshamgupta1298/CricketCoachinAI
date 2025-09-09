@@ -5,7 +5,7 @@ import torch.nn as nn
 import cv2
 import pandas as pd
 import numpy as np
-from flask import Flask, render_template, request, jsonify, flash, redirect, url_for
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 from openai import OpenAI
@@ -780,20 +780,28 @@ The biomechanical assessment reveals potential issues with run-up speed, deliver
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return jsonify({
+        'message': 'CrickCoach API is running',
+        'status': 'healthy',
+        'version': '1.0.0',
+        'endpoints': {
+            'health': '/api/health',
+            'upload': '/api/upload',
+            'auth': '/api/auth/login',
+            'register': '/api/auth/register'
+        }
+    })
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
     if 'video' not in request.files:
-        flash('No video file selected')
-        return redirect(request.url)
+        return jsonify({'error': 'No video file selected'}), 400
     
     file = request.files['video']
     player_type = request.form.get('player_type', 'batsman')
     
     if file.filename == '':
-        flash('No video file selected')
-        return redirect(request.url)
+        return jsonify({'error': 'No video file selected'}), 400
     
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)

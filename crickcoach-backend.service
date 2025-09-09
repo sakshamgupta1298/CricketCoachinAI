@@ -1,21 +1,31 @@
 [Unit]
 Description=CrickCoach Backend Service
 After=network.target
+Wants=network.target
 
 [Service]
 Type=simple
 User=root
 WorkingDirectory=/root/CricketCoachinAI
-Environment=PATH=/root/CricketCoachinAI/myenv/bin:/usr/bin:/usr/local/bin
-Environment=FLASK_ENV=production
-Environment=FLASK_DEBUG=0
-ExecStart=/root/CricketCoachinAI/start_backend.sh
+Environment=PATH=/root/CricketCoachinAI/myenv/bin
+ExecStart=/root/CricketCoachinAI/myenv/bin/python3 /root/CricketCoachinAI/backend_script.py
 Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
-KillMode=mixed
-TimeoutStopSec=30
+SyslogIdentifier=crickcoach-backend
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/root/CricketCoachinAI/uploads
+ReadWritePaths=/var/log
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
 
 [Install]
 WantedBy=multi-user.target
