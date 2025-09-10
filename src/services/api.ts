@@ -382,6 +382,23 @@ class ApiService {
     }
   }
 
+  // Clear analysis history
+  async clearAnalysisHistory(): Promise<ApiResponse<any>> {
+    try {
+      const response = await this.api.delete('/api/history/clear');
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error: any) {
+      console.error('Clear History Error:', error);
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message,
+      };
+    }
+  }
+
   // Get specific analysis result
   async getAnalysisResult(filename: string): Promise<ApiResponse<AnalysisResult>> {
     try {

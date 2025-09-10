@@ -138,11 +138,47 @@ export default function ProfileScreen() {
     );
   };
 
-  const handleClearHistory = () => {
-    Alert.alert('Clear History', 'Are you sure you want to clear all analysis history?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Clear', style: 'destructive' },
-    ]);
+  const handleClearHistory = async () => {
+    Alert.alert(
+      'Clear History', 
+      'Are you sure you want to clear all analysis history? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Clear All', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('🗑️ Clearing analysis history...');
+              const response = await apiService.clearAnalysisHistory();
+              
+              if (response.success) {
+                Toast.show({
+                  type: 'success',
+                  text1: 'History Cleared',
+                  text2: response.data?.message || 'All analysis history has been cleared',
+                });
+                console.log('✅ History cleared successfully');
+              } else {
+                Toast.show({
+                  type: 'error',
+                  text1: 'Error',
+                  text2: response.error || 'Failed to clear history',
+                });
+                console.error('❌ Failed to clear history:', response.error);
+              }
+            } catch (error) {
+              console.error('❌ Clear history error:', error);
+              Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: 'Failed to clear history',
+              });
+            }
+          }
+        },
+      ]
+    );
   };
 
   const handleUpdateApiUrl = () => {

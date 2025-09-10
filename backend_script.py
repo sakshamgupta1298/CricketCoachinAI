@@ -1210,6 +1210,56 @@ def get_analysis_history():
         logging.exception("Failed to get analysis history")
         return jsonify({'error': f'Error retrieving history: {str(e)}'}), 500
 
+@app.route('/api/history/clear', methods=['DELETE'])
+@require_auth
+def clear_analysis_history():
+    """Clear all analysis history for the authenticated user"""
+    try:
+        # Get user info from authentication
+        user_id = request.user['user_id']
+        username = request.user['username']
+        print(f"Clearing history for user: {username} (ID: {user_id})")
+        
+        deleted_count = 0
+        files_to_delete = []
+        
+        # Find all result files for this user
+        for file in os.listdir(UPLOAD_FOLDER):
+            if file.startswith('results_') and file.endswith('.json'):
+                file_path = os.path.join(UPLOAD_FOLDER, file)
+                
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        result_data = json.load(f)
+                    
+                    # Check if this result belongs to the authenticated user
+                    result_user_id = result_data.get('user_id')
+                    if result_user_id == user_id:
+                        files_to_delete.append(file_path)
+                        
+                except Exception as e:
+                    logging.warning(f"Failed to parse {file}: {e}")
+                    continue
+        
+        # Delete the files
+        for file_path in files_to_delete:
+            try:
+                os.remove(file_path)
+                deleted_count += 1
+                print(f"Deleted: {file_path}")
+            except Exception as e:
+                logging.warning(f"Failed to delete {file_path}: {e}")
+        
+        print(f"Cleared {deleted_count} analysis results for user {username}")
+        return jsonify({
+            'message': f'Successfully cleared {deleted_count} analysis results',
+            'deleted_count': deleted_count
+        })
+        
+    except Exception as e:
+        logging.exception("Failed to clear analysis history")
+        return jsonify({'error': f'Error clearing history: {str(e)}'}), 500
+
 @app.route('/api/training-plan', methods=['POST'])
 @require_auth
 def generate_training_plan_api():
