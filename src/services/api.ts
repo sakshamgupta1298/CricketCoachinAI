@@ -17,9 +17,7 @@ class ApiService {
     this.api = axios.create({
       baseURL: this.baseURL,
       timeout: parseInt(process.env.API_TIMEOUT || '120000'), // Increased to 2 minutes
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+      // Don't set Content-Type here - let FormData set it automatically with boundary
     });
 
     // Separate axios instance for JSON requests
@@ -33,7 +31,16 @@ class ApiService {
 
     // Request interceptor
     this.api.interceptors.request.use(
-      (config) => {
+      async (config) => {
+        // Automatically add Authorization header if not already present
+        if (!config.headers['Authorization']) {
+          const token = await this.getStoredToken();
+          if (token) {
+            config.headers['Authorization'] = `Bearer ${token}`;
+            console.log('🔑 [API_REQUEST] Added Authorization header from storage');
+          }
+        }
+        
         console.log('📤 [API_REQUEST] Making request:', config.method?.toUpperCase(), config.url);
         console.log('🔧 [API_REQUEST] Request config:', {
           method: config.method?.toUpperCase(),
@@ -41,6 +48,7 @@ class ApiService {
           baseURL: config.baseURL,
           fullURL: (config.baseURL || '') + (config.url || ''),
           timeout: config.timeout,
+          hasAuth: !!config.headers['Authorization'],
           headers: config.headers,
           data: config.data
         });
@@ -59,15 +67,37 @@ class ApiService {
         console.log('✅ [API_RESPONSE] Response received:', response.status, response.config.url);
         return response;
       },
-      (error) => {
+      async (error) => {
         console.error('❌ [API_RESPONSE] Response interceptor error:', error);
+        
+        // Handle 401 Unauthorized errors
+        if (error.response?.status === 401) {
+          console.error('🔒 [API_RESPONSE] Authentication failed - clearing auth data');
+          // Clear auth data on 401 error
+          try {
+            await this.clearAuthData();
+            console.log('🧹 [API_RESPONSE] Auth data cleared due to 401 error');
+          } catch (clearError) {
+            console.error('❌ [API_RESPONSE] Failed to clear auth data:', clearError);
+          }
+        }
+        
         return Promise.reject(error);
       }
     );
 
     // JSON API request interceptor
     this.jsonApi.interceptors.request.use(
-      (config) => {
+      async (config) => {
+        // Automatically add Authorization header if not already present
+        if (!config.headers['Authorization']) {
+          const token = await this.getStoredToken();
+          if (token) {
+            config.headers['Authorization'] = `Bearer ${token}`;
+            console.log('🔑 [JSON_API_REQUEST] Added Authorization header from storage');
+          }
+        }
+        
         console.log('📤 [JSON_API_REQUEST] Making JSON request:', config.method?.toUpperCase(), config.url);
         console.log('🔧 [JSON_API_REQUEST] Request config:', {
           method: config.method?.toUpperCase(),
@@ -75,6 +105,7 @@ class ApiService {
           baseURL: config.baseURL,
           fullURL: (config.baseURL || '') + (config.url || ''),
           timeout: config.timeout,
+          hasAuth: !!config.headers['Authorization'],
           headers: config.headers,
           data: config.data
         });
@@ -92,10 +123,23 @@ class ApiService {
         console.log('✅ [JSON_API_RESPONSE] JSON response received:', response.status, response.config.url);
         return response;
       },
-      (error) => {
+      async (error) => {
         console.error('❌ [JSON_API_RESPONSE] Response interceptor error:', error, error.message);
         console.error('📋 [JSON_API_RESPONSE] Complete error object:', JSON.stringify(error, null, 2));
         console.error('🔍 [JSON_API_RESPONSE] Error stack trace:', error.stack);
+        
+        // Handle 401 Unauthorized errors
+        if (error.response?.status === 401) {
+          console.error('🔒 [JSON_API_RESPONSE] Authentication failed - clearing auth data');
+          // Clear auth data on 401 error
+          try {
+            await this.clearAuthData();
+            console.log('🧹 [JSON_API_RESPONSE] Auth data cleared due to 401 error');
+          } catch (clearError) {
+            console.error('❌ [JSON_API_RESPONSE] Failed to clear auth data:', clearError);
+          }
+        }
+        
         return Promise.reject(error);
       }
     );
@@ -199,12 +243,26 @@ class ApiService {
       // Ensure we have the authentication token
       const token = await this.getStoredToken();
       if (!token) {
-        console.error('No authentication token found');
+        console.error('❌ [UPLOAD] No authentication token found');
         return {
           success: false,
           error: 'Authentication required. Please login first.',
         };
       }
+
+      // Verify token is still valid before upload
+      console.log('🔍 [UPLOAD] Verifying token before upload...');
+      const tokenVerification = await this.verifyToken();
+      if (!tokenVerification.success) {
+        console.error('❌ [UPLOAD] Token verification failed:', tokenVerification.error);
+        // Clear invalid auth data
+        await this.clearAuthData();
+        return {
+          success: false,
+          error: 'Your session has expired. Please login again.',
+        };
+      }
+      console.log('✅ [UPLOAD] Token verified successfully');
 
       // Create FormData for file upload
       const data = new FormData();
@@ -239,7 +297,7 @@ class ApiService {
 
       const response = await this.api.post('/api/upload', data, {
         headers: {
-          'Content-Type': 'multipart/form-data',
+          // Don't set Content-Type for FormData - let the library set it with boundary
           'Authorization': `Bearer ${token}`,
         },
         timeout: 600000, // 10 minutes timeout
