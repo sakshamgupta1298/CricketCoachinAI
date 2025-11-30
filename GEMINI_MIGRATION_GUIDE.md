@@ -246,3 +246,4 @@ After making changes:
 - [Python SDK for Gemini](https://github.com/google/generative-ai-python)
 - [Gemini API Quickstart](https://ai.google.dev/tutorials/python_quickstart)
 
+

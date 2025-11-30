@@ -394,3 +394,4 @@ GEMINI_API_KEY=your_gemini_api_key_here
 
 5. **API Key Security**: Move hardcoded API key to environment variable for security.
 
+
