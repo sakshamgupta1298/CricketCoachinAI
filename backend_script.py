@@ -8,7 +8,7 @@ import numpy as np
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
-import google.generativeai as genai
+from openai import OpenAI
 from torchvision import transforms as T
 from pytorchvideo.models.hub import slowfast_r50
 import tensorflow as tf
@@ -144,9 +144,8 @@ CHECKPOINT_PATH = MODEL_PATH
 # Create upload folder if it doesn't exist
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Gemini AI client
-genai.configure(api_key="AIzaSyBXQC5XQzCvX2NHBVXFBHwnbCwP6G5a8H0")
-model = genai.GenerativeModel("gemini-1.5-pro")
+# OpenAI client
+client = OpenAI(api_key="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")
 
 # Transform for video frames
 transform = T.Compose([
@@ -250,23 +249,20 @@ def predict_shot(video_path, model):
 def get_feedback_from_gpt_for_bowling(keypoint_csv_path, bowler_type='fast_bowler'):
     print("bowling:", bowler_type)
 
-    # Read CSV content directly
-    with open(keypoint_csv_path, "r") as f:
-        csv_text = f.read()
-    
+    # Upload the CSV file to OpenAI
+    file_obj = client.files.create(
+        file=open(keypoint_csv_path, "rb"),
+        purpose="assistants"
+    )
     bowling_type = bowler_type.split("_")[0]
     print("bowling_type:", bowling_type)
-    
-    # Prompt Gemini with explicit JSON structure instructions
+    # Prompt GPT with explicit JSON structure instructions
     prompt = f"""
 You are a cricket bowling coach AI and biomechanics expert in cricket.
 
 Bowler type: **{bowler_type}**
 
-Below is the bowling_keypoints.csv data:
-
-{csv_text}
-
+Analyze the pose keypoints from the uploaded CSV file (file_id: {file_obj.id}).
 Please perform a comprehensive analysis of the {bowling_type} bowler's biomechanics and provide:
 
 1. **Biomechanical Assessment**: Analyze run-up, gather, delivery stride, follow-through specific to {bowling_type} bowling.
@@ -275,8 +271,9 @@ Please perform a comprehensive analysis of the {bowling_type} bowler's biomechan
 4. **Technical Analysis**: Compare against ideal {bowling_type} bowling benchmarks
 5. **Improvement Recommendations**: Provide specific drills and corrections for {bowling_type} bowling
 
-Respond ONLY in valid JSON format like:
+Respond in JSON format like:
 
+```json
 {{
   "analysis": "Comprehensive analysis of the {bowling_type} bowling technique...",
   "biomechanical_features": {{
@@ -308,15 +305,28 @@ Respond ONLY in valid JSON format like:
 }}
 """
 
-    response = model.generate_content(prompt)
-    raw = response.text
+    # Request GPT to respond in JSON-only mode
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.3,
+        response_format={"type": "json_object"}
+    )
 
+    # Parse GPT's JSON output safely
+    raw_content = response.choices[0].message.content
     try:
-        json_text = re.search(r"\{.*\}", raw, re.DOTALL).group()
+        # return json.loads(response.choices[0].message.content)
+        json_text = re.search(r"\{.*\}", raw_content, re.DOTALL).group()
         return json.loads(json_text)
     except Exception as e:
-        print("Failed to parse Gemini response:", e)
-        return {"error": "Failed to parse Gemini JSON", "raw_content": raw}
+        # print("Failed to parse GPT JSON:", e)
+        # return {
+        #     "error": "Failed to parse GPT JSON",
+        #     "raw_content": response.choices[0].message.content
+        # }
+        print("Failed to parse GPT response:", e)
+        return {"error": "Failed to parse GPT response", "raw_content": raw_content}
 
 
 def extract_pose_keypoints(video_path, player_type):
@@ -490,28 +500,27 @@ def compute_features(keypoints_path, side='right', player_type='batsman'):
 #         return {"error": "Failed to parse GPT response", "raw_content": raw_content}
 
 def get_feedback_from_gpt(action_type, keypoint_csv_path):
-    # Read CSV content directly
-    with open(keypoint_csv_path, "r") as f:
-        csv_text = f.read()
+    # Upload the CSV file to OpenAI (stored temporarily on their server)
+    file_obj = client.files.create(
+        file=open(keypoint_csv_path, "rb"),
+        purpose="assistants"  # or "fine-tune" if training
+    )
 
     prompt = f"""
 You are a cricket batting coach AI and biomechanics expert.
 
 The predicted shot is: **{action_type}**
 
-Below is the batting_keypoints.csv data:
-
-{csv_text}
-
-Please:
+Please analyze the pose keypoints from the uploaded CSV file (file_id: {file_obj.id}).
 
 1. Compute biomechanical features relevant to this shot.
 2. Compare values against ideal coaching benchmarks.
 3. Identify flaws with reasoning.
 4. Recommend drills or corrections.
 
-Respond ONLY in valid JSON format like:
+Respond in JSON format like:
 
+```json
 {{
   "analysis": "...",
   "flaws": [
@@ -527,20 +536,26 @@ Respond ONLY in valid JSON format like:
 }}
 """
 
-    response = model.generate_content(prompt)
-    raw = response.text
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.3
+    )
 
+    raw_content = response.choices[0].message.content
     try:
-        json_text = re.search(r"\{.*\}", raw, re.DOTALL).group()
+        json_text = re.search(r"\{.*\}", raw_content, re.DOTALL).group()
         return json.loads(json_text)
     except Exception as e:
-        print("Failed to parse Gemini response:", e)
-        return {"error": "Failed to parse Gemini JSON", "raw_content": raw}
+        print("Failed to parse GPT response:", e)
+        return {"error": "Failed to parse GPT response", "raw_content": raw_content}
 
 
 def generate_training_plan(gpt_feedback, player_type='batsman', shot_type=None, bowler_type=None, days=7, report_path=None):
     """
-    Generate a personalized multi-day training plan using the Gemini model.
+    Generate a personalized multi-day training plan using the GPT model.
     Returns a dict with structure: { "plan": [ {"day": 1, "focus": "...", "warmup":[...], "drills":[...], "notes":"..."}, ... ] }
     """
     # Read the report file if available
@@ -552,7 +567,7 @@ def generate_training_plan(gpt_feedback, player_type='batsman', shot_type=None, 
         except Exception as e:
             print(f"Failed to read report file: {e}")
     
-    # Create a comprehensive summary for Gemini
+    # Create a comprehensive summary for GPT
     summary = {
         "player_type": player_type,
         "shot_type": shot_type,
@@ -586,13 +601,18 @@ Focus on addressing the specific flaws and biomechanical issues identified in th
 """
 
     try:
-        response = model.generate_content(prompt)
-        raw = response.text
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+            response_format={"type": "json_object"}
+        )
+        raw = response.choices[0].message.content
         json_text = re.search(r"\{.*\}", raw, re.DOTALL).group()
         plan_json = json.loads(json_text)
         return plan_json
     except Exception as e:
-        logging.exception("Failed to generate training plan from Gemini")
+        logging.exception("Failed to generate training plan from GPT")
         # Fallback simple plan
         fallback = {
             "overall_notes": "Could not generate full plan automatically. Follow these simple drills.",
@@ -895,12 +915,12 @@ def api_upload_file():
                     print(f"Error in feature computation: {str(e)}")
                     return jsonify({'error': f'Error computing features: {str(e)}'}), 500
                 
-                print("Getting Gemini feedback...")
+                print("Getting GPT feedback...")
                 try:
                     gpt_feedback = get_feedback_from_gpt(shot_type, keypoints_path)
-                    print("Gemini feedback received")
+                    print("GPT feedback received")
                 except Exception as e:
-                    print(f"Error in Gemini feedback: {str(e)}")
+                    print(f"Error in GPT feedback: {str(e)}")
                     gpt_feedback = "Unable to generate feedback at this time."
                 
                 results = {
@@ -950,12 +970,12 @@ def api_upload_file():
                     print(f"Error in feature computation: {str(e)}")
                     return jsonify({'error': f'Error computing features: {str(e)}'}), 500
                 
-                print("Getting Gemini feedback for bowling...")
+                print("Getting GPT feedback for bowling...")
                 try:
                     gpt_feedback = get_feedback_from_gpt_for_bowling(keypoints_path, bowler_type)
-                    print("Gemini feedback received")
+                    print("GPT feedback received")
                 except Exception as e:
-                    print(f"Error in Gemini feedback: {str(e)}")
+                    print(f"Error in GPT feedback: {str(e)}")
                     gpt_feedback = "Unable to generate feedback at this time."
                 
                 results = {
