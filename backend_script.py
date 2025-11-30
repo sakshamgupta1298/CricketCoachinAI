@@ -2633,8 +2633,30 @@ def api_upload_file():
                     gpt_feedback = get_feedback_from_gpt(shot_type, keypoints_path)
                     print("GPT feedback received")
                 except Exception as e:
-                    print(f"Error in GPT feedback: {str(e)}")
-                    gpt_feedback = "Unable to generate feedback at this time."
+                    error_msg = str(e)
+                    print(f"Error in GPT feedback: {error_msg}")
+                    # Check for specific OpenAI API errors
+                    if "401" in error_msg or "authentication" in error_msg.lower() or "invalid api key" in error_msg.lower():
+                        gpt_feedback = {
+                            "error": "API authentication failed. Please check your OpenAI API key.",
+                            "details": "The API key may be expired, invalid, or missing.",
+                            "raw_error": error_msg
+                        }
+                    elif "429" in error_msg or "rate limit" in error_msg.lower():
+                        gpt_feedback = {
+                            "error": "API rate limit exceeded. Please try again later.",
+                            "details": error_msg
+                        }
+                    elif "network" in error_msg.lower() or "connection" in error_msg.lower():
+                        gpt_feedback = {
+                            "error": "Network error. Unable to connect to OpenAI API.",
+                            "details": error_msg
+                        }
+                    else:
+                        gpt_feedback = {
+                            "error": "Unable to generate feedback at this time.",
+                            "details": error_msg
+                        }
                 
                 results = {
                     'success': True,
@@ -2688,8 +2710,30 @@ def api_upload_file():
                     gpt_feedback = get_feedback_from_gpt_for_bowling(keypoints_path, bowler_type)
                     print("GPT feedback received")
                 except Exception as e:
-                    print(f"Error in GPT feedback: {str(e)}")
-                    gpt_feedback = "Unable to generate feedback at this time."
+                    error_msg = str(e)
+                    print(f"Error in GPT feedback: {error_msg}")
+                    # Check for specific OpenAI API errors
+                    if "401" in error_msg or "authentication" in error_msg.lower() or "invalid api key" in error_msg.lower():
+                        gpt_feedback = {
+                            "error": "API authentication failed. Please check your OpenAI API key.",
+                            "details": "The API key may be expired, invalid, or missing.",
+                            "raw_error": error_msg
+                        }
+                    elif "429" in error_msg or "rate limit" in error_msg.lower():
+                        gpt_feedback = {
+                            "error": "API rate limit exceeded. Please try again later.",
+                            "details": error_msg
+                        }
+                    elif "network" in error_msg.lower() or "connection" in error_msg.lower():
+                        gpt_feedback = {
+                            "error": "Network error. Unable to connect to OpenAI API.",
+                            "details": error_msg
+                        }
+                    else:
+                        gpt_feedback = {
+                            "error": "Unable to generate feedback at this time.",
+                            "details": error_msg
+                        }
                 
                 results = {
                     'success': True,
