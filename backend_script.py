@@ -23,6 +23,30 @@ import sqlite3
 from functools import wraps
 import gdown
 
+# ==================== LOGGING CONFIGURATION ====================
+# Create logging directory if it doesn't exist
+LOG_DIR = 'logging'
+os.makedirs(LOG_DIR, exist_ok=True)
+
+# Configure logging with date and time
+log_filename = os.path.join(LOG_DIR, f'backend_{datetime.now().strftime("%Y%m%d")}.log')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
+    handlers=[
+        logging.FileHandler(log_filename, encoding='utf-8'),
+        logging.StreamHandler()  # Also log to console
+    ]
+)
+
+# Get logger for this module
+logger = logging.getLogger(__name__)
+logger.info("=" * 80)
+logger.info("CrickCoach Backend Application Starting")
+logger.info(f"Log file: {log_filename}")
+logger.info("=" * 80)
+
 app = Flask(__name__)
 app.secret_key = 'cricket_shot_prediction_secret_key'
 
@@ -61,7 +85,7 @@ def init_database():
     
     conn.commit()
     conn.close()
-    print("Database initialized successfully")
+    logger.info("Database initialized successfully")
 
 def get_db_connection():
     """Get database connection"""
@@ -135,8 +159,9 @@ DOWNLOAD_URL = f"https://drive.google.com/uc?id={FILE_ID}"
 
 # Automatically download the model if it's missing
 if not os.path.exists(MODEL_PATH):
-    print("Model not found locally. Downloading from Google Drive...")
+    logger.info("Model not found locally. Downloading from Google Drive...")
     gdown.download(DOWNLOAD_URL, MODEL_PATH, quiet=False)
+    logger.info(f"Model downloaded successfully to {MODEL_PATH}")
 
 CHECKPOINT_PATH = MODEL_PATH
 # BATTER_SIDE = "right"
@@ -157,34 +182,53 @@ transform = T.Compose([
 
 def initialize_models():
     global shot_prediction_model, pose_detection_model, movenet_signature
-    print("Initializing models...")
+    logger.info("Initializing models...")
     shot_prediction_model = load_model()
+    logger.info("Shot prediction model loaded successfully")
     pose_detection_model = hub.load("https://tfhub.dev/google/movenet/singlepose/thunder/4")
     movenet_signature = pose_detection_model.signatures['serving_default']
-    print("All models initialized successfully!")
+    logger.info("Pose detection model loaded successfully")
+    logger.info("All models initialized successfully!")
 
 def get_shot_prediction_model():
     global shot_prediction_model
     if shot_prediction_model is None:
-        print("Warning: Shot prediction model not initialized, loading now...")
+        logger.warning("Shot prediction model not initialized, loading now...")
         shot_prediction_model = load_model()
+        logger.info("Shot prediction model loaded")
     return shot_prediction_model
 
 def get_pose_detection_model():
     global pose_detection_model
     if pose_detection_model is None:
-        print("Warning: Pose detection model not initialized, loading now...")
+        logger.warning("Pose detection model not initialized, loading now...")
         pose_detection_model = hub.load("https://tfhub.dev/google/movenet/singlepose/thunder/4")
+        logger.info("Pose detection model loaded")
     return pose_detection_model
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def load_model(num_classes=2, checkpoint_path=CHECKPOINT_PATH):
+    logger.info(f"Loading model from: {checkpoint_path}")
+    if not os.path.exists(checkpoint_path):
+        logger.error(f"Model checkpoint not found at: {checkpoint_path}")
+        raise FileNotFoundError(f"Model checkpoint not found at: {checkpoint_path}")
+    
     model = slowfast_r50(pretrained=False)
     model.blocks[-1].proj = nn.Linear(model.blocks[-1].proj.in_features, num_classes)
-    model.load_state_dict(torch.load(checkpoint_path, map_location="cpu"))
+    
+    try:
+        checkpoint = torch.load(checkpoint_path, map_location="cpu")
+        model.load_state_dict(checkpoint)
+        logger.info("Model state dict loaded successfully")
+    except Exception as e:
+        logger.error(f"Error loading model checkpoint: {e}", exc_info=True)
+        raise
+    
     model.eval()
+    logger.info(f"Model set to eval mode. Model device: CPU")
+    logger.info(f"Model output classes: {num_classes}")
     return model
 
 def cleanup_old_files(folder, max_age_hours=24):
@@ -194,19 +238,25 @@ def cleanup_old_files(folder, max_age_hours=24):
         if os.path.isfile(filepath):
             if now - os.path.getmtime(filepath) > max_age_hours * 3600:
                 os.remove(filepath)
-                print(f"Deleted old file: {filepath}")
+                logger.info(f"Deleted old file: {filepath}")
 
 def predict_shot(video_path, model):
+    logger.info(f"Starting shot prediction for video: {video_path}")
+    logger.debug(f"Model type: {type(model)}")
+    logger.debug(f"Model in eval mode: {not model.training}")
+    
     cap = cv2.VideoCapture(video_path)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    logger.info(f"Total frames in video: {total_frames}")
     
     # Check if video has frames
     if total_frames <= 0:
-        print(f"Error: Video file has no frames or is corrupted: {video_path}")
+        logger.error(f"Video file has no frames or is corrupted: {video_path}")
         cap.release()
         return 'coverdrive'  # Default fallback
     
     indices = sorted(torch.randperm(total_frames)[:32].tolist()) if total_frames >= 32 else list(range(total_frames)) + [total_frames - 1] * (32 - total_frames)
+    logger.debug(f"Selected frame indices: {indices[:5]}... (showing first 5)")
 
     frames, current_idx, idx_set = [], 0, set(indices)
     while True:
@@ -214,40 +264,64 @@ def predict_shot(video_path, model):
         if not ret:
             break
         if current_idx in idx_set:
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frame = transform(frame)
-            frames.append(frame)
-            if len(frames) == len(indices):
-                break
+            try:
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                frame = transform(frame)
+                frames.append(frame)
+                if len(frames) == len(indices):
+                    break
+            except Exception as e:
+                logger.warning(f"Error processing frame {current_idx}: {e}")
         current_idx += 1
     cap.release()
+    
+    logger.info(f"Successfully extracted {len(frames)} frames")
 
     # Check if we extracted any frames
     if not frames:
-        print(f"Error: No frames extracted from video: {video_path}")
+        logger.error(f"No frames extracted from video: {video_path}")
         return 'coverdrive'  # Default fallback
     
     # Check if we have enough frames
     if len(frames) < 1:
-        print(f"Error: Insufficient frames extracted: {len(frames)}")
+        logger.error(f"Insufficient frames extracted: {len(frames)}")
         return 'coverdrive'  # Default fallback
 
     try:
+        logger.debug(f"Processing {len(frames)} frames for prediction")
         frames = torch.stack(frames).permute(1, 0, 2, 3)
         fast_pathway = frames
         slow_pathway = frames[:, ::4, :, :]
         inputs = [slow_pathway.unsqueeze(0), fast_pathway.unsqueeze(0)]
+        
+        logger.debug(f"Input shapes - Fast: {fast_pathway.shape}, Slow: {slow_pathway.shape}")
 
         with torch.no_grad():
             outputs = model([inp for inp in inputs])
+            logger.debug(f"Model outputs: {outputs}")
+            logger.debug(f"Model output shape: {outputs.shape}")
+            logger.debug(f"Raw output values: {outputs.tolist()}")
+            
+            # Get probabilities using softmax
+            probs = torch.softmax(outputs, dim=1)
+            logger.info(f"Prediction probabilities - Coverdrive: {probs[0][0].item():.4f}, Pull Shot: {probs[0][1].item():.4f}")
+            
             _, pred = torch.max(outputs, 1)
-        return ['coverdrive', 'pull_shot'][pred.item()]
+            pred_value = pred.item()
+            logger.info(f"Predicted class index: {pred_value}")
+            
+            shot_type = ['coverdrive', 'pull_shot'][pred_value]
+            logger.info(f"Final prediction: {shot_type}")
+            return shot_type
     except Exception as e:
-        print(f"Error in shot prediction: {str(e)}")
+        logger.error(f"Error in shot prediction: {str(e)}", exc_info=True)
+        logger.error(f"Exception type: {type(e).__name__}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         return 'coverdrive'  # Default fallback
 
 def get_feedback_from_gpt_for_bowling(keypoint_csv_path, bowler_type='fast_bowler'):
-    print("bowling:", bowler_type)
+    logger.info(f"Getting GPT feedback for bowling type: {bowler_type}")
 
     # Upload the CSV file to OpenAI
     file_obj = client.files.create(
@@ -255,7 +329,7 @@ def get_feedback_from_gpt_for_bowling(keypoint_csv_path, bowler_type='fast_bowle
         purpose="assistants"
     )
     bowling_type = bowler_type.split("_")[0]
-    print("bowling_type:", bowling_type)
+    logger.debug(f"Bowling type extracted: {bowling_type}")
     # Prompt GPT with explicit JSON structure instructions
     prompt = f"""
 You are a cricket bowling coach AI and biomechanics expert in cricket.
@@ -325,7 +399,7 @@ Respond in JSON format like:
         #     "error": "Failed to parse GPT JSON",
         #     "raw_content": response.choices[0].message.content
         # }
-        print("Failed to parse GPT response:", e)
+        logger.error(f"Failed to parse GPT response: {e}", exc_info=True)
         return {"error": "Failed to parse GPT response", "raw_content": raw_content}
 
 
@@ -549,7 +623,7 @@ Respond in JSON format like:
         json_text = re.search(r"\{.*\}", raw_content, re.DOTALL).group()
         return json.loads(json_text)
     except Exception as e:
-        print("Failed to parse GPT response:", e)
+        logger.error(f"Failed to parse GPT response: {e}", exc_info=True)
         return {"error": "Failed to parse GPT response", "raw_content": raw_content}
 
 
@@ -565,7 +639,7 @@ def generate_training_plan(gpt_feedback, player_type='batsman', shot_type=None, 
             with open(report_path, 'r', encoding='utf-8') as f:
                 report_content = f.read()
         except Exception as e:
-            print(f"Failed to read report file: {e}")
+            logger.error(f"Failed to read report file: {e}", exc_info=True)
     
     # Create a comprehensive summary for GPT
     summary = {
@@ -848,28 +922,28 @@ def upload_file():
 @app.route('/api/upload', methods=['POST'])
 @require_auth
 def api_upload_file():
-    print(f"Received upload request from {request.remote_addr}")
-    print(f"Request headers: {dict(request.headers)}")
-    print(f"Request files: {list(request.files.keys())}")
-    print(f"Request form: {dict(request.form)}")
+    logger.info(f"Received upload request from {request.remote_addr}")
+    logger.debug(f"Request headers: {dict(request.headers)}")
+    logger.debug(f"Request files: {list(request.files.keys())}")
+    logger.debug(f"Request form: {dict(request.form)}")
     
     # Get user info from authentication
     user_id = request.user['user_id']
     username = request.user['username']
-    print(f"Authenticated user: {username} (ID: {user_id})")
+    logger.info(f"Authenticated user: {username} (ID: {user_id})")
     
     if 'video' not in request.files:
-        print("No video file in request")
+        logger.warning("No video file in request")
         return jsonify({'error': 'No video file selected'}), 400
     
     file = request.files['video']
     player_type = request.form.get('player_type', 'batsman')
     bowler_type = request.form.get('bowler_type', 'fast_bowler')  # Default to fast bowler
     
-    print(f"File received: {file.filename}, Player type: {player_type}, Bowler type: {bowler_type}")
+    logger.info(f"File received: {file.filename}, Player type: {player_type}, Bowler type: {bowler_type}")
     
     if file.filename == '':
-        print("Empty filename")
+        logger.warning("Empty filename")
         return jsonify({'error': 'No video file selected'}), 400
     
     if file and allowed_file(file.filename):
@@ -877,50 +951,50 @@ def api_upload_file():
         filepath = os.path.join(UPLOAD_FOLDER, filename)
         file.save(filepath)
         
-        print(f"File saved to {filepath}, starting processing...")
+        logger.info(f"File saved to {filepath}, starting processing...")
         
         try:
             # Step 1: Predict shot/bowling action
-            print("Getting shot prediction model...")
+            logger.info("Getting shot prediction model...")
             model = get_shot_prediction_model()
-            print("Model ready for prediction")
+            logger.info("Model ready for prediction")
             
             if player_type == 'batsman':
                 # Batting analysis
-                print("Getting shot prediction model...")
+                logger.info("Starting batting analysis...")
+                logger.debug("Getting shot prediction model...")
                 model = get_shot_prediction_model()
-                print("Model ready for prediction")
-                print("Predicting shot type...")
+                logger.info("Predicting shot type...")
                 try:
                     shot_type = predict_shot(filepath, model)
-                    print(f"Shot type predicted: {shot_type}")
+                    logger.info(f"Shot type predicted: {shot_type}")
                 except Exception as e:
-                    print(f"Error in shot prediction: {str(e)}")
+                    logger.error(f"Error in shot prediction: {str(e)}", exc_info=True)
                     shot_type = 'coverdrive'  # Default fallback
                 
-                print("Extracting pose keypoints...")
+                logger.info("Extracting pose keypoints...")
                 try:
                     keypoints_path = extract_pose_keypoints(filepath, 'batting')
-                    print("Keypoints extracted")
+                    logger.info("Keypoints extracted successfully")
                 except Exception as e:
-                    print(f"Error in keypoint extraction: {str(e)}")
+                    logger.error(f"Error in keypoint extraction: {str(e)}", exc_info=True)
                     return jsonify({'error': f'Error extracting pose keypoints: {str(e)}'}), 500
                 
                 batter_side = request.form.get('batter_side', 'right')
-                print("Computing features...")
+                logger.info("Computing features...")
                 try:
                     summary_path = compute_features(keypoints_path, batter_side, 'batting')
-                    print("Features computed")
+                    logger.info("Features computed successfully")
                 except Exception as e:
-                    print(f"Error in feature computation: {str(e)}")
+                    logger.error(f"Error in feature computation: {str(e)}", exc_info=True)
                     return jsonify({'error': f'Error computing features: {str(e)}'}), 500
                 
-                print("Getting GPT feedback...")
+                logger.info("Getting GPT feedback...")
                 try:
                     gpt_feedback = get_feedback_from_gpt(shot_type, keypoints_path)
-                    print("GPT feedback received")
+                    logger.info("GPT feedback received successfully")
                 except Exception as e:
-                    print(f"Error in GPT feedback: {str(e)}")
+                    logger.error(f"Error in GPT feedback: {str(e)}", exc_info=True)
                     gpt_feedback = "Unable to generate feedback at this time."
                 
                 results = {
@@ -935,47 +1009,48 @@ def api_upload_file():
                 }
                 
                 # Generate and save report
-                print("Generating report...")
+                logger.info("Generating report...")
                 try:
                     report_path = generate_report(results, 'batsman', shot_type, batter_side, None, None, filename)
                     results['report_path'] = report_path
-                    print(f"Report saved to: {report_path}")
+                    logger.info(f"Report saved to: {report_path}")
                 except Exception as e:
-                    print(f"Error generating report: {str(e)}")
+                    logger.error(f"Error generating report: {str(e)}", exc_info=True)
                     results['report_path'] = None
                 
                 # Save results as JSON for later retrieval
                 results_file = os.path.join(UPLOAD_FOLDER, f"results_{filename}.json")
                 with open(results_file, 'w') as f:
                     json.dump(results, f, indent=2)
-                print(f"Results saved to: {results_file}")
+                logger.info(f"Results saved to: {results_file}")
                 
             else:
                 # Bowling analysis
-                print("Extracting pose keypoints for bowling...")
+                logger.info("Starting bowling analysis...")
+                logger.info("Extracting pose keypoints for bowling...")
                 try:
                     keypoints_path = extract_pose_keypoints(filepath, 'bowling')
-                    print("Keypoints extracted")
+                    logger.info("Keypoints extracted successfully")
                 except Exception as e:
-                    print(f"Error in keypoint extraction: {str(e)}")
+                    logger.error(f"Error in keypoint extraction: {str(e)}", exc_info=True)
                     return jsonify({'error': f'Error extracting pose keypoints: {str(e)}'}), 500
                 
                 bowler_side = request.form.get('bowler_side', 'right')
                 bowler_type = request.form.get('bowler_type', 'fast_bowler') # Default to fast bowler
-                print("Computing bowling features...")
+                logger.info("Computing bowling features...")
                 try:
                     summary_path = compute_features(keypoints_path, bowler_side, 'bowling')
-                    print("Features computed")
+                    logger.info("Features computed successfully")
                 except Exception as e:
-                    print(f"Error in feature computation: {str(e)}")
+                    logger.error(f"Error in feature computation: {str(e)}", exc_info=True)
                     return jsonify({'error': f'Error computing features: {str(e)}'}), 500
                 
-                print("Getting GPT feedback for bowling...")
+                logger.info("Getting GPT feedback for bowling...")
                 try:
                     gpt_feedback = get_feedback_from_gpt_for_bowling(keypoints_path, bowler_type)
-                    print("GPT feedback received")
+                    logger.info("GPT feedback received successfully")
                 except Exception as e:
-                    print(f"Error in GPT feedback: {str(e)}")
+                    logger.error(f"Error in GPT feedback: {str(e)}", exc_info=True)
                     gpt_feedback = "Unable to generate feedback at this time."
                 
                 results = {
@@ -990,34 +1065,34 @@ def api_upload_file():
                 }
                 
                 # Generate and save report
-                print("Generating bowling report...")
+                logger.info("Generating bowling report...")
                 try:
                     report_path = generate_report(results, 'bowler', None, None, bowler_side, bowler_type, filename)
                     results['report_path'] = report_path
-                    print(f"Report saved to: {report_path}")
+                    logger.info(f"Report saved to: {report_path}")
                 except Exception as e:
-                    print(f"Error generating report: {str(e)}")
+                    logger.error(f"Error generating report: {str(e)}", exc_info=True)
                     results['report_path'] = None
                 
                 # Save results as JSON for later retrieval
                 results_file = os.path.join(UPLOAD_FOLDER, f"results_{filename}.json")
                 with open(results_file, 'w') as f:
                     json.dump(results, f, indent=2)
-                print(f"Results saved to: {results_file}")
+                logger.info(f"Results saved to: {results_file}")
 
-            print("Processing completed successfully")
+            logger.info("Processing completed successfully")
             return jsonify(results)
             
         except Exception as e:
-            print(f"Error during processing: {str(e)}")
+            logger.error(f"Error during processing: {str(e)}", exc_info=True)
             return jsonify({'error': f'Error processing video: {str(e)}'}), 500
     
-    print("Invalid file type")
+    logger.warning("Invalid file type")
     return jsonify({'error': 'Invalid file type. Please upload a video file.'}), 400
 
 @app.route('/api/test-upload', methods=['POST'])
 def test_upload():
-    print(f"Test upload request from {request.remote_addr}")
+    logger.info(f"Test upload request from {request.remote_addr}")
     
     if 'video' not in request.files:
         return jsonify({'error': 'No video file selected'}), 400
@@ -1399,56 +1474,54 @@ def get_training_plan(filename):
 def register():
     """Register a new user"""
     try:
-        print("=== REGISTRATION REQUEST RECEIVED ===")
+        logger.info("=== REGISTRATION REQUEST RECEIVED ===")
         data = request.get_json()
-        print(f"Request data: {data}")
+        logger.debug(f"Request data: {data}")
         
         if not data:
-            print("No data provided")
+            logger.warning("No data provided in registration request")
             return jsonify({'error': 'No data provided'}), 400
         
         username = data.get('username')
         email = data.get('email')
         password = data.get('password')
-        print(f"Username: {username}")
-        print(f"Email: {email}")
-        print(f"Password provided: {'Yes' if password else 'No'}")
+        logger.info(f"Registration attempt - Username: {username}, Email: {email}")
         
         # Validation
         if not username or not email or not password:
-            print("Missing required fields")
+            logger.warning("Missing required fields in registration request")
             return jsonify({'error': 'Username, email, and password are required'}), 400
         
         if len(password) < 6:
-            print("Password too short")
+            logger.warning("Password too short in registration request")
             return jsonify({'error': 'Password must be at least 6 characters long'}), 400
         
         # Hash password
-        print("Hashing password...")
+        logger.debug("Hashing password...")
         password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-        print(f"Password hash created: {password_hash.decode('utf-8')[:20]}...")
+        logger.debug("Password hash created")
         
         # Save to database
         conn = get_db_connection()
         cursor = conn.cursor()
         
         try:
-            print("Inserting user into database...")
+            logger.info("Inserting user into database...")
             cursor.execute(
                 'INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)',
                 (username, email, password_hash.decode('utf-8'))
             )
             conn.commit()
-            print("User inserted successfully")
+            logger.info("User inserted successfully")
             
             # Get user ID
             user_id = cursor.lastrowid
-            print(f"User ID: {user_id}")
+            logger.info(f"User ID: {user_id}")
             
             # Generate JWT token
-            print("Generating JWT token...")
+            logger.debug("Generating JWT token...")
             token = generate_jwt_token(user_id, username)
-            print("Token generated successfully")
+            logger.info("Token generated successfully")
             
             conn.close()
             
@@ -1462,7 +1535,7 @@ def register():
                     'email': email
                 }
             }
-            print("Registration successful, returning response")
+            logger.info(f"Registration successful for user: {username}")
             response = jsonify(response_data)
             response.headers.add('Access-Control-Allow-Origin', '*')
             response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
@@ -1471,68 +1544,60 @@ def register():
             
         except sqlite3.IntegrityError as e:
             conn.close()
-            print(f"Integrity error: {e}")
+            logger.warning(f"Integrity error during registration: {e}")
             return jsonify({'error': 'Username or email already exists'}), 409
         
     except Exception as e:
-        print(f"Registration error: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Registration error: {str(e)}", exc_info=True)
         return jsonify({'error': 'Registration failed'}), 500
 
 @app.route('/api/auth/login', methods=['POST'])
 def login():
     """Login user"""
     try:
-        print("=== LOGIN REQUEST RECEIVED ===")
+        logger.info("=== LOGIN REQUEST RECEIVED ===")
         data = request.get_json()
-        print(f"Request data: {data}")
+        logger.debug(f"Request data: {data}")
         
         if not data:
-            print("No data provided")
+            logger.warning("No data provided in login request")
             return jsonify({'error': 'No data provided'}), 400
         
         username = data.get('username')
         password = data.get('password')
-        print(f"Username: {username}")
-        print(f"Password provided: {'Yes' if password else 'No'}")
+        logger.info(f"Login attempt for username: {username}")
         
         if not username or not password:
-            print("Missing username or password")
+            logger.warning("Missing username or password in login request")
             return jsonify({'error': 'Username and password are required'}), 400
         
         # Get user from database
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        print("Querying database for user...")
+        logger.debug("Querying database for user...")
         cursor.execute('SELECT * FROM users WHERE username = ?', (username,))
         user = cursor.fetchone()
-        print(f"User found: {'Yes' if user else 'No'}")
-        
-        if user:
-            print(f"User ID: {user['id']}")
-            print(f"Stored password hash: {user['password_hash'][:20]}...")
+        logger.debug(f"User found: {'Yes' if user else 'No'}")
         
         conn.close()
         
         if not user:
-            print("User not found in database")
+            logger.warning(f"User not found in database: {username}")
             return jsonify({'error': 'Invalid username or password'}), 401
         
         # Verify password
-        print("Verifying password...")
+        logger.debug("Verifying password...")
         password_valid = bcrypt.checkpw(password.encode('utf-8'), user['password_hash'].encode('utf-8'))
-        print(f"Password valid: {password_valid}")
         
         if not password_valid:
-            print("Password verification failed")
+            logger.warning(f"Password verification failed for user: {username}")
             return jsonify({'error': 'Invalid username or password'}), 401
         
         # Generate JWT token
-        print("Generating JWT token...")
+        logger.debug("Generating JWT token...")
         token = generate_jwt_token(user['id'], user['username'])
-        print("Token generated successfully")
+        logger.info(f"Login successful for user: {username} (ID: {user['id']})")
         
         response_data = {
             'success': True,
@@ -1544,7 +1609,6 @@ def login():
                 'email': user['email']
             }
         }
-        print("Login successful, returning response")
         response = jsonify(response_data)
         response.headers.add('Access-Control-Allow-Origin', '*')
         response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
@@ -1552,9 +1616,7 @@ def login():
         return response
         
     except Exception as e:
-        print(f"Login error: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Login error: {str(e)}", exc_info=True)
         return jsonify({'error': 'Login failed'}), 500
 
 @app.route('/api/auth/verify', methods=['GET'])
@@ -1586,9 +1648,9 @@ def logout():
 def delete_account():
     """Delete user account and all associated data"""
     try:
-        print(f"=== DELETE ACCOUNT REQUEST ===")
-        print(f"User ID: {request.user['user_id']}")
-        print(f"Username: {request.user['username']}")
+        logger.info(f"=== DELETE ACCOUNT REQUEST ===")
+        logger.info(f"User ID: {request.user['user_id']}")
+        logger.info(f"Username: {request.user['username']}")
         
         # Get user data from request
         user_id = request.user['user_id']
@@ -1603,10 +1665,10 @@ def delete_account():
         
         if not user:
             conn.close()
-            print("User not found in database")
+            logger.warning(f"User not found in database for deletion: {user_id}")
             return jsonify({'error': 'User not found'}), 404
         
-        print(f"Found user: {user['username']} ({user['email']})")
+        logger.info(f"Found user: {user['username']} ({user['email']})")
         
         # Delete user from database
         cursor.execute('DELETE FROM users WHERE id = ?', (user_id,))
@@ -1619,7 +1681,7 @@ def delete_account():
         conn.close()
         
         if remaining == 0:
-            print("User successfully deleted from database")
+            logger.info(f"User successfully deleted from database: {username} (ID: {user_id})")
             
             # Clean up user's analysis files (optional - you might want to keep them)
             cleanup_user_files(username)
@@ -1629,19 +1691,17 @@ def delete_account():
                 'message': 'Account deleted successfully'
             })
         else:
-            print("Failed to delete user from database")
+            logger.error("Failed to delete user from database")
             return jsonify({'error': 'Failed to delete account'}), 500
             
     except Exception as e:
-        print(f"Delete account error: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Delete account error: {str(e)}", exc_info=True)
         return jsonify({'error': 'Failed to delete account'}), 500
 
 def cleanup_user_files(username):
     """Clean up files associated with the deleted user"""
     try:
-        print(f"Cleaning up files for user: {username}")
+        logger.info(f"Cleaning up files for user: {username}")
         
         # This is a basic cleanup - you might want to implement more sophisticated
         # file management based on your requirements
@@ -1653,14 +1713,15 @@ def cleanup_user_files(username):
         # - Delete user's training plans
         # - Archive data instead of deleting
         
-        print(f"File cleanup completed for user: {username}")
+        logger.info(f"File cleanup completed for user: {username}")
         
     except Exception as e:
-        print(f"Error during file cleanup: {str(e)}")
+        logger.error(f"Error during file cleanup: {str(e)}", exc_info=True)
         # Don't fail the account deletion if file cleanup fails
 
 if __name__ == '__main__':
     # Initialize database
+    logger.info("Initializing database...")
     init_database()
     
     # Initialize models before starting the server
@@ -1668,7 +1729,8 @@ if __name__ == '__main__':
     
     # Start the Flask server
     port = int(os.environ.get('FLASK_PORT', 3000))
-    
+    logger.info(f"Starting Flask server on port {port}")
+    logger.info("=" * 80)
     
     # Server environment - disable debug mode and reloader
     app.run(debug=False, host='0.0.0.0', port=port, use_reloader=False)
