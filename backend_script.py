@@ -1858,12 +1858,12 @@ CHECKPOINT_PATH = MODEL_PATH
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # OpenAI client - Get API key from environment variable or use fallback
-DEFAULT_API_KEY = "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"
-OPENAI_API_KEY = "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"
+# DEFAULT_API_KEY = "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"
+OPENAI_API_KEY = "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"
 
-if OPENAI_API_KEY == DEFAULT_API_KEY:
-    print("WARNING: Using default/hardcoded API key. For security, set OPENAI_API_KEY environment variable.")
-    print("To set it: export OPENAI_API_KEY='your-api-key-here' (Linux/Mac) or set OPENAI_API_KEY=your-api-key-here (Windows)")
+# if OPENAI_API_KEY == DEFAULT_API_KEY:
+#     print("WARNING: Using default/hardcoded API key. For security, set OPENAI_API_KEY environment variable.")
+#     print("To set it: export OPENAI_API_KEY='your-api-key-here' (Linux/Mac) or set OPENAI_API_KEY=your-api-key-here (Windows)")
 
 if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY is not set. Please set it as an environment variable or update the code.")
