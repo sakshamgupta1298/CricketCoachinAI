@@ -1857,8 +1857,18 @@ CHECKPOINT_PATH = MODEL_PATH
 # Create upload folder if it doesn't exist
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# OpenAI client
-client = OpenAI(api_key="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")
+# OpenAI client - Get API key from environment variable or use fallback
+DEFAULT_API_KEY = "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"
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', DEFAULT_API_KEY)
+
+if OPENAI_API_KEY == DEFAULT_API_KEY:
+    print("WARNING: Using default/hardcoded API key. For security, set OPENAI_API_KEY environment variable.")
+    print("To set it: export OPENAI_API_KEY='your-api-key-here' (Linux/Mac) or set OPENAI_API_KEY=your-api-key-here (Windows)")
+
+if not OPENAI_API_KEY:
+    raise ValueError("OPENAI_API_KEY is not set. Please set it as an environment variable or update the code.")
+
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 # Transform for video frames
 transform = T.Compose([
