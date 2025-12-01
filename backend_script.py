@@ -1859,7 +1859,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # OpenAI client - Get API key from environment variable or use fallback
 DEFAULT_API_KEY = "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"
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', DEFAULT_API_KEY)
+OPENAI_API_KEY = "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"
 
 if OPENAI_API_KEY == DEFAULT_API_KEY:
     print("WARNING: Using default/hardcoded API key. For security, set OPENAI_API_KEY environment variable.")
