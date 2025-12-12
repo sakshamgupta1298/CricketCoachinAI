@@ -170,7 +170,7 @@ CHECKPOINT_PATH = MODEL_PATH
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # OpenAI client
-client = OpenAI(api_key="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")
+client = OpenAI(api_key="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")
 
 # Transform for video frames
 transform = T.Compose([
