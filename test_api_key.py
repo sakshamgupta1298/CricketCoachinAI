@@ -1,5 +1,5 @@
 from openai import OpenAI
-client = OpenAI(api_key="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")
+client = OpenAI(api_key="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")
 
 try:
     client.models.list()
