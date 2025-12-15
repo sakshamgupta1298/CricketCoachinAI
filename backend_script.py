@@ -350,59 +350,190 @@ def get_feedback_from_gpt_for_bowling(keypoint_csv_path, bowler_type='fast_bowle
     
     # Prompt Gemini with explicit JSON structure instructions
     prompt = f"""
-You are a cricket bowling coach AI and biomechanics expert in cricket.
+            You are an **elite Cricket Bowling Coach AI** and **Sports Biomechanics Analyst**.
+            Your role is to analyze pose-estimation keypoint time-series data and deliver
+            **bowling-type-specific, norm-based performance and injury-risk feedback**.
 
-Bowler type: **{bowler_type}**
+            ────────────────────────
+            CONTEXT
+            ────────────────────────
+            Bowling Type: {bowling_type}   # fast | spin
+            Bowler Style: {bowler_type}   # right-arm / left-arm / overarm / off-spin / leg-spin
 
-Analyze the pose keypoints from the following data:
+            Each row of the input represents one video frame containing
+            body joint coordinates.
 
-{csv_json}
+            ────────────────────────
+            INPUT DATA
+            ────────────────────────
+            {csv_json}
 
-Please perform a comprehensive analysis of the {bowling_type} bowler's biomechanics and provide:
+            ────────────────────────
+            CRICKET NORM CONSTRAINT (CRITICAL)
+            ────────────────────────
+            All "ideal_range" values MUST be derived from **established cricket bowling norms**
+            as defined in:
+            - ICC fast & spin bowling coaching manuals
+            - elite cricket academies
+            - published bowling biomechanics research
 
-1. **Biomechanical Assessment**: Analyze run-up, gather, delivery stride, follow-through specific to {bowling_type} bowling.
-2. **Performance Metrics**: Evaluate pace generation (for fast bowlers) or spin generation (for spin bowlers), accuracy, and line-length consistency  
-3. **Injury Risk Assessment**: Identify potential injury risks based on joint movements for {bowling_type} bowling
-4. **Technical Analysis**: Compare against ideal {bowling_type} bowling benchmarks
-5. **Improvement Recommendations**: Provide specific drills and corrections for {bowling_type} bowling
+            Do NOT invent generic athletic ranges.
+            Do NOT use single ideal values — ALWAYS use ranges.
+            Adjust ranges based on bowling type and style.
 
-Rules:
-- Use realistic numeric estimates inferred from the data.
-- Never return null values.
-- Respond ONLY in valid JSON.
-- Do not include explanations outside JSON.
+            ────────────────────────
+            AUTO-FEATURE SELECTION LOGIC
+            ────────────────────────
+            1. Always compute CORE features supported by pose keypoints.
+            2. Compute CONDITIONAL features only when motion clarity supports them.
+            3. Infer ADVANCED features conservatively and mark them as "estimated".
+            4. Do NOT fabricate metrics that require sensors not present
+            (force plates, EMG, ball tracking).
 
-Required JSON format:
-{{
-  "analysis": "Comprehensive analysis of the {bowling_type} bowling technique...",
-  "biomechanical_features": {{
-    "run_up_speed": {{
-      "observed": 8.5,
-      "expected_range": "10-12" if "{bowling_type}" == "fast" else "6-8",
-      "analysis": "Run-up speed analysis for {bowling_type} bowling"
-    }},
-    "delivery_stride": {{
-      "observed": 2.1,
-      "expected_range": "1.8-2.2" if "{bowling_type}" == "fast" else "1.5-1.8",
-      "analysis": "Delivery stride analysis for {bowling_type} bowling"
-    }}
-  }},
-  "flaws": [
-    {{
-      "feature": "run_up_speed",
-      "observed": 8.5,
-      "expected_range": "10-12" if "{bowling_type}" == "fast" else "6-8",
-      "issue": "Run-up too slow for {bowling_type} bowling",
-      "recommendation": "Increase run-up speed gradually"
-    }}
-  ],
-  "injury_risks": [
-    "Shoulder strain due to excessive rotation",
-    "Lower back stress from poor follow-through"
-  ],
-  "general_tips": ["Improve follow-through", "Focus on wrist position", "Work on core strength"]
-}}
-"""
+            ────────────────────────
+            FEATURE TIERS
+            ────────────────────────
+
+            ### TIER 1 — CORE (MANDATORY)
+            - Run-up speed (estimated m/s)
+            - Approach rhythm consistency
+            - Trunk lean at delivery
+            - Shoulder rotation angle
+            - Hip–shoulder separation (X-factor)
+            - Front knee flexion at front-foot contact
+            - Front-foot stride length
+            - Arm path plane (over-the-top / round-arm)
+            - Release height consistency
+
+            ### TIER 2 — CONDITIONAL
+            - Run-up acceleration profile
+            - Braking force at front-foot contact (inferred)
+            - Pelvic rotation velocity
+            - Bowling arm angular velocity
+            - Follow-through momentum dissipation
+
+            Mark these as `"confidence": "medium"`.
+
+            ### TIER 3 — INFERRED
+            - Wrist position at release
+            - Seam orientation stability
+            - Spin generation efficiency (spin bowlers)
+            - Pace transfer efficiency (fast bowlers)
+            - Kinetic chain sequencing quality
+
+            Mark these as `"estimated": true`.
+
+            ────────────────────────
+            BOWLING-TYPE NORM ADJUSTMENT
+            ────────────────────────
+            Ideal ranges MUST be adjusted based on bowling type:
+
+            FAST BOWLING →
+            - Higher run-up speed & stride length norms
+            - Strong front-knee bracing norms
+            - Larger hip–shoulder separation norms
+            - Controlled trunk flexion norms
+
+            SPIN BOWLING →
+            - Moderate run-up speed norms
+            - Upright trunk posture norms
+            - Higher shoulder rotation control norms
+            - Wrist-dominant release norms
+
+            A deviation is a flaw ONLY if it lies clearly outside
+            the acceptable cricket norm for the given bowling type.
+
+            ────────────────────────
+            ANALYSIS TASKS
+            ────────────────────────
+            1. Select biomechanical features using the rules above.
+            2. Compute or estimate realistic numeric values from the data.
+            3. Compare each value against **bowling-type-specific cricket norm ranges**.
+            4. Identify ONLY data-supported technical flaws.
+            5. Assess injury risk linked to norm deviations.
+            6. Provide ONE practical corrective drill per flaw.
+
+            ────────────────────────
+            INJURY-AWARE CONSTRAINTS
+            ────────────────────────
+            When flagging injury risk, relate it biomechanically to:
+            - lumbar spine (hyperextension / lateral flexion)
+            - shoulder complex (over-rotation / load)
+            - elbow (especially for spinners)
+            - knee and ankle (braking forces)
+
+            Avoid over-alarmist language unless deviation is severe.
+
+            ────────────────────────
+            RULES (STRICT)
+            ────────────────────────
+            - Respond ONLY in valid JSON.
+            - No markdown or explanations outside JSON.
+            - No null, NaN, or empty objects.
+            - All numeric values must be biomechanically plausible.
+            - Use concise, professional coaching language.
+
+            ────────────────────────
+            REQUIRED JSON OUTPUT
+            ────────────────────────
+            {{
+            "analysis_summary": "Bowler-specific biomechanical overview based on cricket norms",
+
+            "selected_features": {{
+                "core": ["list of computed core features"],
+                "conditional": ["list of computed conditional features"],
+                "inferred": ["list of inferred features"]
+            }},
+
+            "biomechanics": {{
+                "core": {{
+                "feature_name": {{
+                    "observed": <number>,
+                    "ideal_range": "cricket-norm range adjusted for bowling type",
+                    "analysis": "Comparison against cricket bowling norms"
+                }}
+                }},
+                "conditional": {{
+                "feature_name": {{
+                    "observed": <number>,
+                    "ideal_range": "cricket-norm range",
+                    "confidence": "medium",
+                    "analysis": "Norm-based evaluation"
+                }}
+                }},
+                "inferred": {{
+                "feature_name": {{
+                    "observed": <number>,
+                    "estimated": true,
+                    "analysis": "Norm-aligned inference"
+                }}
+                }}
+            }},
+
+            "technical_flaws": [
+                {{
+                "feature": "feature_name",
+                "deviation": "clear deviation from cricket bowling norm",
+                "issue": "Biomechanical explanation",
+                "recommendation": "specific bowling drill + coaching cue"
+                }}
+            ],
+
+            "injury_risk_assessment": [
+                {{
+                "body_part": "Lower back | Shoulder | Elbow | Knee | Ankle",
+                "risk_level": "Low | Moderate | High",
+                "reason": "Biomechanical cause linked to norm deviation"
+                }}
+            ],
+
+            "general_tips": [
+                "Bowling-specific coaching cue",
+                "Bowling-type appropriate improvement focus"
+            ]
+            }}
+            """
+
 
     try:
         # Request Gemini to respond in JSON
@@ -620,43 +751,161 @@ def get_feedback_from_gpt(action_type, keypoint_csv_path):
     csv_json = json.dumps(data)
 
     prompt = f"""
-You are a cricket batting coach AI and biomechanics expert.
+            You are an **elite Cricket Batting Coach** and **Sports Biomechanics Analyst**.
+            Your role is to analyze pose keypoint time-series data and deliver
+            **shot-specific, norm-based coaching feedback** grounded in real cricket biomechanics.
 
-The predicted shot is: {action_type}
+            ────────────────────────
+            CONTEXT
+            ────────────────────────
+            Shot Type: {action_type}
 
-Analyze the pose keypoints from the following data:
+            Each row of the input represents one video frame containing
+            body joint coordinates and bat reference points (if available).
 
-{csv_json}
+            ────────────────────────
+            INPUT DATA
+            ────────────────────────
+            {csv_json}
 
-Tasks:
-1. Compute biomechanical features relevant to this shot
-   (e.g. backlift angle, head stability, front knee flexion,
-   hip–shoulder separation, bat swing plane).
-2. Compare observed values against ideal professional coaching benchmarks.
-3. Identify technical flaws with biomechanical reasoning.
-4. Recommend specific drills or corrections.
+            ────────────────────────
+            CRICKET NORM CONSTRAINT (CRITICAL)
+            ────────────────────────
+            All "ideal_range" values MUST be derived from **established cricket coaching norms**
+            as used in:
+            - ICC coaching manuals
+            - elite cricket academies
+            - published cricket biomechanics research
 
-Rules:
-- Use realistic numeric estimates inferred from the data.
-- Never return null values.
-- Respond ONLY in valid JSON.
-- Do not include explanations outside JSON.
+            Do NOT invent arbitrary or generic athletic ranges.
+            Do NOT use single ideal values — ALWAYS use ranges.
 
-Required JSON format:
-{{
-  "analysis": "...",
-  "flaws": [
-    {{
-      "feature": "backlift_angle",
-      "observed": 158.4,
-      "expected_range": "45-65",
-      "issue": "Too high for cover drive",
-      "recommendation": "Use mirror drill to restrict backlift"
-    }}
-  ],
-  "general_tips": ["Improve head stability", "Use shadow practice"]
-}}
-"""
+            ────────────────────────
+            AUTO-FEATURE SELECTION LOGIC
+            ────────────────────────
+            1. Always compute CORE features supported by pose keypoints.
+            2. Compute CONDITIONAL features only when motion clarity supports them.
+            3. Infer ADVANCED features conservatively and mark them as "estimated".
+            4. Do NOT fabricate metrics that require sensors not present
+            (eye tracking, grip pressure, ball tracking).
+
+            ────────────────────────
+            FEATURE TIERS
+            ────────────────────────
+
+            ### TIER 1 — CORE (MANDATORY)
+            - Head stability (lateral & vertical displacement)
+            - Trunk lean
+            - Spine angle change (setup → impact)
+            - Shoulder rotation angle
+            - Hip–shoulder separation
+            - Front knee flexion at impact
+            - Front-foot stride length
+            - Backlift angle (relative to vertical)
+            - Bat proximity to body (horizontal distance from torso)
+
+            ### TIER 2 — CONDITIONAL
+            - Hip rotation velocity
+            - Bat angular velocity
+            - Downswing duration
+            - Center of mass shift
+            - Peak bat speed timing
+
+            Mark these as `"confidence": "medium"`.
+
+            ### TIER 3 — INFERRED
+            - Bat face stability
+            - Wrist release timing
+            - Sweet-spot contact probability
+            - Kinetic chain sequencing quality
+
+            Mark these as `"estimated": true`.
+
+            ────────────────────────
+            SHOT-SPECIFIC NORM ADJUSTMENT
+            ────────────────────────
+            Ideal ranges MUST be adjusted based on shot type:
+
+            - Defensive → compact mechanics, minimal movement
+            - Cover Drive → balance, bat control, front-knee stability
+            - Cut Shot → late bat swing, controlled wrist release
+            - Pull / Hook → trunk rotation and wider bat arc
+            - Lofted Shot → increased bat speed and separation
+
+            A deviation is a flaw ONLY if it lies clearly outside
+            the acceptable cricket norm for the given shot.
+
+            ────────────────────────
+            ANALYSIS TASKS
+            ────────────────────────
+            1. Select biomechanical features using the rules above.
+            2. Compute or estimate realistic numeric values from the data.
+            3. Compare each value against **shot-specific cricket norm ranges**.
+            4. Identify ONLY data-supported technical flaws.
+            5. Provide ONE practical corrective drill per flaw.
+
+            ────────────────────────
+            RULES (STRICT)
+            ────────────────────────
+            - Respond ONLY in valid JSON.
+            - No markdown, no explanations outside JSON.
+            - No null, NaN, or empty objects.
+            - All numeric values must be realistic for cricket biomechanics.
+            - Use concise, professional coaching language.
+
+            ────────────────────────
+            REQUIRED JSON OUTPUT
+            ────────────────────────
+            {{
+            "analysis_summary": "Shot-specific biomechanical overview based on cricket norms",
+
+            "selected_features": {{
+                "core": ["list of computed core features"],
+                "conditional": ["list of computed conditional features"],
+                "inferred": ["list of inferred features"]
+            }},
+
+            "biomechanics": {{
+                "core": {{
+                "feature_name": {{
+                    "observed": <number>,
+                    "ideal_range": "cricket-norm range adjusted for the shot",
+                    "analysis": "Comparison against cricket norms"
+                }}
+                }},
+                "conditional": {{
+                "feature_name": {{
+                    "observed": <number>,
+                    "ideal_range": "cricket-norm range",
+                    "confidence": "medium",
+                    "analysis": "Norm-based evaluation"
+                }}
+                }},
+                "inferred": {{
+                "feature_name": {{
+                    "observed": <number>,
+                    "estimated": true,
+                    "analysis": "Norm-aligned inference"
+                }}
+                }}
+            }},
+
+            "technical_flaws": [
+                {{
+                "feature": "feature_name",
+                "deviation": "clear deviation from cricket norm",
+                "issue": "Biomechanical explanation",
+                "recommendation": "specific cricket coaching drill + cue"
+                }}
+            ],
+
+            "general_tips": [
+                "Cricket-specific coaching cue",
+                "Shot-appropriate improvement focus"
+            ]
+            }}
+            """
+
 
     try:
         response = client.models.generate_content(
