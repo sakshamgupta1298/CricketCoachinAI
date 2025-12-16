@@ -18,6 +18,10 @@ class ApiService {
       baseURL: this.baseURL,
       timeout: parseInt(process.env.API_TIMEOUT || '120000'), // Increased to 2 minutes
       // Don't set Content-Type here - let FormData set it automatically with boundary
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+      // React Native specific configuration
+      validateStatus: (status) => status < 500, // Don't throw on 4xx errors
     });
 
     // Separate axios instance for JSON requests
@@ -27,6 +31,9 @@ class ApiService {
       headers: {
         'Content-Type': 'application/json',
       },
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+      validateStatus: (status) => status < 500,
     });
 
     // Request interceptor
@@ -237,8 +244,10 @@ class ApiService {
     }
   }
 
-  // Upload video for analysis
-  async uploadVideo(formData: UploadFormData): Promise<ApiResponse<AnalysisResult>> {
+  // Upload video for analysis with retry logic
+  async uploadVideo(formData: UploadFormData, retryCount: number = 0): Promise<ApiResponse<AnalysisResult>> {
+    const maxRetries = 2;
+    
     try {
       // Ensure we have the authentication token
       const token = await this.getStoredToken();
@@ -248,6 +257,20 @@ class ApiService {
           success: false,
           error: 'Authentication required. Please login first.',
         };
+      }
+
+      // Check connectivity before upload (only on first attempt)
+      if (retryCount === 0) {
+        console.log('🔍 [UPLOAD] Checking connectivity before upload...');
+        const healthCheck = await this.healthCheck();
+        if (!healthCheck.success) {
+          console.error('❌ [UPLOAD] Connectivity check failed:', healthCheck.error);
+          return {
+            success: false,
+            error: 'Cannot connect to server. Please check your internet connection and try again.',
+          };
+        }
+        console.log('✅ [UPLOAD] Connectivity check passed');
       }
 
       // Verify token is still valid before upload
@@ -267,11 +290,11 @@ class ApiService {
       // Create FormData for file upload
       const data = new FormData();
       
-      // Add video file
+      // Add video file - React Native FormData format
       const videoFile = {
         uri: formData.video_uri,
-        name: formData.video_name,
-        type: formData.video_type,
+        name: formData.video_name || 'video.mp4',
+        type: formData.video_type || 'video/mp4',
       } as any;
       
       data.append('video', videoFile);
@@ -281,17 +304,20 @@ class ApiService {
         data.append('batter_side', formData.batter_side);
       } else if (formData.player_type === 'bowler') {
         if (formData.bowler_side) {
-        data.append('bowler_side', formData.bowler_side);
+          data.append('bowler_side', formData.bowler_side);
         }
         if (formData.bowler_type) {
           data.append('bowler_type', formData.bowler_type);
         }
       }
 
-      console.log('📤 [UPLOAD] Making upload request with token');
-      console.log('🔧 [UPLOAD] Request headers:', {
-        'Content-Type': 'multipart/form-data',
-        'Authorization': `Bearer ${token.substring(0, 20)}...` // Log partial token for security
+      console.log('📤 [UPLOAD] Making upload request (attempt ' + (retryCount + 1) + ')');
+      console.log('🔧 [UPLOAD] Request config:', {
+        baseURL: this.baseURL,
+        url: '/api/upload',
+        fullURL: `${this.baseURL}/api/upload`,
+        timeout: 600000,
+        hasAuth: !!token,
       });
       console.log('⏱️ [UPLOAD] Timeout set to 10 minutes');
 
@@ -301,10 +327,12 @@ class ApiService {
           'Authorization': `Bearer ${token}`,
         },
         timeout: 600000, // 10 minutes timeout
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
         onUploadProgress: (progressEvent) => {
           if (progressEvent.total) {
             const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-            console.log('Upload Progress:', progress + '%');
+            console.log(`📊 [UPLOAD] Progress: ${progress}% (${Math.round(progressEvent.loaded / 1024 / 1024)}MB / ${Math.round(progressEvent.total / 1024 / 1024)}MB)`);
           }
         },
       });
@@ -315,14 +343,19 @@ class ApiService {
         data: response.data,
       };
     } catch (error: any) {
-      console.error('❌ [UPLOAD] Upload Error:', error);
-      console.error('📋 [UPLOAD] Error details:', {
+      console.error('❌ [UPLOAD] Upload Error (attempt ' + (retryCount + 1) + '):', error);
+      console.error('📋 [UPLOAD] Error details:', JSON.stringify({
         message: error.message,
         code: error.code,
         response: error.response?.data,
         status: error.response?.status,
-        config: error.config
-      });
+        config: {
+          baseURL: error.config?.baseURL,
+          url: error.config?.url,
+          method: error.config?.method,
+          timeout: error.config?.timeout,
+        }
+      }, null, 2));
       
       // Handle specific error cases
       if (error.response?.status === 401) {
@@ -340,17 +373,25 @@ class ApiService {
         };
       }
       
-      // Handle network errors
+      // Handle network errors with retry logic
+      if ((error.message.includes('Network Error') || error.code === 'ERR_NETWORK') && retryCount < maxRetries) {
+        console.log(`🔄 [UPLOAD] Retrying upload (${retryCount + 1}/${maxRetries})...`);
+        // Wait before retry (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, (retryCount + 1) * 2000));
+        return this.uploadVideo(formData, retryCount + 1);
+      }
+      
+      // Final network error after retries
       if (error.message.includes('Network Error') || error.code === 'ERR_NETWORK') {
         return {
           success: false,
-          error: 'Network connection lost. The video may have been uploaded successfully. Please check your results.',
+          error: 'Network connection failed. Please check your internet connection and try again.',
         };
       }
       
       return {
         success: false,
-        error: error.response?.data?.error || error.message,
+        error: error.response?.data?.error || error.message || 'Upload failed. Please try again.',
       };
     }
   }
