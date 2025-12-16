@@ -321,6 +321,58 @@ def predict_shot(video_path, model):
         logger.error(f"Full traceback: {traceback.format_exc()}")
         return 'coverdrive'  # Default fallback
 
+
+def parse_gemini_json_response(raw_content):
+    """
+    Parse JSON from Gemini response, handling markdown code blocks and various formats.
+    
+    Gemini sometimes returns JSON wrapped in markdown like:
+    ```json
+    {...}
+    ```
+    
+    This function handles multiple formats:
+    1. Plain JSON
+    2. JSON wrapped in markdown code blocks
+    3. JSON with leading/trailing whitespace
+    """
+    if not raw_content:
+        raise ValueError("Empty response content")
+    
+    # First, try to strip markdown code blocks if present
+    content = raw_content.strip()
+    
+    # Remove markdown code block markers
+    # Handle ```json ... ``` or ``` ... ```
+    if content.startswith('```'):
+        # Find the first newline after ```
+        first_newline = content.find('\n')
+        if first_newline != -1:
+            # Find the last ```
+            last_backticks = content.rfind('```')
+            if last_backticks != -1 and last_backticks > first_newline:
+                # Extract content between first newline and last ```
+                content = content[first_newline + 1:last_backticks].strip()
+    
+    # Try to extract JSON object using regex
+    json_match = re.search(r'\{.*\}', content, re.DOTALL)
+    if json_match:
+        json_text = json_match.group()
+        try:
+            return json.loads(json_text)
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse extracted JSON: {e}")
+            # Try cleaning up common issues
+            # Remove trailing commas before closing braces/brackets
+            json_text = re.sub(r',(\s*[}\]])', r'\1', json_text)
+            try:
+                return json.loads(json_text)
+            except json.JSONDecodeError:
+                raise ValueError(f"Invalid JSON format: {e}")
+    else:
+        raise ValueError("No JSON object found in response")
+
+
 def get_feedback_from_gpt_for_bowling(keypoint_csv_path, bowler_type='fast_bowler'):
     logger.info(f"Getting Gemini feedback for bowling type: {bowler_type}")
 
@@ -545,10 +597,10 @@ def get_feedback_from_gpt_for_bowling(keypoint_csv_path, bowler_type='fast_bowle
         # Parse Gemini's JSON output safely
         raw_content = response.text
         try:
-            json_text = re.search(r"\{.*\}", raw_content, re.DOTALL).group()
-            return json.loads(json_text)
+            return parse_gemini_json_response(raw_content)
         except Exception as e:
             logger.error(f"Failed to parse Gemini response: {e}", exc_info=True)
+            logger.debug(f"Raw content: {raw_content[:500]}...")  # Log first 500 chars for debugging
             return {"error": "Failed to parse Gemini response", "raw_content": raw_content}
     except Exception as e:
         logger.error(f"Failed to get Gemini response: {e}", exc_info=True)
@@ -915,10 +967,10 @@ def get_feedback_from_gpt(action_type, keypoint_csv_path):
 
         raw_content = response.text
         try:
-            json_text = re.search(r"\{.*\}", raw_content, re.DOTALL).group()
-            return json.loads(json_text)
+            return parse_gemini_json_response(raw_content)
         except Exception as e:
             logger.error(f"Failed to parse Gemini response: {e}", exc_info=True)
+            logger.debug(f"Raw content: {raw_content[:500]}...")  # Log first 500 chars for debugging
             return {"error": "Failed to parse Gemini response", "raw_content": raw_content}
     except Exception as e:
         logger.error(f"Failed to get Gemini response: {e}", exc_info=True)

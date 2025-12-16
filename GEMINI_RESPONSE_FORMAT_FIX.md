@@ -156,7 +156,32 @@ To verify the fix works:
 }
 ```
 
+## Additional Fix: Markdown Code Block Parsing
+
+### Problem
+Gemini sometimes wraps JSON responses in markdown code blocks:
+```
+```json
+{...}
+```
+```
+
+The original regex-based parsing (`r"\{.*\}"`) failed to handle this format, causing parse errors.
+
+### Solution
+Added `parse_gemini_json_response()` function that:
+1. Strips markdown code block markers (```json ... ```)
+2. Extracts JSON using regex
+3. Handles trailing comma issues
+4. Provides better error messages
+
+This function is now used in both:
+- `get_feedback_from_gpt()` (batting analysis)
+- `get_feedback_from_gpt_for_bowling()` (bowling analysis)
+
 ## Status
 
-✅ **Fixed** - The backend now transforms Gemini responses to match frontend expectations.
+✅ **Fixed** - The backend now:
+1. Parses Gemini responses even when wrapped in markdown code blocks
+2. Transforms Gemini responses to match frontend expectations
 
