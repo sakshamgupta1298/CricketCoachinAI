@@ -22,6 +22,33 @@ class ApiService {
       maxContentLength: Infinity,
       // React Native specific configuration
       validateStatus: (status) => status < 500, // Don't throw on 4xx errors
+      // Override default transformRequest to handle FormData properly
+      transformRequest: [
+        (data: any, headers: any) => {
+          // Check if this is FormData - React Native FormData detection
+          const isFormData = data instanceof FormData || 
+                            (data && data.constructor && data.constructor.name === 'FormData');
+          
+          if (isFormData) {
+            // Remove Content-Type - FormData will set it with boundary
+            if (headers) {
+              delete headers['Content-Type'];
+              delete headers['content-type'];
+            }
+            // Return FormData as-is - don't serialize it
+            return data;
+          }
+          
+          // For non-FormData, use default axios serialization
+          // This will handle JSON.stringify for objects
+          if (typeof data === 'object' && !(data instanceof FormData)) {
+            headers['Content-Type'] = 'application/json';
+            return JSON.stringify(data);
+          }
+          
+          return data;
+        }
+      ],
     });
 
     // Separate axios instance for JSON requests
@@ -48,6 +75,42 @@ class ApiService {
           }
         }
         
+        // CRITICAL: If data is FormData, remove Content-Type header
+        // FormData must set Content-Type itself with the proper boundary
+        // React Native FormData detection - check multiple ways
+        const isFormData = config.data && (
+          config.data instanceof FormData || 
+          (typeof FormData !== 'undefined' && config.data.constructor?.name === 'FormData') ||
+          (config.data.constructor && config.data.constructor.name === 'FormData') ||
+          (config.url && config.url.includes('/api/upload')) // Upload endpoint always uses FormData
+        );
+        
+        if (isFormData) {
+          console.log('📎 [API_REQUEST] FormData detected - removing Content-Type header');
+          console.log('📎 [API_REQUEST] FormData check details:', {
+            instanceof: config.data instanceof FormData,
+            constructorName: config.data?.constructor?.name,
+            url: config.url
+          });
+          
+          // Remove Content-Type from all possible locations
+          delete config.headers['Content-Type'];
+          delete config.headers['content-type'];
+          delete config.headers['Content-type'];
+          delete config.headers['CONTENT-TYPE'];
+          
+          // Also remove from common headers if present
+          if (config.headers.common) {
+            delete config.headers.common['Content-Type'];
+            delete config.headers.common['content-type'];
+          }
+          
+          // Don't set Content-Type at all - let FormData handle it
+          // But we need to ensure axios doesn't set it automatically
+          // Note: Upload endpoint uses native fetch API, so this interceptor
+          // mainly handles other endpoints that might use FormData
+        }
+        
         console.log('📤 [API_REQUEST] Making request:', config.method?.toUpperCase(), config.url);
         console.log('🔧 [API_REQUEST] Request config:', {
           method: config.method?.toUpperCase(),
@@ -56,8 +119,9 @@ class ApiService {
           fullURL: (config.baseURL || '') + (config.url || ''),
           timeout: config.timeout,
           hasAuth: !!config.headers['Authorization'],
+          isFormData: config.data instanceof FormData || (typeof FormData !== 'undefined' && config.data?.constructor?.name === 'FormData'),
           headers: config.headers,
-          data: config.data
+          data: config.data instanceof FormData ? 'FormData' : config.data
         });
         return config;
       },
@@ -288,15 +352,37 @@ class ApiService {
       console.log('✅ [UPLOAD] Token verified successfully');
 
       // Create FormData for file upload
+      // IMPORTANT: Use the global FormData from React Native, not a polyfill
       const data = new FormData();
       
+      // Verify FormData is available
+      if (typeof FormData === 'undefined') {
+        console.error('❌ [UPLOAD] FormData is not available!');
+        return {
+          success: false,
+          error: 'FormData is not supported in this environment',
+        };
+      }
+      
       // Add video file - React Native FormData format
+      // For React Native, we need to use the file URI directly
+      // The format should be compatible with React Native's FormData implementation
       const videoFile = {
         uri: formData.video_uri,
         name: formData.video_name || 'video.mp4',
         type: formData.video_type || 'video/mp4',
       } as any;
       
+      console.log('📎 [UPLOAD] FormData file object:', {
+        uri: formData.video_uri,
+        name: videoFile.name,
+        type: videoFile.type,
+        size: formData.video_size
+      });
+      console.log('📎 [UPLOAD] FormData instance check:', data instanceof FormData);
+      console.log('📎 [UPLOAD] FormData constructor:', data.constructor?.name);
+      
+      // Append fields to FormData
       data.append('video', videoFile);
       data.append('player_type', formData.player_type);
       
@@ -308,8 +394,19 @@ class ApiService {
         }
         if (formData.bowler_type) {
           data.append('bowler_type', formData.bowler_type);
+        } else {
+          console.warn('⚠️ [UPLOAD] bowler_type not provided, backend will use default');
         }
       }
+      
+      // Log FormData contents for debugging
+      console.log('📋 [UPLOAD] FormData fields:', {
+        player_type: formData.player_type,
+        batter_side: formData.batter_side,
+        bowler_side: formData.bowler_side,
+        bowler_type: formData.bowler_type,
+        has_video: !!videoFile
+      });
 
       console.log('📤 [UPLOAD] Making upload request (attempt ' + (retryCount + 1) + ')');
       console.log('🔧 [UPLOAD] Request config:', {
@@ -321,27 +418,64 @@ class ApiService {
       });
       console.log('⏱️ [UPLOAD] Timeout set to 10 minutes');
 
-      const response = await this.api.post('/api/upload', data, {
-        headers: {
-          // Don't set Content-Type for FormData - let the library set it with boundary
-          'Authorization': `Bearer ${token}`,
-        },
-        timeout: 600000, // 10 minutes timeout
-        maxBodyLength: Infinity,
-        maxContentLength: Infinity,
-        onUploadProgress: (progressEvent) => {
-          if (progressEvent.total) {
-            const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-            console.log(`📊 [UPLOAD] Progress: ${progress}% (${Math.round(progressEvent.loaded / 1024 / 1024)}MB / ${Math.round(progressEvent.total / 1024 / 1024)}MB)`);
-          }
-        },
-      });
-
-      console.log('✅ [UPLOAD] Upload successful');
-      return {
-        success: true,
-        data: response.data,
+      // For React Native, we need to ensure FormData is sent correctly
+      // CRITICAL: Do NOT set Content-Type header - FormData will set it automatically with boundary
+      // We need to explicitly prevent axios from setting Content-Type
+      const headers: any = {
+        'Authorization': `Bearer ${token}`,
       };
+      
+      // Explicitly do NOT set Content-Type - FormData must set it with boundary
+      // Setting it to undefined or deleting it might not work, so we'll handle it in transformRequest
+      
+      console.log('📤 [UPLOAD] Making request with FormData');
+      console.log('📤 [UPLOAD] FormData type check:', data instanceof FormData);
+      console.log('📤 [UPLOAD] FormData constructor name:', data.constructor?.name);
+      console.log('📤 [UPLOAD] Using native fetch API for FormData upload');
+      
+      // Use native fetch API for FormData uploads - it handles FormData correctly
+      // axios has issues with React Native FormData and Content-Type headers
+      const uploadUrl = `${this.baseURL}/api/upload`;
+      
+      // Create AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minutes
+      
+      try {
+        const fetchResponse = await fetch(uploadUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            // DO NOT set Content-Type - fetch will set it automatically with boundary for FormData
+          },
+          body: data, // FormData - fetch handles this correctly
+          signal: controller.signal,
+        });
+        
+        clearTimeout(timeoutId);
+        
+        // Check if response is ok
+        if (!fetchResponse.ok) {
+          const errorData = await fetchResponse.json().catch(() => ({ error: 'Unknown error' }));
+          throw new Error(errorData.error || `Upload failed with status ${fetchResponse.status}`);
+        }
+        
+        const responseData = await fetchResponse.json();
+        
+        console.log('✅ [UPLOAD] Upload successful via fetch API');
+        return {
+          success: true,
+          data: responseData,
+        };
+      } catch (error: any) {
+        clearTimeout(timeoutId);
+        
+        if (error.name === 'AbortError') {
+          throw new Error('Upload timed out after 10 minutes');
+        }
+        
+        throw error;
+      }
     } catch (error: any) {
       console.error('❌ [UPLOAD] Upload Error (attempt ' + (retryCount + 1) + '):', error);
       console.error('📋 [UPLOAD] Error details:', JSON.stringify({
@@ -354,8 +488,26 @@ class ApiService {
           url: error.config?.url,
           method: error.config?.method,
           timeout: error.config?.timeout,
+          headers: error.config?.headers,
+        },
+        request: {
+          data: error.request?.data ? 'FormData present' : 'No data',
         }
       }, null, 2));
+      
+      // Log the actual error response if available
+      if (error.response) {
+        console.error('📄 [UPLOAD] Response status:', error.response.status);
+        console.error('📄 [UPLOAD] Response headers:', JSON.stringify(error.response.headers, null, 2));
+        console.error('📄 [UPLOAD] Response data:', JSON.stringify(error.response.data, null, 2));
+      }
+      
+      // Log request details for debugging
+      if (error.config) {
+        console.error('📤 [UPLOAD] Request URL:', error.config.baseURL + error.config.url);
+        console.error('📤 [UPLOAD] Request method:', error.config.method);
+        console.error('📤 [UPLOAD] Request headers:', JSON.stringify(error.config.headers, null, 2));
+      }
       
       // Handle specific error cases
       if (error.response?.status === 401) {

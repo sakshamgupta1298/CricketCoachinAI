@@ -3,26 +3,26 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
 import {
-    Alert,
-    ScrollView,
-    StyleSheet,
-    TouchableOpacity,
-    View,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import {
-    Button,
-    Card,
-    ProgressBar,
-    RadioButton,
-    Surface,
-    Text,
-    useTheme
+  Button,
+  Card,
+  ProgressBar,
+  RadioButton,
+  Surface,
+  Text,
+  useTheme
 } from 'react-native-paper';
 import Toast from 'react-native-toast-message';
 import { useUpload } from '../context/UploadContext';
 import apiService from '../services/api';
 import { borderRadius, colors, shadows, spacing } from '../theme';
-import { PlayerSide, PlayerType, UploadFormData } from '../types';
+import { BowlerType, PlayerSide, PlayerType, UploadFormData } from '../types';
 
 type RootStackParamList = {
   Main: undefined;
@@ -38,6 +38,7 @@ const UploadScreen: React.FC = () => {
 
   const [playerType, setPlayerType] = useState<PlayerType>('batsman');
   const [playerSide, setPlayerSide] = useState<PlayerSide>('right');
+  const [bowlerType, setBowlerType] = useState<BowlerType>('fast_bowler');
   const [selectedVideo, setSelectedVideo] = useState<{
     uri: string;
     name: string;
@@ -102,6 +103,7 @@ const UploadScreen: React.FC = () => {
         formData.batter_side = playerSide;
       } else {
         formData.bowler_side = playerSide;
+        formData.bowler_type = bowlerType;
       }
 
       startUpload(formData);
@@ -187,6 +189,29 @@ const UploadScreen: React.FC = () => {
             </RadioButton.Group>
           </Card.Content>
         </Card>
+
+        {/* Bowler Type Selection */}
+        {playerType === 'bowler' && (
+          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+            <Card.Content>
+              <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
+                Bowler Type
+              </Text>
+              <RadioButton.Group onValueChange={value => setBowlerType(value as BowlerType)} value={bowlerType}>
+                <View style={styles.radioGroup}>
+                  <View style={styles.radioItem}>
+                    <RadioButton value="fast_bowler" />
+                    <Text style={[styles.radioLabel, { color: theme.colors.onSurface }]}>Fast Bowler</Text>
+                  </View>
+                  <View style={styles.radioItem}>
+                    <RadioButton value="spin_bowler" />
+                    <Text style={[styles.radioLabel, { color: theme.colors.onSurface }]}>Spin Bowler</Text>
+                  </View>
+                </View>
+              </RadioButton.Group>
+            </Card.Content>
+          </Card>
+        )}
 
         {/* Video Selection */}
         <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
