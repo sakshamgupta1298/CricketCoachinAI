@@ -45,7 +45,10 @@ const ResultsScreen: React.FC = () => {
   };
 
   const renderFlaws = () => {
-    if (!result.gpt_feedback.flaws || result.gpt_feedback.flaws.length === 0) {
+    // Support both Gemini format (technical_flaws) and legacy format (flaws)
+    const flaws = result.gpt_feedback.technical_flaws || result.gpt_feedback.flaws || [];
+    
+    if (flaws.length === 0) {
       return (
         <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
           <Card.Content>
@@ -60,37 +63,51 @@ const ResultsScreen: React.FC = () => {
       );
     }
 
-    return result.gpt_feedback.flaws.map((flaw, index) => (
-      <Card key={index} style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-        <Card.Content>
-          <View style={styles.flawHeader}>
-            <Text style={[styles.flawTitle, { color: theme.colors.onSurface }]}>
-              {flaw.feature.replace(/_/g, ' ').toUpperCase()}
-            </Text>
-            <Chip
-              mode="outlined"
-              textStyle={{ color: colors.error }}
-              style={{ borderColor: colors.error }}
-            >
-              {flaw.observed} vs {flaw.expected_range}
-            </Chip>
-          </View>
-          
-          <Text style={[styles.flawIssue, { color: theme.colors.onSurface }]}>
-            {flaw.issue}
-          </Text>
-          
-          <View style={styles.recommendationContainer}>
-            <Text style={[styles.recommendationLabel, { color: theme.colors.primary }]}>
-              💡 Recommendation:
-            </Text>
-            <Text style={[styles.recommendationText, { color: theme.colors.onSurface }]}>
-              {flaw.recommendation}
-            </Text>
-          </View>
-        </Card.Content>
-      </Card>
-    ));
+    return flaws.map((flaw: any, index: number) => {
+      // Handle both Gemini format and legacy format
+      const feature = flaw.feature || '';
+      const deviation = flaw.deviation || (flaw.observed ? `${flaw.observed} vs ${flaw.expected_range || 'N/A'}` : '');
+      const issue = flaw.issue || '';
+      const recommendation = flaw.recommendation || '';
+      
+      return (
+        <Card key={index} style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+          <Card.Content>
+            <View style={styles.flawHeader}>
+              <Text style={[styles.flawTitle, { color: theme.colors.onSurface }]}>
+                {feature.replace(/_/g, ' ').toUpperCase()}
+              </Text>
+              {deviation && (
+                <Chip
+                  mode="outlined"
+                  textStyle={{ color: colors.error }}
+                  style={{ borderColor: colors.error }}
+                >
+                  {deviation}
+                </Chip>
+              )}
+            </View>
+            
+            {issue && (
+              <Text style={[styles.flawIssue, { color: theme.colors.onSurface }]}>
+                {issue}
+              </Text>
+            )}
+            
+            {recommendation && (
+              <View style={styles.recommendationContainer}>
+                <Text style={[styles.recommendationLabel, { color: theme.colors.primary }]}>
+                  💡 Recommendation:
+                </Text>
+                <Text style={[styles.recommendationText, { color: theme.colors.onSurface }]}>
+                  {recommendation}
+                </Text>
+              </View>
+            )}
+          </Card.Content>
+        </Card>
+      );
+    });
   };
 
   const renderGeneralTips = () => {
@@ -118,7 +135,11 @@ const ResultsScreen: React.FC = () => {
   };
 
   const renderInjuryRisks = () => {
-    if (!result.gpt_feedback.injury_risks || result.gpt_feedback.injury_risks.length === 0) {
+    // Support both Gemini format (injury_risk_assessment) and legacy format (injury_risks)
+    const injuryRisks = result.gpt_feedback.injury_risk_assessment || [];
+    const legacyRisks = result.gpt_feedback.injury_risks || [];
+    
+    if (injuryRisks.length === 0 && legacyRisks.length === 0) {
       return null;
     }
 
@@ -128,8 +149,23 @@ const ResultsScreen: React.FC = () => {
           <Text style={[styles.cardTitle, { color: colors.error }]}>
             ⚠️ Injury Risks
           </Text>
-          {result.gpt_feedback.injury_risks.map((risk, index) => (
+          {/* Render Gemini format injury risks */}
+          {injuryRisks.map((risk: any, index: number) => (
             <View key={index} style={styles.riskItem}>
+              <Text style={styles.riskBullet}>⚠️</Text>
+              <View style={styles.riskContent}>
+                <Text style={[styles.riskText, { color: theme.colors.onSurface, fontWeight: '600' }]}>
+                  {risk.body_part}: {risk.risk_level}
+                </Text>
+                <Text style={[styles.riskText, { color: theme.colors.onSurfaceVariant }]}>
+                  {risk.reason}
+                </Text>
+              </View>
+            </View>
+          ))}
+          {/* Render legacy format injury risks */}
+          {legacyRisks.map((risk: string, index: number) => (
+            <View key={`legacy-${index}`} style={styles.riskItem}>
               <Text style={styles.riskBullet}>⚠️</Text>
               <Text style={[styles.riskText, { color: theme.colors.onSurface }]}>
                 {risk}
@@ -177,21 +213,134 @@ const ResultsScreen: React.FC = () => {
         </Surface>
 
         {/* Analysis Summary */}
-        {result.gpt_feedback.analysis && (
+        {(result.gpt_feedback.analysis_summary || result.gpt_feedback.analysis) && (
           <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
             <Card.Content>
               <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
                 📊 Analysis Summary
               </Text>
               <Text style={[styles.analysisText, { color: theme.colors.onSurface }]}>
-                {result.gpt_feedback.analysis}
+                {result.gpt_feedback.analysis_summary || result.gpt_feedback.analysis}
               </Text>
             </Card.Content>
           </Card>
         )}
 
-        {/* Biomechanical Features */}
-        {result.gpt_feedback.biomechanical_features && (
+        {/* Biomechanical Features - Gemini Format */}
+        {result.gpt_feedback.biomechanics && (
+          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+            <Card.Content>
+              <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
+                🔬 Biomechanical Features
+              </Text>
+              
+              {/* Core Features */}
+              {result.gpt_feedback.biomechanics.core && Object.keys(result.gpt_feedback.biomechanics.core).length > 0 && (
+                <View style={styles.biomechanicsSection}>
+                  <Text style={[styles.biomechanicsSectionTitle, { color: theme.colors.primary }]}>
+                    Core Features
+                  </Text>
+                  {Object.entries(result.gpt_feedback.biomechanics.core).map(([key, value]: [string, any], index) => (
+                    <View key={`core-${index}`} style={styles.biomechanicalItem}>
+                      <Text style={[styles.biomechanicalLabel, { color: theme.colors.onSurface }]}>
+                        {key.replace(/_/g, ' ').toUpperCase()}
+                      </Text>
+                      <View style={styles.biomechanicalValue}>
+                        <Text style={[styles.biomechanicalObserved, { color: theme.colors.primary }]}>
+                          Observed: {value.observed}
+                        </Text>
+                        {value.ideal_range && (
+                          <Text style={[styles.biomechanicalExpected, { color: theme.colors.onSurfaceVariant }]}>
+                            Ideal: {value.ideal_range}
+                          </Text>
+                        )}
+                      </View>
+                      {value.analysis && (
+                        <Text style={[styles.biomechanicalAnalysis, { color: theme.colors.onSurfaceVariant }]}>
+                          {value.analysis}
+                        </Text>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              )}
+              
+              {/* Conditional Features */}
+              {result.gpt_feedback.biomechanics.conditional && Object.keys(result.gpt_feedback.biomechanics.conditional).length > 0 && (
+                <View style={styles.biomechanicsSection}>
+                  <Text style={[styles.biomechanicsSectionTitle, { color: theme.colors.secondary }]}>
+                    Conditional Features
+                  </Text>
+                  {Object.entries(result.gpt_feedback.biomechanics.conditional).map(([key, value]: [string, any], index) => (
+                    <View key={`conditional-${index}`} style={styles.biomechanicalItem}>
+                      <View style={styles.biomechanicalHeader}>
+                        <Text style={[styles.biomechanicalLabel, { color: theme.colors.onSurface }]}>
+                          {key.replace(/_/g, ' ').toUpperCase()}
+                        </Text>
+                        {value.confidence && (
+                          <Chip mode="outlined" compact style={styles.confidenceChip}>
+                            {value.confidence} confidence
+                          </Chip>
+                        )}
+                      </View>
+                      <View style={styles.biomechanicalValue}>
+                        <Text style={[styles.biomechanicalObserved, { color: theme.colors.primary }]}>
+                          Observed: {value.observed}
+                        </Text>
+                        {value.ideal_range && (
+                          <Text style={[styles.biomechanicalExpected, { color: theme.colors.onSurfaceVariant }]}>
+                            Ideal: {value.ideal_range}
+                          </Text>
+                        )}
+                      </View>
+                      {value.analysis && (
+                        <Text style={[styles.biomechanicalAnalysis, { color: theme.colors.onSurfaceVariant }]}>
+                          {value.analysis}
+                        </Text>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              )}
+              
+              {/* Inferred Features */}
+              {result.gpt_feedback.biomechanics.inferred && Object.keys(result.gpt_feedback.biomechanics.inferred).length > 0 && (
+                <View style={styles.biomechanicsSection}>
+                  <Text style={[styles.biomechanicsSectionTitle, { color: theme.colors.onSurfaceVariant }]}>
+                    Inferred Features
+                  </Text>
+                  {Object.entries(result.gpt_feedback.biomechanics.inferred).map(([key, value]: [string, any], index) => (
+                    <View key={`inferred-${index}`} style={styles.biomechanicalItem}>
+                      <View style={styles.biomechanicalHeader}>
+                        <Text style={[styles.biomechanicalLabel, { color: theme.colors.onSurface }]}>
+                          {key.replace(/_/g, ' ').toUpperCase()}
+                        </Text>
+                        {value.estimated && (
+                          <Chip mode="outlined" compact style={styles.estimatedChip}>
+                            Estimated
+                          </Chip>
+                        )}
+                      </View>
+                      <View style={styles.biomechanicalValue}>
+                        <Text style={[styles.biomechanicalObserved, { color: theme.colors.primary }]}>
+                          Observed: {value.observed}
+                        </Text>
+                      </View>
+                      {value.analysis && (
+                        <Text style={[styles.biomechanicalAnalysis, { color: theme.colors.onSurfaceVariant }]}>
+                          {value.analysis}
+                        </Text>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              )}
+            </Card.Content>
+          </Card>
+        )}
+
+        {/* Biomechanical Features - Legacy Format */}
+        {result.gpt_feedback.biomechanical_features && !result.gpt_feedback.biomechanics && (
           <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
             <Card.Content>
               <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
@@ -207,7 +356,7 @@ const ResultsScreen: React.FC = () => {
                       Observed: {value.observed}
                     </Text>
                     <Text style={[styles.biomechanicalExpected, { color: theme.colors.onSurfaceVariant }]}>
-                      Expected: {value.expected_range}
+                      Expected: {value.expected_range || value.ideal_range}
                     </Text>
                   </View>
                   <Text style={[styles.biomechanicalAnalysis, { color: theme.colors.onSurfaceVariant }]}>
@@ -400,10 +549,37 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginRight: spacing.sm,
   },
+  riskContent: {
+    flex: 1,
+  },
   riskText: {
     fontSize: 16,
     lineHeight: 22,
     flex: 1,
+  },
+  biomechanicsSection: {
+    marginBottom: spacing.lg,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray[200],
+  },
+  biomechanicsSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: spacing.md,
+    marginTop: spacing.sm,
+  },
+  biomechanicalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  confidenceChip: {
+    height: 24,
+  },
+  estimatedChip: {
+    height: 24,
   },
   actionButtons: {
     flexDirection: 'row',
