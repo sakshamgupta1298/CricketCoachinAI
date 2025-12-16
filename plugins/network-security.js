@@ -38,11 +38,19 @@ const withNetworkSecurity = (config) => {
     </base-config>
     
     <!-- Specific domain configurations -->
-    <domain-config cleartextTrafficPermitted="true">
-        <!-- Digital Ocean production backend -->
+    <!-- Production backend with HTTPS -->
+    <domain-config cleartextTrafficPermitted="false">
+        <!-- Digital Ocean production backend - HTTPS only -->
         <domain includeSubdomains="true">165.232.184.91</domain>
         
-        <!-- Local development IPs -->
+        <!-- Trust system certificates for HTTPS -->
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </domain-config>
+    
+    <!-- Local development IPs - allow cleartext for development -->
+    <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">192.168.1.3</domain>
         <domain includeSubdomains="true">10.0.2.2</domain>
         <domain includeSubdomains="true">localhost</domain>
@@ -67,9 +75,9 @@ const withNetworkSecurity = (config) => {
       NSAllowsArbitraryLoads: true,
       NSExceptionDomains: {
         '165.232.184.91': {
-          NSExceptionAllowsInsecureHTTPLoads: true,
-          NSExceptionMinimumTLSVersion: '1.0',
-          NSExceptionRequiresForwardSecrecy: false,
+          NSExceptionAllowsInsecureHTTPLoads: false, // HTTPS only for production
+          NSExceptionMinimumTLSVersion: '1.2',
+          NSExceptionRequiresForwardSecrecy: true,
           NSIncludesSubdomains: true
         },
         '192.168.1.3': {

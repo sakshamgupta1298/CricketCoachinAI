@@ -12,65 +12,20 @@ export interface AnalysisResult {
   batter_side?: string;
   bowler_side?: string;
   bowler_type?: string;
-  gpt_feedback: GeminiFeedback;
+  gpt_feedback: {
+    analysis?: string;
+    flaws?: Array<{
+      feature: string;
+      observed: number;
+      expected_range: string;
+      issue: string;
+      recommendation: string;
+    }>;
+    general_tips?: string[];
+    biomechanical_features?: Record<string, any>;
+    injury_risks?: string[];
+  };
   filename: string;
-}
-
-// Gemini response format
-export interface GeminiFeedback {
-  // Analysis summary
-  analysis_summary?: string;
-  analysis?: string; // Legacy support
-  
-  // Selected features
-  selected_features?: {
-    core?: string[];
-    conditional?: string[];
-    inferred?: string[];
-  };
-  
-  // Biomechanics data (nested structure)
-  biomechanics?: {
-    core?: Record<string, BiomechanicalFeature>;
-    conditional?: Record<string, BiomechanicalFeature>;
-    inferred?: Record<string, BiomechanicalFeature>;
-  };
-  biomechanical_features?: Record<string, any>; // Legacy support
-  
-  // Technical flaws
-  technical_flaws?: Array<{
-    feature: string;
-    deviation: string;
-    issue: string;
-    recommendation: string;
-  }>;
-  flaws?: Array<{ // Legacy support
-    feature: string;
-    observed: number;
-    expected_range: string;
-    issue: string;
-    recommendation: string;
-  }>;
-  
-  // Injury risk assessment
-  injury_risk_assessment?: Array<{
-    body_part: string;
-    risk_level: 'Low' | 'Moderate' | 'High';
-    reason: string;
-  }>;
-  injury_risks?: string[]; // Legacy support
-  
-  // General tips
-  general_tips?: string[];
-}
-
-export interface BiomechanicalFeature {
-  observed: number;
-  ideal_range?: string;
-  expected_range?: string; // Legacy support
-  confidence?: 'low' | 'medium' | 'high';
-  estimated?: boolean;
-  analysis: string;
 }
 
 export interface UploadFormData {

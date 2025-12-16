@@ -106,7 +106,7 @@ const HistoryScreen: React.FC = () => {
                   {item.player_type === 'batsman' ? 'Batting' : 'Bowling'} Analysis
                 </Text>
                 <Text style={[styles.cardSubtitle, { color: theme.colors.onSurfaceVariant }]}>
-                  {formatDate(item.created)}
+                  {formatDate(item.timestamp)}
                 </Text>
               </View>
             </View>
@@ -132,20 +132,19 @@ const HistoryScreen: React.FC = () => {
             {item.filename}
           </Text>
 
-          {(item.result.gpt_feedback.analysis_summary || item.result.gpt_feedback.analysis) && (
+          {item.result.gpt_feedback.analysis && (
             <Text 
               style={[styles.analysisPreview, { color: theme.colors.onSurfaceVariant }]}
               numberOfLines={2}
             >
-              {item.result.gpt_feedback.analysis_summary || item.result.gpt_feedback.analysis}
+              {item.result.gpt_feedback.analysis}
             </Text>
           )}
 
-          {((item.result.gpt_feedback.technical_flaws && item.result.gpt_feedback.technical_flaws.length > 0) ||
-            (item.result.gpt_feedback.flaws && item.result.gpt_feedback.flaws.length > 0)) && (
+          {item.result.gpt_feedback.flaws && item.result.gpt_feedback.flaws.length > 0 && (
             <View style={styles.flawsPreview}>
               <Text style={[styles.flawsLabel, { color: colors.error }]}>
-                {(item.result.gpt_feedback.technical_flaws?.length || item.result.gpt_feedback.flaws?.length || 0)} issue{(item.result.gpt_feedback.technical_flaws?.length || item.result.gpt_feedback.flaws?.length || 0) > 1 ? 's' : ''} found
+                {item.result.gpt_feedback.flaws.length} issue{item.result.gpt_feedback.flaws.length > 1 ? 's' : ''} found
               </Text>
             </View>
           )}

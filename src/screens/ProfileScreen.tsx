@@ -91,9 +91,7 @@ const ProfileScreen: React.FC = () => {
     const battingAnalyses = uploadHistory.filter(item => item.player_type === 'batsman').length;
     const bowlingAnalyses = uploadHistory.filter(item => item.player_type === 'bowler').length;
     const issuesFound = uploadHistory.reduce((total, item) => {
-      // Support both Gemini format (technical_flaws) and legacy format (flaws)
-      const flaws = item.result.gpt_feedback.technical_flaws || item.result.gpt_feedback.flaws || [];
-      return total + flaws.length;
+      return total + (item.result.gpt_feedback.flaws?.length || 0);
     }, 0);
 
     return { totalAnalyses, battingAnalyses, bowlingAnalyses, issuesFound };
