@@ -925,6 +925,130 @@ def get_feedback_from_gpt(action_type, keypoint_csv_path):
         return {"error": "Failed to get Gemini response", "raw_content": str(e)}
 
 
+def transform_gpt_feedback_for_frontend(gpt_feedback):
+    """
+    Transform Gemini response structure to match frontend expectations.
+    Converts:
+    - analysis_summary -> analysis
+    - technical_flaws -> flaws (with proper structure)
+    - biomechanics -> biomechanical_features (flattened)
+    """
+    if not isinstance(gpt_feedback, dict) or 'error' in gpt_feedback:
+        return gpt_feedback
+    
+    transformed = {}
+    
+    # Convert analysis_summary to analysis
+    if 'analysis_summary' in gpt_feedback:
+        transformed['analysis'] = gpt_feedback['analysis_summary']
+    elif 'analysis' in gpt_feedback:
+        transformed['analysis'] = gpt_feedback['analysis']
+    
+    # Convert technical_flaws to flaws with proper structure
+    if 'technical_flaws' in gpt_feedback:
+        flaws = []
+        for flaw in gpt_feedback['technical_flaws']:
+            # Try to get observed value from biomechanics if not in flaw
+            observed_value = flaw.get('observed', 'N/A')
+            if observed_value == 'N/A' and 'biomechanics' in gpt_feedback:
+                feature_name = flaw.get('feature', '')
+                # Check in core, conditional, and inferred
+                for tier in ['core', 'conditional', 'inferred']:
+                    if tier in gpt_feedback['biomechanics'] and feature_name in gpt_feedback['biomechanics'][tier]:
+                        observed_value = gpt_feedback['biomechanics'][tier][feature_name].get('observed', 'N/A')
+                        break
+            
+            # Transform to match frontend expected structure
+            transformed_flaw = {
+                'feature': flaw.get('feature', ''),
+                'observed': observed_value,
+                'expected_range': flaw.get('ideal_range', flaw.get('expected_range', 'N/A')),
+                'issue': flaw.get('issue', flaw.get('deviation', '')),
+                'recommendation': flaw.get('recommendation', '')
+            }
+            flaws.append(transformed_flaw)
+        transformed['flaws'] = flaws
+    elif 'flaws' in gpt_feedback:
+        # Ensure existing flaws have the right structure
+        flaws = []
+        for flaw in gpt_feedback['flaws']:
+            if isinstance(flaw, dict):
+                flaws.append({
+                    'feature': flaw.get('feature', ''),
+                    'observed': flaw.get('observed', 'N/A'),
+                    'expected_range': flaw.get('expected_range', flaw.get('ideal_range', 'N/A')),
+                    'issue': flaw.get('issue', flaw.get('deviation', '')),
+                    'recommendation': flaw.get('recommendation', '')
+                })
+            else:
+                flaws.append(flaw)
+        transformed['flaws'] = flaws
+    else:
+        transformed['flaws'] = []
+    
+    # Convert biomechanics nested structure to flat biomechanical_features
+    if 'biomechanics' in gpt_feedback:
+        biomechanical_features = {}
+        biomechanics = gpt_feedback['biomechanics']
+        
+        # Flatten core features
+        if 'core' in biomechanics:
+            for feature_name, feature_data in biomechanics['core'].items():
+                biomechanical_features[feature_name] = {
+                    'observed': feature_data.get('observed', 'N/A'),
+                    'expected_range': feature_data.get('ideal_range', feature_data.get('expected_range', 'N/A')),
+                    'analysis': feature_data.get('analysis', '')
+                }
+        
+        # Flatten conditional features
+        if 'conditional' in biomechanics:
+            for feature_name, feature_data in biomechanics['conditional'].items():
+                biomechanical_features[feature_name] = {
+                    'observed': feature_data.get('observed', 'N/A'),
+                    'expected_range': feature_data.get('ideal_range', feature_data.get('expected_range', 'N/A')),
+                    'analysis': feature_data.get('analysis', ''),
+                    'confidence': feature_data.get('confidence', 'medium')
+                }
+        
+        # Flatten inferred features
+        if 'inferred' in biomechanics:
+            for feature_name, feature_data in biomechanics['inferred'].items():
+                biomechanical_features[feature_name] = {
+                    'observed': feature_data.get('observed', 'N/A'),
+                    'expected_range': feature_data.get('ideal_range', feature_data.get('expected_range', 'N/A')),
+                    'analysis': feature_data.get('analysis', ''),
+                    'estimated': feature_data.get('estimated', True)
+                }
+        
+        transformed['biomechanical_features'] = biomechanical_features
+    elif 'biomechanical_features' in gpt_feedback:
+        transformed['biomechanical_features'] = gpt_feedback['biomechanical_features']
+    
+    # Keep general_tips as is
+    if 'general_tips' in gpt_feedback:
+        transformed['general_tips'] = gpt_feedback['general_tips']
+    
+    # Convert injury_risk_assessment to injury_risks (for bowling)
+    if 'injury_risk_assessment' in gpt_feedback:
+        # Convert array of objects to array of strings for frontend
+        injury_risks = []
+        for risk in gpt_feedback['injury_risk_assessment']:
+            if isinstance(risk, dict):
+                risk_str = f"{risk.get('body_part', 'Unknown')}: {risk.get('risk_level', 'Unknown')} risk - {risk.get('reason', '')}"
+                injury_risks.append(risk_str)
+            else:
+                injury_risks.append(str(risk))
+        transformed['injury_risks'] = injury_risks
+    elif 'injury_risks' in gpt_feedback:
+        transformed['injury_risks'] = gpt_feedback['injury_risks']
+    
+    # Keep selected_features if present (for reference)
+    if 'selected_features' in gpt_feedback:
+        transformed['selected_features'] = gpt_feedback['selected_features']
+    
+    return transformed
+
+
 def generate_training_plan(gpt_feedback, player_type='batsman', shot_type=None, bowler_type=None, days=7, report_path=None):
     """
     Generate a personalized multi-day training plan using the Gemini model.
@@ -1290,11 +1414,14 @@ def api_upload_file():
                 
                 logger.info("Getting Gemini feedback...")
                 try:
-                    gpt_feedback = get_feedback_from_gpt(shot_type, keypoints_path)
+                    gpt_feedback_raw = get_feedback_from_gpt(shot_type, keypoints_path)
                     logger.info("Gemini feedback received successfully")
+                    # Transform feedback to match frontend expectations
+                    gpt_feedback = transform_gpt_feedback_for_frontend(gpt_feedback_raw)
+                    logger.info("Feedback transformed for frontend")
                 except Exception as e:
                     logger.error(f"Error in Gemini feedback: {str(e)}", exc_info=True)
-                    gpt_feedback = "Unable to generate feedback at this time."
+                    gpt_feedback = {"error": "Unable to generate feedback at this time.", "analysis": "Unable to generate feedback at this time.", "flaws": [], "general_tips": []}
                 
                 results = {
                     'success': True,
@@ -1346,11 +1473,14 @@ def api_upload_file():
                 
                 logger.info("Getting Gemini feedback for bowling...")
                 try:
-                    gpt_feedback = get_feedback_from_gpt_for_bowling(keypoints_path, bowler_type)
+                    gpt_feedback_raw = get_feedback_from_gpt_for_bowling(keypoints_path, bowler_type)
                     logger.info("Gemini feedback received successfully")
+                    # Transform feedback to match frontend expectations
+                    gpt_feedback = transform_gpt_feedback_for_frontend(gpt_feedback_raw)
+                    logger.info("Feedback transformed for frontend")
                 except Exception as e:
                     logger.error(f"Error in Gemini feedback: {str(e)}", exc_info=True)
-                    gpt_feedback = "Unable to generate feedback at this time."
+                    gpt_feedback = {"error": "Unable to generate feedback at this time.", "analysis": "Unable to generate feedback at this time.", "flaws": [], "general_tips": [], "injury_risks": []}
                 
                 results = {
                     'success': True,
