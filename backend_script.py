@@ -674,7 +674,7 @@ REQUIRED JSON OUTPUT
 
     try:
         response_B = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-2.5-pro",
             contents=[prompt_B]
         )
 
@@ -1239,7 +1239,7 @@ REQUIRED JSON OUTPUT
 
     try:
         response_B = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-2.5-pro",
             contents=[prompt_B]
         )
 
