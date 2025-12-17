@@ -1150,6 +1150,7 @@ def get_feedback_from_gpt(action_type, keypoint_csv_path, player_level='intermed
     
     # Convert biomechanics report to JSON string for prompt_B
     biomechanics_report_json = json.dumps(biomechanics_report, indent=2)
+    logger.info(f"Biomechanics report: {biomechanics_report_json}")
     
     prompt_B = f"""
 You are an **elite Cricket Batting Coach** interpreting a biomechanics report.
