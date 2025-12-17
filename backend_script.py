@@ -321,8 +321,8 @@ def predict_shot(video_path, model):
         logger.error(f"Full traceback: {traceback.format_exc()}")
         return 'coverdrive'  # Default fallback
 
-def get_feedback_from_gpt_for_bowling(keypoint_csv_path, bowler_type='fast_bowler'):
-    logger.info(f"Getting Gemini feedback for bowling type: {bowler_type}")
+def get_feedback_from_gpt_for_bowling(keypoint_csv_path, bowler_type='fast_bowler', player_level='intermediate'):
+    logger.info(f"Getting Gemini feedback for bowling type: {bowler_type}, player level: {player_level}")
 
     # Read CSV and convert to JSON
     data = []
@@ -347,12 +347,23 @@ def get_feedback_from_gpt_for_bowling(keypoint_csv_path, bowler_type='fast_bowle
     csv_json = json.dumps(data)
     bowling_type = bowler_type.split("_")[0]
     logger.debug(f"Bowling type extracted: {bowling_type}")
-    
-    # Prompt Gemini with explicit JSON structure instructions
-    prompt = f"""
-            You are an **elite Cricket Bowling Coach AI** and **Sports Biomechanics Analyst**.
-            Your role is to analyze pose-estimation keypoint time-series data and deliver
-            **bowling-type-specific, norm-based performance and injury-risk feedback**.
+
+# ================================
+# PROMPT A — BIOMECHANICAL ANALYST (BOWLING)
+# ================================
+
+    prompt_A = f"""
+    You are a **Cricket Biomechanics Analyst** specializing in bowling mechanics.
+
+    Your responsibility is STRICTLY LIMITED to:
+    - analyzing pose keypoint time-series data
+    - computing biomechanical features
+    - comparing them against established cricket bowling norms
+    - reporting deviations and data confidence
+    - assessing injury risk based on biomechanical deviations
+
+    You are NOT a coach.
+    You must NOT provide drills, cues, training advice, or subjective coaching opinions.
 
             ────────────────────────
             CONTEXT
@@ -405,154 +416,340 @@ def get_feedback_from_gpt_for_bowling(keypoint_csv_path, bowler_type='fast_bowle
             - Arm path plane (over-the-top / round-arm)
             - Release height consistency
 
-            ### TIER 2 — CONDITIONAL
-            - Run-up acceleration profile
-            - Braking force at front-foot contact (inferred)
-            - Pelvic rotation velocity
-            - Bowling arm angular velocity
-            - Follow-through momentum dissipation
+    TIER 2 — CONDITIONAL
+    - Run-up acceleration profile
+    - Braking force at front-foot contact (inferred)
+    - Pelvic rotation velocity
+    - Bowling arm angular velocity
+    - Follow-through momentum dissipation
 
-            Mark these as `"confidence": "medium"`.
+    Mark all Tier 2 features with "confidence": "medium"
 
-            ### TIER 3 — INFERRED
-            - Wrist position at release
-            - Seam orientation stability
-            - Spin generation efficiency (spin bowlers)
-            - Pace transfer efficiency (fast bowlers)
-            - Kinetic chain sequencing quality
+    TIER 3 — INFERRED
+    - Wrist position at release
+    - Seam orientation stability
+    - Spin generation efficiency (spin bowlers)
+    - Pace transfer efficiency (fast bowlers)
+    - Kinetic chain sequencing quality
 
-            Mark these as `"estimated": true`.
+    Mark all Tier 3 features with "estimated": true
 
-            ────────────────────────
-            BOWLING-TYPE NORM ADJUSTMENT
-            ────────────────────────
-            Ideal ranges MUST be adjusted based on bowling type:
+    ────────────────────────
+    BOWLING-TYPE NORM ADJUSTMENT
+    ────────────────────────
+    Adjust interpretation based on bowling type:
 
-            FAST BOWLING →
-            - Higher run-up speed & stride length norms
-            - Strong front-knee bracing norms
-            - Larger hip–shoulder separation norms
-            - Controlled trunk flexion norms
+    FAST BOWLING →
+    - Higher run-up speed & stride length norms
+    - Strong front-knee bracing norms
+    - Larger hip–shoulder separation norms
+    - Controlled trunk flexion norms
 
-            SPIN BOWLING →
-            - Moderate run-up speed norms
-            - Upright trunk posture norms
-            - Higher shoulder rotation control norms
-            - Wrist-dominant release norms
+    SPIN BOWLING →
+    - Moderate run-up speed norms
+    - Upright trunk posture norms
+    - Higher shoulder rotation control norms
+    - Wrist-dominant release norms
 
-            A deviation is a flaw ONLY if it lies clearly outside
-            the acceptable cricket norm for the given bowling type.
+    A deviation exists ONLY if values clearly fall outside
+    acceptable norms for the given bowling type.
 
-            ────────────────────────
-            ANALYSIS TASKS
-            ────────────────────────
-            1. Select biomechanical features using the rules above.
-            2. Compute or estimate realistic numeric values from the data.
-            3. Compare each value against **bowling-type-specific cricket norm ranges**.
-            4. Identify ONLY data-supported technical flaws.
-            5. Assess injury risk linked to norm deviations.
-            6. Provide ONE practical corrective drill per flaw.
+    ────────────────────────
+    INJURY RISK ASSESSMENT
+    ────────────────────────
+    When flagging injury risk, relate it biomechanically to:
+    - lumbar spine (hyperextension / lateral flexion)
+    - shoulder complex (over-rotation / load)
+    - elbow (especially for spinners)
+    - knee and ankle (braking forces)
 
-            ────────────────────────
-            INJURY-AWARE CONSTRAINTS
-            ────────────────────────
-            When flagging injury risk, relate it biomechanically to:
-            - lumbar spine (hyperextension / lateral flexion)
-            - shoulder complex (over-rotation / load)
-            - elbow (especially for spinners)
-            - knee and ankle (braking forces)
+    Avoid over-alarmist language unless deviation is severe.
+    Only flag injury risk if biomechanical deviation is significant.
 
-            Avoid over-alarmist language unless deviation is severe.
+    ────────────────────────
+    ANALYSIS TASKS
+    ────────────────────────
+    1. Select valid biomechanical features using tier rules
+    2. Compute or estimate realistic numeric values
+    3. Compare against cricket bowling norm ranges
+    4. Classify deviations without coaching interpretation
+    5. Assess injury risk based on biomechanical deviations
+    6. Report data quality and limitations
 
-            ────────────────────────
-            RULES (STRICT)
-            ────────────────────────
-            - Respond ONLY in valid JSON.
-            - No markdown or explanations outside JSON.
-            - No null, NaN, or empty objects.
-            - All numeric values must be biomechanically plausible.
-            - Use concise, professional coaching language.
+    ────────────────────────
+    RULES (STRICT)
+    ────────────────────────
+    - Respond ONLY in valid JSON
+    - No coaching language
+    - No drills or recommendations
+    - No null, NaN, or empty objects
+    - Use realistic cricket bowling biomechanics values only
 
-            ────────────────────────
-            REQUIRED JSON OUTPUT
-            ────────────────────────
-            {{
-            "analysis_summary": "Bowler-specific biomechanical overview based on cricket norms",
+    ────────────────────────
+    REQUIRED JSON OUTPUT
+    ────────────────────────
+    {{
+    "analysis_summary": "Neutral biomechanical assessment based on cricket bowling norms",
 
-            "selected_features": {{
-                "core": ["list of computed core features"],
-                "conditional": ["list of computed conditional features"],
-                "inferred": ["list of inferred features"]
-            }},
+    "data_quality": {{
+        "frame_coverage": "percentage",
+        "motion_clarity": "low | medium | high",
+        "analysis_limitations": "explicit limitations based on data"
+    }},
 
-            "biomechanics": {{
-                "core": {{
-                "feature_name": {{
-                    "observed": <number>,
-                    "ideal_range": "cricket-norm range adjusted for bowling type",
-                    "analysis": "Comparison against cricket bowling norms"
-                }}
-                }},
-                "conditional": {{
-                "feature_name": {{
-                    "observed": <number>,
-                    "ideal_range": "cricket-norm range",
-                    "confidence": "medium",
-                    "analysis": "Norm-based evaluation"
-                }}
-                }},
-                "inferred": {{
-                "feature_name": {{
-                    "observed": <number>,
-                    "estimated": true,
-                    "analysis": "Norm-aligned inference"
-                }}
-                }}
-            }},
+    "selected_features": {{
+        "core": [],
+        "conditional": [],
+        "inferred": []
+    }},
 
-            "technical_flaws": [
-                {{
-                "feature": "feature_name",
-                "deviation": "clear deviation from cricket bowling norm",
-                "issue": "Biomechanical explanation",
-                "recommendation": "specific bowling drill + coaching cue"
-                }}
-            ],
+    "biomechanics": {{
+        "core": {{}},
+        "conditional": {{}},
+        "inferred": {{}}
+    }},
 
-            "injury_risk_assessment": [
-                {{
-                "body_part": "Lower back | Shoulder | Elbow | Knee | Ankle",
-                "risk_level": "Low | Moderate | High",
-                "reason": "Biomechanical cause linked to norm deviation"
-                }}
-            ],
+    "deviations": [
+        {{
+        "feature": "feature_name",
+        "observed": 0.0,
+        "ideal_range": "cricket-norm range",
+        "deviation_type": "within_range | mild | significant",
+        "biomechanical_note": "Mechanical difference only",
+        "confidence": "high | medium"
+        }}
+    ],
 
-            "general_tips": [
-                "Bowling-specific coaching cue",
-                "Bowling-type appropriate improvement focus"
-            ]
-            }}
-            """
+    "injury_risk_assessment": [
+        {{
+        "body_part": "Lower back | Shoulder | Elbow | Knee | Ankle",
+        "risk_level": "Low | Moderate | High",
+        "reason": "Biomechanical cause linked to norm deviation"
+        }}
+    ]
+    }}
+    """
 
-
+# ================================
+# STAGE 1: BIOMECHANICAL ANALYSIS
+# ================================
+    logger.info("Stage 1: Running biomechanical analysis for bowling (Prompt A)...")
     try:
-        # Request Gemini to respond in JSON
-        response = client.models.generate_content(
+        response_A = client.models.generate_content(
             model="gemini-2.5-flash",
-            contents=[prompt]
+            contents=[prompt_A]
         )
 
-        # Parse Gemini's JSON output safely
-        raw_content = response.text
+        raw_content_A = response_A.text
         try:
-            json_text = re.search(r"\{.*\}", raw_content, re.DOTALL).group()
-            return json.loads(json_text)
+            json_text_A = re.search(r"\{.*\}", raw_content_A, re.DOTALL).group()
+            biomechanics_report = json.loads(json_text_A)
+            logger.info("Stage 1 completed: Biomechanical analysis received")
         except Exception as e:
-            logger.error(f"Failed to parse Gemini response: {e}", exc_info=True)
-            return {"error": "Failed to parse Gemini response", "raw_content": raw_content}
+            logger.error(f"Failed to parse Stage 1 (biomechanics) response: {e}", exc_info=True)
+            return {
+                "error": "Failed to parse biomechanics response", 
+                "raw_content": raw_content_A,
+                "stage": "biomechanics_analysis"
+            }
     except Exception as e:
-        logger.error(f"Failed to get Gemini response: {e}", exc_info=True)
-        return {"error": "Failed to get Gemini response", "raw_content": str(e)}
+        logger.error(f"Failed to get Stage 1 (biomechanics) response: {e}", exc_info=True)
+        return {
+            "error": "Failed to get biomechanics response", 
+            "raw_content": str(e),
+            "stage": "biomechanics_analysis"
+        }
+
+# ================================
+# STAGE 2: COACH INTERPRETATION (BOWLING)
+# ================================
+    logger.info("Stage 2: Running coach interpretation for bowling (Prompt B)...")
+    
+    # Convert biomechanics report to JSON string for prompt_B
+    biomechanics_report_json = json.dumps(biomechanics_report, indent=2)
+    
+    prompt_B = f"""
+You are an **elite Cricket Bowling Coach** interpreting a biomechanics report.
+
+Your role is to convert biomechanical deviations into
+clear, practical, bowling-type-specific coaching guidance.
+
+You do NOT recompute biomechanics.
+You rely ONLY on the provided analysis.
+
+────────────────────────
+COACHING PHILOSOPHY
+────────────────────────
+- Coach like an elite academy instructor
+- Prioritize fundamentals over micro-details
+- Ignore deviations that do not affect bowling performance
+- Be concise, actionable, and player-appropriate
+- Consider bowling type (fast vs spin) in all recommendations
+
+────────────────────────
+INPUTS
+────────────────────────
+Bowling Type: {bowling_type}   # fast | spin
+Bowler Style: {bowler_type}   # right-arm / left-arm / overarm / off-spin / leg-spin
+Player Level: {player_level}   # beginner | intermediate | advanced | elite
+
+Biomechanics Report (JSON):
+{biomechanics_report_json}
+
+────────────────────────
+INTERPRETATION RULES (STRICT)
+────────────────────────
+- Only "significant" deviations may become confirmed faults
+- "Mild" deviations may be monitored, not corrected
+- Inferred features may NOT be the primary reason for a fault
+- Limit confirmed faults to a maximum of 3
+- Injury risks should be addressed but not cause alarm unless High risk
+
+────────────────────────
+SKILL-LEVEL ADAPTATION
+────────────────────────
+- Beginner → simple language, run-up rhythm & basic action focus
+- Intermediate → standard technical cues
+- Advanced / Elite → sequencing, efficiency, and fine-tuning
+
+────────────────────────
+BOWLING-TYPE ADAPTATION
+────────────────────────
+- Fast Bowling → focus on pace generation, run-up speed, front-foot bracing
+- Spin Bowling → focus on wrist position, rotation control, release consistency
+
+────────────────────────
+COACHING TASKS
+────────────────────────
+1. Review deviations and data quality
+2. Decide which deviations are true technical faults
+3. Rank faults by impact on bowling performance
+4. Provide ONE drill per fault using standardized format
+5. Address injury risks with appropriate caution level
+6. Reinforce strengths that should not be overcorrected
+
+────────────────────────
+DRILL FORMAT (MANDATORY)
+────────────────────────
+"Drill name — setup — execution cue — reps"
+
+────────────────────────
+RULES (STRICT)
+────────────────────────
+- Respond ONLY in valid JSON
+- No biomechanics recalculation
+- No contradiction of analysis confidence
+- Use professional coaching language
+- Bowling-type appropriate recommendations
+
+────────────────────────
+REQUIRED JSON OUTPUT
+────────────────────────
+{{
+  "coaching_focus": "Primary technical theme for this session",
+
+  "confirmed_faults": [
+    {{
+      "feature": "feature_name",
+      "severity": "minor | moderate | major",
+      "why_it_matters": "Bowling-type-specific explanation",
+      "recommendation": "Drill name — setup — execution cue — reps"
+    }}
+  ],
+
+  "injury_risk_guidance": [
+    {{
+      "body_part": "Lower back | Shoulder | Elbow | Knee | Ankle",
+      "risk_level": "Low | Moderate | High",
+      "guidance": "Practical advice to reduce risk"
+    }}
+  ],
+
+  "coach_notes": [
+    "What to keep doing well",
+    "What not to overcorrect"
+  ]
+}}
+"""
+
+    try:
+        response_B = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[prompt_B]
+        )
+
+        raw_content_B = response_B.text
+        try:
+            json_text_B = re.search(r"\{.*\}", raw_content_B, re.DOTALL).group()
+            coaching_feedback = json.loads(json_text_B)
+            logger.info("Stage 2 completed: Coaching feedback received")
+        except Exception as e:
+            logger.error(f"Failed to parse Stage 2 (coaching) response: {e}", exc_info=True)
+            # Return biomechanics report even if coaching fails
+            return {
+                "biomechanics_report": biomechanics_report,
+                "coaching_feedback": {"error": "Failed to parse coaching response", "raw_content": raw_content_B},
+                "stage": "coaching_interpretation"
+            }
+    except Exception as e:
+        logger.error(f"Failed to get Stage 2 (coaching) response: {e}", exc_info=True)
+        # Return biomechanics report even if coaching fails
+        return {
+            "biomechanics_report": biomechanics_report,
+            "coaching_feedback": {"error": "Failed to get coaching response", "raw_content": str(e)},
+            "stage": "coaching_interpretation"
+        }
+
+    # Combine both reports - structure for backward compatibility
+    # Frontend expects: technical_flaws, flaws, injury_risk_assessment, etc.
+    combined_result = {
+        # New structure with both reports
+        "biomechanics_report": biomechanics_report,
+        "coaching_feedback": coaching_feedback,
+        "bowler_type": bowler_type,
+        "bowling_type": bowling_type,
+        "player_level": player_level,
+        
+        # Backward compatibility: flatten key fields for frontend
+        "analysis_summary": biomechanics_report.get("analysis_summary", ""),
+        "analysis": biomechanics_report.get("analysis_summary", ""),
+        
+        # Extract flaws from coaching feedback (confirmed_faults) for frontend compatibility
+        "confirmed_faults": coaching_feedback.get("confirmed_faults", []),
+        "flaws": [
+            {
+                "feature": fault.get("feature", ""),
+                "severity": fault.get("severity", ""),
+                "deviation": fault.get("why_it_matters", ""),
+                "issue": fault.get("why_it_matters", ""),
+                "recommendation": fault.get("recommendation", "")
+            }
+            for fault in coaching_feedback.get("confirmed_faults", [])
+        ],
+        "technical_flaws": coaching_feedback.get("confirmed_faults", []),
+        
+        # Coach notes
+        "coach_notes": coaching_feedback.get("coach_notes", []),
+        "coaching_focus": coaching_feedback.get("coaching_focus", ""),
+        "general_tips": coaching_feedback.get("coach_notes", []),
+        
+        # Injury risks - combine from both reports
+        "injury_risk_assessment": biomechanics_report.get("injury_risk_assessment", []),
+        "injury_risk_guidance": coaching_feedback.get("injury_risk_guidance", []),
+        "injury_risks": [
+            f"{risk.get('body_part', 'Unknown')} - {risk.get('risk_level', 'Unknown')}: {risk.get('reason', risk.get('guidance', ''))}"
+            for risk in (biomechanics_report.get("injury_risk_assessment", []) + 
+                        coaching_feedback.get("injury_risk_guidance", []))
+        ],
+        
+        # Biomechanics data (excluding biomechanical_features for frontend)
+        "data_quality": biomechanics_report.get("data_quality", {}),
+        "selected_features": biomechanics_report.get("selected_features", {}),
+        "deviations": biomechanics_report.get("deviations", [])
+    }
+    
+    logger.info("Two-stage bowling analysis completed successfully")
+    return combined_result
 
 
 def extract_pose_keypoints(video_path, player_type):
@@ -725,8 +922,8 @@ def compute_features(keypoints_path, side='right', player_type='batsman'):
 #         print("Failed to parse GPT response:", e)
 #         return {"error": "Failed to parse GPT response", "raw_content": raw_content}
 
-def get_feedback_from_gpt(action_type, keypoint_csv_path):
-    logger.info(f"Getting Gemini feedback for shot type: {action_type}")
+def get_feedback_from_gpt(action_type, keypoint_csv_path, player_level='intermediate'):
+    logger.info(f"Getting Gemini feedback for shot type: {action_type}, player level: {player_level}")
     
     # Read CSV and convert to JSON
     data = []
@@ -750,179 +947,362 @@ def get_feedback_from_gpt(action_type, keypoint_csv_path):
     
     csv_json = json.dumps(data)
 
-    prompt = f"""
-            You are an **elite Cricket Batting Coach** and **Sports Biomechanics Analyst**.
-            Your role is to analyze pose keypoint time-series data and deliver
-            **shot-specific, norm-based coaching feedback** grounded in real cricket biomechanics.
+# ================================
+# PROMPT A — BIOMECHANICAL ANALYST
+# ================================
 
-            ────────────────────────
-            CONTEXT
-            ────────────────────────
-            Shot Type: {action_type}
+    prompt_A = f"""
+    You are a **Cricket Biomechanics Analyst** specializing in batting mechanics.
 
-            Each row of the input represents one video frame containing
-            body joint coordinates and bat reference points (if available).
+    Your responsibility is STRICTLY LIMITED to:
+    - analyzing pose keypoint time-series data
+    - computing biomechanical features
+    - comparing them against established cricket norms
+    - reporting deviations and data confidence
 
-            ────────────────────────
-            INPUT DATA
-            ────────────────────────
-            {csv_json}
+    You are NOT a coach.
+    You must NOT provide drills, cues, training advice, or subjective coaching opinions.
 
-            ────────────────────────
-            CRICKET NORM CONSTRAINT (CRITICAL)
-            ────────────────────────
-            All "ideal_range" values MUST be derived from **established cricket coaching norms**
-            as used in:
-            - ICC coaching manuals
-            - elite cricket academies
-            - published cricket biomechanics research
+    ────────────────────────
+    ANALYSIS PHILOSOPHY
+    ────────────────────────
+    - Be conservative, neutral, and data-driven
+    - Prefer under-reporting over over-interpretation
+    - If data quality is insufficient, explicitly state limitations
+    - Use cricket-specific biomechanical norms only
 
-            Do NOT invent arbitrary or generic athletic ranges.
-            Do NOT use single ideal values — ALWAYS use ranges.
+    ────────────────────────
+    CONTEXT
+    ────────────────────────
+    Shot Type: {action_type}
 
-            ────────────────────────
-            AUTO-FEATURE SELECTION LOGIC
-            ────────────────────────
-            1. Always compute CORE features supported by pose keypoints.
-            2. Compute CONDITIONAL features only when motion clarity supports them.
-            3. Infer ADVANCED features conservatively and mark them as "estimated".
-            4. Do NOT fabricate metrics that require sensors not present
-            (eye tracking, grip pressure, ball tracking).
+    Each row of the input represents one video frame containing
+    body joint coordinates and bat reference points (if available).
 
-            ────────────────────────
-            FEATURE TIERS
-            ────────────────────────
+    ────────────────────────
+    INPUT DATA
+    ────────────────────────
+    {csv_json}
 
-            ### TIER 1 — CORE (MANDATORY)
-            - Head stability (lateral & vertical displacement)
-            - Trunk lean
-            - Spine angle change (setup → impact)
-            - Shoulder rotation angle
-            - Hip–shoulder separation
-            - Front knee flexion at impact
-            - Front-foot stride length
-            - Backlift angle (relative to vertical)
-            - Bat proximity to body (horizontal distance from torso)
+    ────────────────────────
+    CRICKET NORM CONSTRAINT (CRITICAL)
+    ────────────────────────
+    All ideal ranges MUST be derived from:
+    - ICC coaching manuals
+    - Elite cricket academies
+    - Peer-reviewed cricket biomechanics research
 
-            ### TIER 2 — CONDITIONAL
-            - Hip rotation velocity
-            - Bat angular velocity
-            - Downswing duration
-            - Center of mass shift
-            - Peak bat speed timing
+    - Do NOT invent arbitrary athletic ranges
+    - Do NOT use single ideal values — ALWAYS use ranges
 
-            Mark these as `"confidence": "medium"`.
+    ────────────────────────
+    AUTO-FEATURE SELECTION LOGIC
+    ────────────────────────
+    1. Compute CORE features whenever required keypoints exist
+    2. Compute CONDITIONAL features ONLY if motion clarity supports reliable temporal or velocity calculation
+    3. Infer ADVANCED features conservatively and label them as estimated
+    4. NEVER fabricate metrics requiring sensors not present (e.g., eye tracking, grip pressure, ball tracking)
 
-            ### TIER 3 — INFERRED
-            - Bat face stability
-            - Wrist release timing
-            - Sweet-spot contact probability
-            - Kinetic chain sequencing quality
+    ────────────────────────
+    FEATURE SELECTION GATING (STRICT)
+    ────────────────────────
+    - TIER 1: Include only if keypoints exist in ≥70% of frames
+    - TIER 2: Include only if ≥80% frame continuity allows velocity or timing computation
+    - TIER 3: Include only if supported by Tier 1 or Tier 2 signals
 
-            Mark these as `"estimated": true`.
+    Never promote or demote features across tiers.
+    Never infer beyond available data.
 
-            ────────────────────────
-            SHOT-SPECIFIC NORM ADJUSTMENT
-            ────────────────────────
-            Ideal ranges MUST be adjusted based on shot type:
+    ────────────────────────
+    FEATURE TIERS
+    ────────────────────────
+    TIER 1 — CORE
+    - Head stability (lateral & vertical displacement)
+    - Trunk lean
+    - Spine angle change (setup → impact)
+    - Shoulder rotation angle
+    - Hip–shoulder separation
+    - Front knee flexion at impact
+    - Front-foot stride length
+    - Backlift angle
+    - Bat proximity to torso
 
-            - Defensive → compact mechanics, minimal movement
-            - Cover Drive → balance, bat control, front-knee stability
-            - Cut Shot → late bat swing, controlled wrist release
-            - Pull / Hook → trunk rotation and wider bat arc
-            - Lofted Shot → increased bat speed and separation
+    TIER 2 — CONDITIONAL
+    - Hip rotation velocity
+    - Bat angular velocity
+    - Downswing duration
+    - Center of mass shift
+    - Peak bat speed timing
 
-            A deviation is a flaw ONLY if it lies clearly outside
-            the acceptable cricket norm for the given shot.
+    Mark all Tier 2 features with "confidence": "medium"
 
-            ────────────────────────
-            ANALYSIS TASKS
-            ────────────────────────
-            1. Select biomechanical features using the rules above.
-            2. Compute or estimate realistic numeric values from the data.
-            3. Compare each value against **shot-specific cricket norm ranges**.
-            4. Identify ONLY data-supported technical flaws.
-            5. Provide ONE practical corrective drill per flaw.
+    TIER 3 — INFERRED
+    - Bat face stability
+    - Wrist release timing
+    - Sweet-spot contact probability
+    - Kinetic chain sequencing quality
 
-            ────────────────────────
-            RULES (STRICT)
-            ────────────────────────
-            - Respond ONLY in valid JSON.
-            - No markdown, no explanations outside JSON.
-            - No null, NaN, or empty objects.
-            - All numeric values must be realistic for cricket biomechanics.
-            - Use concise, professional coaching language.
+    Mark all Tier 3 features with "estimated": true
 
-            ────────────────────────
-            REQUIRED JSON OUTPUT
-            ────────────────────────
-            {{
-            "analysis_summary": "Shot-specific biomechanical overview based on cricket norms",
+    ────────────────────────
+    SHOT-SPECIFIC NORM ADJUSTMENT
+    ────────────────────────
+    Adjust interpretation based on shot type:
+    - Defensive → compact mechanics, minimal displacement
+    - Cover Drive → balance, front-knee stability, bat control
+    - Cut Shot → late bat swing, controlled wrists
+    - Pull / Hook → increased trunk rotation and bat arc
+    - Lofted Shot → increased separation and bat speed
 
-            "selected_features": {{
-                "core": ["list of computed core features"],
-                "conditional": ["list of computed conditional features"],
-                "inferred": ["list of inferred features"]
-            }},
+    A deviation exists ONLY if values clearly fall outside
+    acceptable norms for the given shot type.
 
-            "biomechanics": {{
-                "core": {{
-                "feature_name": {{
-                    "observed": <number>,
-                    "ideal_range": "cricket-norm range adjusted for the shot",
-                    "analysis": "Comparison against cricket norms"
-                }}
-                }},
-                "conditional": {{
-                "feature_name": {{
-                    "observed": <number>,
-                    "ideal_range": "cricket-norm range",
-                    "confidence": "medium",
-                    "analysis": "Norm-based evaluation"
-                }}
-                }},
-                "inferred": {{
-                "feature_name": {{
-                    "observed": <number>,
-                    "estimated": true,
-                    "analysis": "Norm-aligned inference"
-                }}
-                }}
-            }},
+    ────────────────────────
+    ANALYSIS TASKS
+    ────────────────────────
+    1. Select valid biomechanical features using tier rules
+    2. Compute or estimate realistic numeric values
+    3. Compare against cricket-norm ranges
+    4. Classify deviations without coaching interpretation
+    5. Report data quality and limitations
 
-            "technical_flaws": [
-                {{
-                "feature": "feature_name",
-                "deviation": "clear deviation from cricket norm",
-                "issue": "Biomechanical explanation",
-                "recommendation": "specific cricket coaching drill + cue"
-                }}
-            ],
+    ────────────────────────
+    RULES (STRICT)
+    ────────────────────────
+    - Respond ONLY in valid JSON
+    - No coaching language
+    - No drills or recommendations
+    - No null, NaN, or empty objects
+    - Use realistic cricket biomechanics values only
 
-            "general_tips": [
-                "Cricket-specific coaching cue",
-                "Shot-appropriate improvement focus"
-            ]
-            }}
-            """
+    ────────────────────────
+    REQUIRED JSON OUTPUT
+    ────────────────────────
+    {
+    "analysis_summary": "Neutral biomechanical assessment based on cricket norms",
+
+    "data_quality": {
+        "frame_coverage": "percentage",
+        "motion_clarity": "low | medium | high",
+        "analysis_limitations": "explicit limitations based on data"
+    },
+
+    "selected_features": {
+        "core": [],
+        "conditional": [],
+        "inferred": []
+    },
+
+    "biomechanics": {
+        "core": {},
+        "conditional": {},
+        "inferred": {}
+    },
+
+    "deviations": [
+        {
+        "feature": "feature_name",
+        "observed": 0.0,
+        "ideal_range": "cricket-norm range",
+        "deviation_type": "within_range | mild | significant",
+        "biomechanical_note": "Mechanical difference only",
+        "confidence": "high | medium"
+        }
+    ]
+    }
+    """
 
 
+# ================================
+# STAGE 1: BIOMECHANICAL ANALYSIS
+# ================================
+    logger.info("Stage 1: Running biomechanical analysis (Prompt A)...")
     try:
-        response = client.models.generate_content(
+        response_A = client.models.generate_content(
             model="gemini-2.5-flash",
-            contents=[prompt]
+            contents=[prompt_A]
         )
 
-        raw_content = response.text
+        raw_content_A = response_A.text
         try:
-            json_text = re.search(r"\{.*\}", raw_content, re.DOTALL).group()
-            return json.loads(json_text)
+            json_text_A = re.search(r"\{.*\}", raw_content_A, re.DOTALL).group()
+            biomechanics_report = json.loads(json_text_A)
+            logger.info("Stage 1 completed: Biomechanical analysis received")
         except Exception as e:
-            logger.error(f"Failed to parse Gemini response: {e}", exc_info=True)
-            return {"error": "Failed to parse Gemini response", "raw_content": raw_content}
+            logger.error(f"Failed to parse Stage 1 (biomechanics) response: {e}", exc_info=True)
+            return {
+                "error": "Failed to parse biomechanics response", 
+                "raw_content": raw_content_A,
+                "stage": "biomechanics_analysis"
+            }
     except Exception as e:
-        logger.error(f"Failed to get Gemini response: {e}", exc_info=True)
-        return {"error": "Failed to get Gemini response", "raw_content": str(e)}
+        logger.error(f"Failed to get Stage 1 (biomechanics) response: {e}", exc_info=True)
+        return {
+            "error": "Failed to get biomechanics response", 
+            "raw_content": str(e),
+            "stage": "biomechanics_analysis"
+        }
+
+# ================================
+# STAGE 2: COACH INTERPRETATION
+# ================================
+    logger.info("Stage 2: Running coach interpretation (Prompt B)...")
+    
+    # Convert biomechanics report to JSON string for prompt_B
+    biomechanics_report_json = json.dumps(biomechanics_report, indent=2)
+    
+    prompt_B = f"""
+You are an **elite Cricket Batting Coach** interpreting a biomechanics report.
+
+Your role is to convert biomechanical deviations into
+clear, practical, shot-specific coaching guidance.
+
+You do NOT recompute biomechanics.
+You rely ONLY on the provided analysis.
+
+────────────────────────
+COACHING PHILOSOPHY
+────────────────────────
+- Coach like an elite academy instructor
+- Prioritize fundamentals over micro-details
+- Ignore deviations that do not affect shot outcome
+- Be concise, actionable, and player-appropriate
+
+────────────────────────
+INPUTS
+────────────────────────
+Shot Type: {action_type}
+Player Level: {player_level}   # beginner | intermediate | advanced | elite
+
+Biomechanics Report (JSON):
+{biomechanics_report_json}
+
+────────────────────────
+INTERPRETATION RULES (STRICT)
+────────────────────────
+- Only "significant" deviations may become confirmed faults
+- "Mild" deviations may be monitored, not corrected
+- Inferred features may NOT be the primary reason for a fault
+- Limit confirmed faults to a maximum of 3
+
+────────────────────────
+SKILL-LEVEL ADAPTATION
+────────────────────────
+- Beginner → simple language, balance & head position focus
+- Intermediate → standard technical cues
+- Advanced / Elite → sequencing and efficiency
+
+────────────────────────
+COACHING TASKS
+────────────────────────
+1. Review deviations and data quality
+2. Decide which deviations are true technical faults
+3. Rank faults by impact on the selected shot
+4. Provide ONE drill per fault using standardized format
+5. Reinforce strengths that should not be overcorrected
+
+────────────────────────
+DRILL FORMAT (MANDATORY)
+────────────────────────
+"Drill name — setup — execution cue — reps"
+
+────────────────────────
+RULES (STRICT)
+────────────────────────
+- Respond ONLY in valid JSON
+- No biomechanics recalculation
+- No contradiction of analysis confidence
+- Use professional coaching language
+
+────────────────────────
+REQUIRED JSON OUTPUT
+────────────────────────
+{{
+  "coaching_focus": "Primary technical theme for this session",
+
+  "confirmed_faults": [
+    {{
+      "feature": "feature_name",
+      "severity": "minor | moderate | major",
+      "why_it_matters": "Shot-specific explanation",
+      "recommendation": "Drill name — setup — execution cue — reps"
+    }}
+  ],
+
+  "coach_notes": [
+    "What to keep doing well",
+    "What not to overcorrect"
+  ]
+}}
+"""
+
+    try:
+        response_B = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[prompt_B]
+        )
+
+        raw_content_B = response_B.text
+        try:
+            json_text_B = re.search(r"\{.*\}", raw_content_B, re.DOTALL).group()
+            coaching_feedback = json.loads(json_text_B)
+            logger.info("Stage 2 completed: Coaching feedback received")
+        except Exception as e:
+            logger.error(f"Failed to parse Stage 2 (coaching) response: {e}", exc_info=True)
+            # Return biomechanics report even if coaching fails
+            return {
+                "biomechanics_report": biomechanics_report,
+                "coaching_feedback": {"error": "Failed to parse coaching response", "raw_content": raw_content_B},
+                "stage": "coaching_interpretation"
+            }
+    except Exception as e:
+        logger.error(f"Failed to get Stage 2 (coaching) response: {e}", exc_info=True)
+        # Return biomechanics report even if coaching fails
+        return {
+            "biomechanics_report": biomechanics_report,
+            "coaching_feedback": {"error": "Failed to get coaching response", "raw_content": str(e)},
+            "stage": "coaching_interpretation"
+        }
+
+    # Combine both reports - structure for backward compatibility
+    # Frontend expects: flaws, technical_flaws, analysis, analysis_summary, etc.
+    combined_result = {
+        # New structure with both reports
+        "biomechanics_report": biomechanics_report,
+        "coaching_feedback": coaching_feedback,
+        "shot_type": action_type,
+        "player_level": player_level,
+        
+        # Backward compatibility: flatten key fields for frontend
+        "analysis_summary": biomechanics_report.get("analysis_summary", ""),
+        "analysis": biomechanics_report.get("analysis_summary", ""),
+        
+        # Extract flaws from coaching feedback (confirmed_faults) for frontend compatibility
+        "confirmed_faults": coaching_feedback.get("confirmed_faults", []),
+        "flaws": [
+            {
+                "feature": fault.get("feature", ""),
+                "severity": fault.get("severity", ""),
+                "issue": fault.get("why_it_matters", ""),
+                "recommendation": fault.get("recommendation", "")
+            }
+            for fault in coaching_feedback.get("confirmed_faults", [])
+        ],
+        "technical_flaws": coaching_feedback.get("confirmed_faults", []),
+        
+        # Coach notes
+        "coach_notes": coaching_feedback.get("coach_notes", []),
+        "coaching_focus": coaching_feedback.get("coaching_focus", ""),
+        "general_tips": coaching_feedback.get("coach_notes", []),
+        
+        # Biomechanics data (excluding biomechanical_features for frontend)
+        "data_quality": biomechanics_report.get("data_quality", {}),
+        "selected_features": biomechanics_report.get("selected_features", {}),
+        "deviations": biomechanics_report.get("deviations", [])
+    }
+    
+    logger.info("Two-stage analysis completed successfully")
+    return combined_result
 
 
 def generate_training_plan(gpt_feedback, player_type='batsman', shot_type=None, bowler_type=None, days=7, report_path=None):
@@ -940,15 +1320,43 @@ def generate_training_plan(gpt_feedback, player_type='batsman', shot_type=None, 
             logger.error(f"Failed to read report file: {e}", exc_info=True)
     
     # Create a comprehensive summary for Gemini
-    summary = {
-        "player_type": player_type,
-        "shot_type": shot_type,
-        "bowler_type": bowler_type,
-        "flaws": gpt_feedback.get('flaws') if isinstance(gpt_feedback, dict) else None,
-        "biomechanical_features": gpt_feedback.get('biomechanical_features') if isinstance(gpt_feedback, dict) else None,
-        "general_tips": gpt_feedback.get('general_tips') if isinstance(gpt_feedback, dict) else None,
-        "injury_risks": gpt_feedback.get('injury_risks') if isinstance(gpt_feedback, dict) else None
-    }
+    # Handle both old format and new two-stage format
+    if isinstance(gpt_feedback, dict):
+        # New format: has biomechanics_report and coaching_feedback
+        if 'biomechanics_report' in gpt_feedback and 'coaching_feedback' in gpt_feedback:
+            biomechanics = gpt_feedback.get('biomechanics_report', {})
+            coaching = gpt_feedback.get('coaching_feedback', {})
+            summary = {
+                "player_type": player_type,
+                "shot_type": shot_type,
+                "bowler_type": bowler_type,
+                "flaws": gpt_feedback.get('flaws', []),
+                "confirmed_faults": coaching.get('confirmed_faults', []),
+                "deviations": biomechanics.get('deviations', []),
+                "coaching_focus": coaching.get('coaching_focus', ''),
+                "coach_notes": coaching.get('coach_notes', []),
+                "general_tips": gpt_feedback.get('general_tips', coaching.get('coach_notes', [])),
+                "injury_risks": gpt_feedback.get('injury_risks', [])
+            }
+        else:
+            # Old format: flat structure
+            summary = {
+                "player_type": player_type,
+                "shot_type": shot_type,
+                "bowler_type": bowler_type,
+                "flaws": gpt_feedback.get('flaws', []),
+                "general_tips": gpt_feedback.get('general_tips', []),
+                "injury_risks": gpt_feedback.get('injury_risks', [])
+            }
+    else:
+        summary = {
+            "player_type": player_type,
+            "shot_type": shot_type,
+            "bowler_type": bowler_type,
+            "flaws": None,
+            "general_tips": None,
+            "injury_risks": None
+        }
 
     prompt = f"""
 You are an expert cricket coach and training planner. Based on the comprehensive analysis below, produce a {days}-day personalized training plan.
@@ -1111,14 +1519,6 @@ Cricket Bowling Analysis Report
 
 ```json
 {json.dumps(results['gpt_feedback'].get('general_tips', []), indent=4)}
-```
-
----
-
-**Biomechanical Features:**
-
-```json
-{json.dumps(results['gpt_feedback'].get('biomechanical_features', {}), indent=4)}
 ```
 
 ---
