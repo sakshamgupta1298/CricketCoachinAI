@@ -13,6 +13,7 @@ export interface AnalysisResult {
   bowler_side?: string;
   bowler_type?: string;
   gpt_feedback: {
+    // Old format support
     analysis?: string;
     flaws?: Array<{
       feature: string;
@@ -21,11 +22,46 @@ export interface AnalysisResult {
       issue: string;
       recommendation: string;
     }>;
-    general_tips?: string[];
     biomechanical_features?: Record<string, any>;
     injury_risks?: string[];
+    
+    // New Gemini format
+    analysis_summary?: string;
+    biomechanics?: {
+      core?: Record<string, BiomechanicalFeature>;
+      conditional?: Record<string, BiomechanicalFeature>;
+      inferred?: Record<string, BiomechanicalFeature>;
+    };
+    technical_flaws?: Array<{
+      feature: string;
+      deviation: string;
+      issue: string;
+      recommendation: string;
+    }>;
+    selected_features?: {
+      core?: string[];
+      conditional?: string[];
+      inferred?: string[];
+    };
+    injury_risk_assessment?: Array<{
+      body_part: string;
+      risk_level: string;
+      reason: string;
+    }>;
+    general_tips?: string[];
   };
   filename: string;
+  user_id?: number;
+  username?: string;
+  report_path?: string;
+}
+
+export interface BiomechanicalFeature {
+  observed: number | string;
+  ideal_range?: string;
+  confidence?: string;
+  estimated?: boolean;
+  analysis: string;
 }
 
 export interface UploadFormData {
@@ -33,6 +69,7 @@ export interface UploadFormData {
   batter_side?: 'left' | 'right';
   bowler_side?: 'left' | 'right';
   bowler_type?: 'fast_bowler' | 'spin_bowler';
+  shot_type?: string; // Optional: if provided, backend will skip shot detection
   video_uri: string;
   video_name: string;
   video_size: number;

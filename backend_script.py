@@ -321,58 +321,6 @@ def predict_shot(video_path, model):
         logger.error(f"Full traceback: {traceback.format_exc()}")
         return 'coverdrive'  # Default fallback
 
-
-def parse_gemini_json_response(raw_content):
-    """
-    Parse JSON from Gemini response, handling markdown code blocks and various formats.
-    
-    Gemini sometimes returns JSON wrapped in markdown like:
-    ```json
-    {...}
-    ```
-    
-    This function handles multiple formats:
-    1. Plain JSON
-    2. JSON wrapped in markdown code blocks
-    3. JSON with leading/trailing whitespace
-    """
-    if not raw_content:
-        raise ValueError("Empty response content")
-    
-    # First, try to strip markdown code blocks if present
-    content = raw_content.strip()
-    
-    # Remove markdown code block markers
-    # Handle ```json ... ``` or ``` ... ```
-    if content.startswith('```'):
-        # Find the first newline after ```
-        first_newline = content.find('\n')
-        if first_newline != -1:
-            # Find the last ```
-            last_backticks = content.rfind('```')
-            if last_backticks != -1 and last_backticks > first_newline:
-                # Extract content between first newline and last ```
-                content = content[first_newline + 1:last_backticks].strip()
-    
-    # Try to extract JSON object using regex
-    json_match = re.search(r'\{.*\}', content, re.DOTALL)
-    if json_match:
-        json_text = json_match.group()
-        try:
-            return json.loads(json_text)
-        except json.JSONDecodeError as e:
-            logger.warning(f"Failed to parse extracted JSON: {e}")
-            # Try cleaning up common issues
-            # Remove trailing commas before closing braces/brackets
-            json_text = re.sub(r',(\s*[}\]])', r'\1', json_text)
-            try:
-                return json.loads(json_text)
-            except json.JSONDecodeError:
-                raise ValueError(f"Invalid JSON format: {e}")
-    else:
-        raise ValueError("No JSON object found in response")
-
-
 def get_feedback_from_gpt_for_bowling(keypoint_csv_path, bowler_type='fast_bowler'):
     logger.info(f"Getting Gemini feedback for bowling type: {bowler_type}")
 
@@ -597,10 +545,10 @@ def get_feedback_from_gpt_for_bowling(keypoint_csv_path, bowler_type='fast_bowle
         # Parse Gemini's JSON output safely
         raw_content = response.text
         try:
-            return parse_gemini_json_response(raw_content)
+            json_text = re.search(r"\{.*\}", raw_content, re.DOTALL).group()
+            return json.loads(json_text)
         except Exception as e:
             logger.error(f"Failed to parse Gemini response: {e}", exc_info=True)
-            logger.debug(f"Raw content: {raw_content[:500]}...")  # Log first 500 chars for debugging
             return {"error": "Failed to parse Gemini response", "raw_content": raw_content}
     except Exception as e:
         logger.error(f"Failed to get Gemini response: {e}", exc_info=True)
@@ -967,170 +915,14 @@ def get_feedback_from_gpt(action_type, keypoint_csv_path):
 
         raw_content = response.text
         try:
-            return parse_gemini_json_response(raw_content)
+            json_text = re.search(r"\{.*\}", raw_content, re.DOTALL).group()
+            return json.loads(json_text)
         except Exception as e:
             logger.error(f"Failed to parse Gemini response: {e}", exc_info=True)
-            logger.debug(f"Raw content: {raw_content[:500]}...")  # Log first 500 chars for debugging
             return {"error": "Failed to parse Gemini response", "raw_content": raw_content}
     except Exception as e:
         logger.error(f"Failed to get Gemini response: {e}", exc_info=True)
         return {"error": "Failed to get Gemini response", "raw_content": str(e)}
-
-
-def transform_gemini_response_to_frontend_format(gemini_response):
-    """
-    Transform Gemini API response format to match frontend expected format.
-    
-    Gemini format:
-    {
-        "analysis_summary": "...",
-        "biomechanics": {
-            "core": {...},
-            "conditional": {...},
-            "inferred": {...}
-        },
-        "technical_flaws": [
-            {
-                "feature": "...",
-                "deviation": "...",
-                "issue": "...",
-                "recommendation": "..."
-            }
-        ],
-        "general_tips": [...],
-        "selected_features": {...}
-    }
-    
-    Frontend format:
-    {
-        "analysis": "...",
-        "biomechanical_features": {
-            "feature_name": {
-                "observed": number,
-                "expected_range": string,
-                "analysis": string
-            }
-        },
-        "flaws": [
-            {
-                "feature": "...",
-                "observed": number,
-                "expected_range": string,
-                "issue": "...",
-                "recommendation": "..."
-            }
-        ],
-        "general_tips": [...],
-        "injury_risks": [...]
-    }
-    """
-    if not isinstance(gemini_response, dict) or 'error' in gemini_response:
-        return gemini_response
-    
-    transformed = {}
-    
-    # Transform analysis_summary -> analysis
-    if 'analysis_summary' in gemini_response:
-        transformed['analysis'] = gemini_response['analysis_summary']
-    elif 'analysis' in gemini_response:
-        transformed['analysis'] = gemini_response['analysis']
-    
-    # Transform biomechanics -> biomechanical_features
-    biomechanical_features = {}
-    if 'biomechanics' in gemini_response:
-        biomechanics = gemini_response['biomechanics']
-        
-        # Flatten nested structure (core, conditional, inferred) into a single object
-        for category in ['core', 'conditional', 'inferred']:
-            if category in biomechanics:
-                for feature_name, feature_data in biomechanics[category].items():
-                    if isinstance(feature_data, dict):
-                        biomechanical_features[feature_name] = {
-                            'observed': feature_data.get('observed', 0),
-                            'expected_range': feature_data.get('ideal_range', feature_data.get('expected_range', 'N/A')),
-                            'analysis': feature_data.get('analysis', '')
-                        }
-                        # Add confidence/estimated flags if present
-                        if 'confidence' in feature_data:
-                            biomechanical_features[feature_name]['confidence'] = feature_data['confidence']
-                        if 'estimated' in feature_data:
-                            biomechanical_features[feature_name]['estimated'] = feature_data['estimated']
-    
-    if biomechanical_features:
-        transformed['biomechanical_features'] = biomechanical_features
-    
-    # Transform technical_flaws -> flaws
-    flaws = []
-    if 'technical_flaws' in gemini_response:
-        technical_flaws = gemini_response['technical_flaws']
-        biomechanics = gemini_response.get('biomechanics', {})
-        
-        # Flatten biomechanics to lookup observed values and ideal ranges
-        biomechanics_flat = {}
-        for category in ['core', 'conditional', 'inferred']:
-            if category in biomechanics:
-                for feature_name, feature_data in biomechanics[category].items():
-                    if isinstance(feature_data, dict):
-                        biomechanics_flat[feature_name] = {
-                            'observed': feature_data.get('observed', 0),
-                            'ideal_range': feature_data.get('ideal_range', 'N/A')
-                        }
-        
-        for flaw in technical_flaws:
-            if isinstance(flaw, dict):
-                feature_name = flaw.get('feature', '')
-                
-                # Try to get observed value and expected_range from biomechanics
-                observed = 0
-                expected_range = 'N/A'
-                
-                if feature_name in biomechanics_flat:
-                    observed = biomechanics_flat[feature_name]['observed']
-                    expected_range = biomechanics_flat[feature_name]['ideal_range']
-                else:
-                    # Try to extract from deviation text if available
-                    deviation = flaw.get('deviation', '')
-                    # Look for numeric patterns in deviation
-                    numbers = re.findall(r'\d+\.?\d*', deviation)
-                    if numbers:
-                        try:
-                            observed = float(numbers[0])
-                        except ValueError:
-                            pass
-                
-                transformed_flaw = {
-                    'feature': feature_name,
-                    'observed': observed,
-                    'expected_range': expected_range,
-                    'issue': flaw.get('issue', ''),
-                    'recommendation': flaw.get('recommendation', '')
-                }
-                flaws.append(transformed_flaw)
-    
-    if flaws:
-        transformed['flaws'] = flaws
-    
-    # Copy general_tips as-is
-    if 'general_tips' in gemini_response:
-        transformed['general_tips'] = gemini_response['general_tips']
-    
-    # Transform injury_risk_assessment -> injury_risks
-    if 'injury_risk_assessment' in gemini_response:
-        injury_risks = []
-        for risk in gemini_response['injury_risk_assessment']:
-            if isinstance(risk, dict):
-                body_part = risk.get('body_part', '')
-                risk_level = risk.get('risk_level', '')
-                reason = risk.get('reason', '')
-                injury_risks.append(f"{body_part}: {risk_level} - {reason}")
-            elif isinstance(risk, str):
-                injury_risks.append(risk)
-        if injury_risks:
-            transformed['injury_risks'] = injury_risks
-    elif 'injury_risks' in gemini_response:
-        transformed['injury_risks'] = gemini_response['injury_risks']
-    
-    return transformed
 
 
 def generate_training_plan(gpt_feedback, player_type='batsman', shot_type=None, bowler_type=None, days=7, report_path=None):
@@ -1433,6 +1225,7 @@ def api_upload_file():
     logger.debug(f"Request headers: {dict(request.headers)}")
     logger.debug(f"Request files: {list(request.files.keys())}")
     logger.debug(f"Request form: {dict(request.form)}")
+    logger.info(f"Shot type from form: {request.form.get('shot_type', 'NOT PROVIDED')}")
     
     # Get user info from authentication
     user_id = request.user['user_id']
@@ -1461,23 +1254,29 @@ def api_upload_file():
         logger.info(f"File saved to {filepath}, starting processing...")
         
         try:
-            # Step 1: Predict shot/bowling action
-            logger.info("Getting shot prediction model...")
-            model = get_shot_prediction_model()
-            logger.info("Model ready for prediction")
-            
             if player_type == 'batsman':
                 # Batting analysis
                 logger.info("Starting batting analysis...")
-                logger.debug("Getting shot prediction model...")
-                model = get_shot_prediction_model()
-                logger.info("Predicting shot type...")
-                try:
-                    shot_type = predict_shot(filepath, model)
-                    logger.info(f"Shot type predicted: {shot_type}")
-                except Exception as e:
-                    logger.error(f"Error in shot prediction: {str(e)}", exc_info=True)
-                    shot_type = 'coverdrive'  # Default fallback
+                
+                # Check if shot_type is provided by user (skip auto-detection if provided)
+                shot_type = request.form.get('shot_type', '').strip()
+                
+                if shot_type:
+                    # User provided shot_type, skip auto-detection
+                    logger.info(f"Using user-provided shot type: {shot_type}")
+                else:
+                    # Auto-detect shot type using ML model
+                    logger.info("Shot type not provided, starting auto-detection...")
+                    logger.info("Getting shot prediction model...")
+                    model = get_shot_prediction_model()
+                    logger.info("Model ready for prediction")
+                    logger.info("Predicting shot type...")
+                    try:
+                        shot_type = predict_shot(filepath, model)
+                        logger.info(f"Shot type predicted: {shot_type}")
+                    except Exception as e:
+                        logger.error(f"Error in shot prediction: {str(e)}", exc_info=True)
+                        shot_type = 'coverdrive'  # Default fallback
                 
                 logger.info("Extracting pose keypoints...")
                 try:
@@ -1498,14 +1297,11 @@ def api_upload_file():
                 
                 logger.info("Getting Gemini feedback...")
                 try:
-                    gpt_feedback_raw = get_feedback_from_gpt(shot_type, keypoints_path)
+                    gpt_feedback = get_feedback_from_gpt(shot_type, keypoints_path)
                     logger.info("Gemini feedback received successfully")
-                    # Transform Gemini response to frontend format
-                    gpt_feedback = transform_gemini_response_to_frontend_format(gpt_feedback_raw)
-                    logger.info("Gemini feedback transformed to frontend format")
                 except Exception as e:
                     logger.error(f"Error in Gemini feedback: {str(e)}", exc_info=True)
-                    gpt_feedback = {"error": "Unable to generate feedback at this time."}
+                    gpt_feedback = "Unable to generate feedback at this time."
                 
                 results = {
                     'success': True,
@@ -1557,14 +1353,11 @@ def api_upload_file():
                 
                 logger.info("Getting Gemini feedback for bowling...")
                 try:
-                    gpt_feedback_raw = get_feedback_from_gpt_for_bowling(keypoints_path, bowler_type)
+                    gpt_feedback = get_feedback_from_gpt_for_bowling(keypoints_path, bowler_type)
                     logger.info("Gemini feedback received successfully")
-                    # Transform Gemini response to frontend format
-                    gpt_feedback = transform_gemini_response_to_frontend_format(gpt_feedback_raw)
-                    logger.info("Gemini feedback transformed to frontend format")
                 except Exception as e:
                     logger.error(f"Error in Gemini feedback: {str(e)}", exc_info=True)
-                    gpt_feedback = {"error": "Unable to generate feedback at this time."}
+                    gpt_feedback = "Unable to generate feedback at this time."
                 
                 results = {
                     'success': True,

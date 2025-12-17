@@ -388,6 +388,10 @@ class ApiService {
       
       if (formData.player_type === 'batsman' && formData.batter_side) {
         data.append('batter_side', formData.batter_side);
+        // Include shot_type if provided (optional - if not provided, backend will auto-detect)
+        if (formData.shot_type) {
+          data.append('shot_type', formData.shot_type);
+        }
       } else if (formData.player_type === 'bowler') {
         if (formData.bowler_side) {
           data.append('bowler_side', formData.bowler_side);
@@ -405,6 +409,7 @@ class ApiService {
         batter_side: formData.batter_side,
         bowler_side: formData.bowler_side,
         bowler_type: formData.bowler_type,
+        shot_type: formData.shot_type, // Log shot_type if provided
         has_video: !!videoFile
       });
 
@@ -442,6 +447,7 @@ class ApiService {
       const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minutes
       
       try {
+        console.log('🌐 [UPLOAD] Starting fetch request to:', uploadUrl);
         const fetchResponse = await fetch(uploadUrl, {
           method: 'POST',
           headers: {
@@ -454,13 +460,44 @@ class ApiService {
         
         clearTimeout(timeoutId);
         
+        console.log('📡 [UPLOAD] Fetch response received:', {
+          status: fetchResponse.status,
+          statusText: fetchResponse.statusText,
+          ok: fetchResponse.ok,
+          headers: Object.fromEntries(fetchResponse.headers.entries())
+        });
+        
         // Check if response is ok
         if (!fetchResponse.ok) {
-          const errorData = await fetchResponse.json().catch(() => ({ error: 'Unknown error' }));
-          throw new Error(errorData.error || `Upload failed with status ${fetchResponse.status}`);
+          let errorMessage = `Upload failed with status ${fetchResponse.status}`;
+          try {
+            const errorText = await fetchResponse.text();
+            console.error('❌ [UPLOAD] Error response text:', errorText);
+            try {
+              const errorData = JSON.parse(errorText);
+              errorMessage = errorData.error || errorData.message || errorMessage;
+              console.error('❌ [UPLOAD] Error response JSON:', errorData);
+            } catch (parseError) {
+              // If not JSON, use the text as error message
+              errorMessage = errorText || errorMessage;
+            }
+          } catch (textError) {
+            console.error('❌ [UPLOAD] Failed to read error response:', textError);
+          }
+          throw new Error(errorMessage);
         }
         
-        const responseData = await fetchResponse.json();
+        // Parse successful response
+        let responseData;
+        try {
+          const responseText = await fetchResponse.text();
+          console.log('📄 [UPLOAD] Response text length:', responseText.length);
+          responseData = JSON.parse(responseText);
+          console.log('✅ [UPLOAD] Response parsed successfully');
+        } catch (parseError) {
+          console.error('❌ [UPLOAD] Failed to parse response as JSON:', parseError);
+          throw new Error('Invalid response format from server');
+        }
         
         console.log('✅ [UPLOAD] Upload successful via fetch API');
         return {
@@ -470,8 +507,22 @@ class ApiService {
       } catch (error: any) {
         clearTimeout(timeoutId);
         
+        console.error('❌ [UPLOAD] Fetch error details:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack,
+          type: error.constructor.name
+        });
+        
         if (error.name === 'AbortError') {
           throw new Error('Upload timed out after 10 minutes');
+        }
+        
+        // Handle network errors
+        if (error.message.includes('Network request failed') || 
+            error.message.includes('Failed to fetch') ||
+            error.message.includes('NetworkError')) {
+          throw new Error('Network connection failed. Please check your internet connection and try again.');
         }
         
         throw error;

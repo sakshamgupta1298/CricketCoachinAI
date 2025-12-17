@@ -2,7 +2,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { Button, Card, ProgressBar, RadioButton, Surface, Text, useTheme } from 'react-native-paper';
+import { Button, Card, Menu, ProgressBar, RadioButton, Surface, Text, TextInput, useTheme } from 'react-native-paper';
 import Toast from 'react-native-toast-message';
 import { useUpload } from '../../src/context/UploadContext';
 import apiService from '../../src/services/api';
@@ -16,12 +16,45 @@ export default function UploadScreen() {
   const [playerType, setPlayerType] = useState<PlayerType>('batsman');
   const [playerSide, setPlayerSide] = useState<PlayerSide>('right');
   const [bowlerType, setBowlerType] = useState<BowlerType>('fast_bowler');
+  const [shotType, setShotType] = useState<string>('');
+  const [customShotType, setCustomShotType] = useState<string>('');
+  const [shotTypeMenuVisible, setShotTypeMenuVisible] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<{
     uri: string;
     name: string;
     size: number;
     type: string;
   } | null>(null);
+
+  // Major cricket batting shots
+  const majorShots = [
+    'cover_drive',
+    'pull_shot',
+    'cut_shot',
+    'straight_drive',
+    'sweep_shot',
+    'other'
+  ];
+
+  const getShotDisplayName = (shot: string) => {
+    const displayNames: Record<string, string> = {
+      'cover_drive': 'Cover Drive',
+      'pull_shot': 'Pull Shot',
+      'cut_shot': 'Cut Shot',
+      'straight_drive': 'Straight Drive',
+      'sweep_shot': 'Sweep Shot',
+      'other': 'Other'
+    };
+    return displayNames[shot] || shot.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  };
+
+  // Reset shot type when player type changes
+  React.useEffect(() => {
+    if (playerType !== 'batsman') {
+      setShotType('');
+      setCustomShotType('');
+    }
+  }, [playerType]);
 
   const pickVideo = async () => {
     try {
@@ -78,6 +111,17 @@ export default function UploadScreen() {
 
       if (playerType === 'batsman') {
         formData.batter_side = playerSide;
+        // Only include shot_type if user selected one (not empty)
+        // If shot_type is provided, backend will skip auto-detection
+        if (shotType && shotType !== '') {
+          if (shotType === 'other' && customShotType.trim()) {
+            formData.shot_type = customShotType.trim().toLowerCase().replace(/\s+/g, '_');
+          } else if (shotType !== 'other') {
+            formData.shot_type = shotType;
+          }
+        }
+        // If shotType is empty, backend will auto-detect
+        console.log('📋 [UPLOAD] Shot type being sent:', formData.shot_type || 'AUTO-DETECT');
       } else {
         formData.bowler_side = playerSide;
         formData.bowler_type = bowlerType;
@@ -169,6 +213,84 @@ export default function UploadScreen() {
             </RadioButton.Group>
           </Card.Content>
         </Card>
+
+        {/* Shot Type Selection - Only for Batsman */}
+        {playerType === 'batsman' && (
+          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+            <Card.Content>
+              <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
+                Shot Type (Optional)
+              </Text>
+              <Text style={[styles.cardSubtitle, { color: theme.colors.onSurfaceVariant }]}>
+                Select a shot type or leave empty for automatic detection
+              </Text>
+              
+              <Menu
+                visible={shotTypeMenuVisible}
+                onDismiss={() => setShotTypeMenuVisible(false)}
+                anchor={
+                  <TouchableOpacity
+                    style={[styles.dropdownButton, { 
+                      backgroundColor: theme.colors.surfaceVariant,
+                      borderColor: theme.colors.outline 
+                    }]}
+                    onPress={() => setShotTypeMenuVisible(true)}
+                  >
+                    <Text style={[styles.dropdownText, { color: theme.colors.onSurface }]}>
+                      {shotType ? getShotDisplayName(shotType) : 'Select Shot Type (Optional)'}
+                    </Text>
+                    <Text style={[styles.dropdownIcon, { color: theme.colors.onSurfaceVariant }]}>
+                      ▼
+                    </Text>
+                  </TouchableOpacity>
+                }
+              >
+                {majorShots.map((shot) => (
+                  <Menu.Item
+                    key={shot}
+                    onPress={() => {
+                      setShotType(shot);
+                      setShotTypeMenuVisible(false);
+                      if (shot !== 'other') {
+                        setCustomShotType('');
+                      }
+                    }}
+                    title={getShotDisplayName(shot)}
+                  />
+                ))}
+              </Menu>
+
+              {/* Custom Shot Type Input - Show when "Other" is selected */}
+              {shotType === 'other' && (
+                <View style={styles.customShotContainer}>
+                  <TextInput
+                    label="Enter Shot Type"
+                    value={customShotType}
+                    onChangeText={setCustomShotType}
+                    mode="outlined"
+                    placeholder="e.g., reverse_sweep, scoop"
+                    style={styles.customShotInput}
+                  />
+                </View>
+              )}
+
+              {/* Clear Selection Button */}
+              {shotType && (
+                <Button
+                  mode="text"
+                  onPress={() => {
+                    setShotType('');
+                    setCustomShotType('');
+                  }}
+                  style={styles.clearButton}
+                  textColor={theme.colors.error}
+                >
+                  Clear Selection (Use Auto Detection)
+                </Button>
+              )}
+            </Card.Content>
+          </Card>
+        )}
 
         {/* Bowler Type Selection */}
         {playerType === 'bowler' && (
@@ -409,5 +531,36 @@ const styles = StyleSheet.create({
   tip: {
     fontSize: 14,
     lineHeight: 20,
+  },
+  cardSubtitle: {
+    fontSize: 14,
+    marginBottom: spacing.md,
+    fontStyle: 'italic',
+  },
+  dropdownButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    marginBottom: spacing.sm,
+  },
+  dropdownText: {
+    fontSize: 16,
+    flex: 1,
+  },
+  dropdownIcon: {
+    fontSize: 12,
+    marginLeft: spacing.sm,
+  },
+  customShotContainer: {
+    marginTop: spacing.md,
+  },
+  customShotInput: {
+    marginBottom: spacing.sm,
+  },
+  clearButton: {
+    marginTop: spacing.xs,
   },
 }); 

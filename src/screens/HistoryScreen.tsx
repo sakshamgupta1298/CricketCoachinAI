@@ -132,22 +132,26 @@ const HistoryScreen: React.FC = () => {
             {item.filename}
           </Text>
 
-          {item.result.gpt_feedback.analysis && (
+          {(item.result.gpt_feedback.analysis_summary || item.result.gpt_feedback.analysis) && (
             <Text 
               style={[styles.analysisPreview, { color: theme.colors.onSurfaceVariant }]}
               numberOfLines={2}
             >
-              {item.result.gpt_feedback.analysis}
+              {item.result.gpt_feedback.analysis_summary || item.result.gpt_feedback.analysis}
             </Text>
           )}
 
-          {item.result.gpt_feedback.flaws && item.result.gpt_feedback.flaws.length > 0 && (
-            <View style={styles.flawsPreview}>
-              <Text style={[styles.flawsLabel, { color: colors.error }]}>
-                {item.result.gpt_feedback.flaws.length} issue{item.result.gpt_feedback.flaws.length > 1 ? 's' : ''} found
-              </Text>
-            </View>
-          )}
+          {(() => {
+            // Support both old format (flaws) and new format (technical_flaws)
+            const flaws = item.result.gpt_feedback.technical_flaws || item.result.gpt_feedback.flaws || [];
+            return flaws.length > 0 ? (
+              <View style={styles.flawsPreview}>
+                <Text style={[styles.flawsLabel, { color: colors.error }]}>
+                  {flaws.length} issue{flaws.length > 1 ? 's' : ''} found
+                </Text>
+              </View>
+            ) : null;
+          })()}
         </Card.Content>
       </Card>
     </TouchableOpacity>
