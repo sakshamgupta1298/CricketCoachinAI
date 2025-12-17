@@ -1078,38 +1078,38 @@ def get_feedback_from_gpt(action_type, keypoint_csv_path, player_level='intermed
     ────────────────────────
     REQUIRED JSON OUTPUT
     ────────────────────────
-    {
+    {{
     "analysis_summary": "Neutral biomechanical assessment based on cricket norms",
 
-    "data_quality": {
+    "data_quality": {{
         "frame_coverage": "percentage",
         "motion_clarity": "low | medium | high",
         "analysis_limitations": "explicit limitations based on data"
-    },
+    }},
 
-    "selected_features": {
+    "selected_features": {{
         "core": [],
         "conditional": [],
         "inferred": []
-    },
+    }},
 
-    "biomechanics": {
-        "core": {},
-        "conditional": {},
-        "inferred": {}
-    },
+    "biomechanics": {{
+        "core": {{}},
+        "conditional": {{}},
+        "inferred": {{}}
+    }},
 
     "deviations": [
-        {
+        {{
         "feature": "feature_name",
         "observed": 0.0,
         "ideal_range": "cricket-norm range",
         "deviation_type": "within_range | mild | significant",
         "biomechanical_note": "Mechanical difference only",
         "confidence": "high | medium"
-        }
+        }}
     ]
-    }
+    }}
     """
 
 
