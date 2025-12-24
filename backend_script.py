@@ -564,9 +564,12 @@ def get_feedback_from_gpt_for_bowling(keypoint_csv_path, bowler_type='fast_bowle
 # STAGE 2: COACH INTERPRETATION (BOWLING)
 # ================================
     logger.info("Stage 2: Running coach interpretation for bowling (Prompt B)...")
+
+    
     
     # Convert biomechanics report to JSON string for prompt_B
     biomechanics_report_json = json.dumps(biomechanics_report, indent=2)
+    logger.info(f"Biomechanics report: {biomechanics_report_json}")
     
     prompt_B = f"""
 You are an **elite Cricket Bowling Coach** interpreting a biomechanics report.
