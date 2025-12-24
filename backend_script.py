@@ -607,6 +607,7 @@ INTERPRETATION RULES (STRICT)
 - Inferred features may NOT be the primary reason for a fault
 - Limit confirmed faults to a maximum of 3
 - Injury risks should be addressed but not cause alarm unless High risk
+- Data Mapping: Carry over the 'observed' and 'ideal_range' values exactly as they appear in the Biomechanics Report for the chosen faults.
 
 ────────────────────────
 SKILL-LEVEL ADAPTATION
@@ -654,6 +655,8 @@ REQUIRED JSON OUTPUT
   "confirmed_faults": [
     {{
       "feature": "feature_name",
+      "observed": "<numeric_value_from_report>", 
+      "ideal_range": "<numeric_value_from_report>",
       "severity": "minor | moderate | major",
       "why_it_matters": "Bowling-type-specific explanation",
       "recommendation": "Drill name — setup — execution cue — reps"
@@ -1188,6 +1191,7 @@ INTERPRETATION RULES (STRICT)
 - "Mild" deviations may be monitored, not corrected
 - Inferred features may NOT be the primary reason for a fault
 - Limit confirmed faults to a maximum of 3
+- Data Mapping: Carry over the 'observed' and 'ideal_range' values exactly as they appear in the Biomechanics Report for the chosen faults.
 
 ────────────────────────
 SKILL-LEVEL ADAPTATION
@@ -1227,6 +1231,8 @@ REQUIRED JSON OUTPUT
   "confirmed_faults": [
     {{
       "feature": "feature_name",
+      "observed": "<numeric_value_from_report>", 
+      "ideal_range": "<numeric_value_from_report>",
       "severity": "minor | moderate | major",
       "why_it_matters": "Shot-specific explanation",
       "recommendation": "Drill name — setup — execution cue — reps"
