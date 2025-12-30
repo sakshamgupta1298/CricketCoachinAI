@@ -34,7 +34,9 @@ export interface AnalysisResult {
     };
     technical_flaws?: Array<{
       feature: string;
-      deviation: string;
+      observed?: number;
+      ideal_range?: string;
+      deviation?: string;
       issue: string;
       recommendation: string;
     }>;

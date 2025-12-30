@@ -2,21 +2,21 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useState } from 'react';
 import {
-    Alert,
-    ScrollView,
-    StyleSheet,
-    TouchableOpacity,
-    View,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import {
-    Card,
-    Chip,
-    FAB,
-    IconButton,
-    Searchbar,
-    Surface,
-    Text,
-    useTheme,
+  Card,
+  Chip,
+  FAB,
+  IconButton,
+  Searchbar,
+  Surface,
+  Text,
+  useTheme,
 } from 'react-native-paper';
 import { useUpload } from '../context/UploadContext';
 import { colors, shadows, spacing } from '../theme';

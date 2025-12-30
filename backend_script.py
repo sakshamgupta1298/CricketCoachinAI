@@ -708,16 +708,39 @@ REQUIRED JSON OUTPUT
             "stage": "coaching_interpretation"
         }
 
+    # Enrich flaws with missing ideal_range and observed from biomechanics report
+    flaws = coaching_feedback.get("flaws", [])
+    deviations = biomechanics_report.get("deviations", [])
+    
+    # Create a lookup map from feature name to deviation data
+    deviation_map = {}
+    for dev in deviations:
+        feature_name = dev.get("feature", "")
+        if feature_name:
+            deviation_map[feature_name] = dev
+    
+    # Fill in missing ideal_range and observed from biomechanics report
+    for flaw in flaws:
+        feature_name = flaw.get("feature", "")
+        if feature_name in deviation_map:
+            dev = deviation_map[feature_name]
+            if "ideal_range" not in flaw or not flaw.get("ideal_range"):
+                flaw["ideal_range"] = dev.get("ideal_range", "")
+                logger.info(f"Filled missing ideal_range for {feature_name}: {dev.get('ideal_range', '')}")
+            if "observed" not in flaw or flaw.get("observed") is None:
+                flaw["observed"] = dev.get("observed")
+                logger.info(f"Filled missing observed for {feature_name}: {dev.get('observed')}")
+
     # Simplified result - only fields that frontend actually uses
     combined_result = {
         # Analysis summary - from Prompt B (coaching), fallback to Prompt A (biomechanics)
         "analysis_summary": coaching_feedback.get("analysis_summary", biomechanics_report.get("analysis_summary", "")),
         "analysis": coaching_feedback.get("analysis_summary", biomechanics_report.get("analysis_summary", "")),  # Backward compatibility
         
-        # Flaws - from Prompt B (coaching feedback)
+        # Flaws - from Prompt B (coaching feedback), enriched with biomechanics data
         # Each flaw includes: feature, observed (numeric), ideal_range (string), issue, recommendation, deviation
-        "flaws": coaching_feedback.get("flaws", []),
-        "technical_flaws": coaching_feedback.get("flaws", []),  # Backward compatibility alias
+        "flaws": flaws,
+        "technical_flaws": flaws,  # Backward compatibility alias
         
         # General tips - from Prompt B (coaching feedback)
         "general_tips": coaching_feedback.get("general_tips", []),
@@ -1274,16 +1297,39 @@ REQUIRED JSON OUTPUT
             "stage": "coaching_interpretation"
         }
 
+    # Enrich flaws with missing ideal_range and observed from biomechanics report
+    flaws = coaching_feedback.get("flaws", [])
+    deviations = biomechanics_report.get("deviations", [])
+    
+    # Create a lookup map from feature name to deviation data
+    deviation_map = {}
+    for dev in deviations:
+        feature_name = dev.get("feature", "")
+        if feature_name:
+            deviation_map[feature_name] = dev
+    
+    # Fill in missing ideal_range and observed from biomechanics report
+    for flaw in flaws:
+        feature_name = flaw.get("feature", "")
+        if feature_name in deviation_map:
+            dev = deviation_map[feature_name]
+            if "ideal_range" not in flaw or not flaw.get("ideal_range"):
+                flaw["ideal_range"] = dev.get("ideal_range", "")
+                logger.info(f"Filled missing ideal_range for {feature_name}: {dev.get('ideal_range', '')}")
+            if "observed" not in flaw or flaw.get("observed") is None:
+                flaw["observed"] = dev.get("observed")
+                logger.info(f"Filled missing observed for {feature_name}: {dev.get('observed')}")
+
     # Simplified result - only fields that frontend actually uses
     combined_result = {
         # Analysis summary - from Prompt B (coaching), fallback to Prompt A (biomechanics)
         "analysis_summary": coaching_feedback.get("analysis_summary", biomechanics_report.get("analysis_summary", "")),
         "analysis": coaching_feedback.get("analysis_summary", biomechanics_report.get("analysis_summary", "")),  # Backward compatibility
         
-        # Flaws - from Prompt B (coaching feedback)
+        # Flaws - from Prompt B (coaching feedback), enriched with biomechanics data
         # Each flaw includes: feature, observed (numeric), ideal_range (string), issue, recommendation, deviation
-        "flaws": coaching_feedback.get("flaws", []),
-        "technical_flaws": coaching_feedback.get("flaws", []),  # Backward compatibility alias
+        "flaws": flaws,
+        "technical_flaws": flaws,  # Backward compatibility alias
         
         # General tips - from Prompt B (coaching feedback)
         "general_tips": coaching_feedback.get("general_tips", []),

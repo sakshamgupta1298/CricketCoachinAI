@@ -93,6 +93,7 @@ const ResultsScreen: React.FC = () => {
                 {featureName}
               </Text>
             </View>
+            
             <View style={styles.flawChipContainer}>
               <View style={[styles.flawChip, { borderColor: colors.error }]}>
                 <Text style={[styles.flawChipText, { color: colors.error }]}>
@@ -100,10 +101,6 @@ const ResultsScreen: React.FC = () => {
                 </Text>
               </View>
             </View>
-            
-            <Text style={[styles.flawIssue, { color: theme.colors.onSurface }]}>
-              {flaw.issue}
-            </Text>
             
             <View style={styles.recommendationContainer}>
               <Text style={[styles.recommendationLabel, { color: theme.colors.primary }]}>
@@ -113,6 +110,12 @@ const ResultsScreen: React.FC = () => {
                 {flaw.recommendation}
               </Text>
             </View>
+            
+            {flaw.issue && (
+              <Text style={[styles.flawIssue, { color: theme.colors.onSurface, marginTop: spacing.md }]}>
+                {flaw.issue}
+              </Text>
+            )}
           </Card.Content>
         </Card>
       );
@@ -539,10 +542,12 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     alignSelf: 'flex-start',
     maxWidth: '100%',
+    flexWrap: 'wrap',
   },
   flawChipText: {
     fontSize: 12,
     fontWeight: '500',
+    flexShrink: 1,
   },
   flawIssue: {
     fontSize: 16,
