@@ -47,22 +47,27 @@ const ResultsScreen: React.FC = () => {
   };
 
   const renderFlaws = () => {
-    // Support multiple formats: technical_flaws, flaws, or deviations
-    const technicalFlaws = result.gpt_feedback.technical_flaws || [];
-    const oldFlaws = result.gpt_feedback.flaws || [];
-    const deviations = result.gpt_feedback.deviations || [];
+    // Get deviations from backend - check both top level and gpt_feedback
+    const allDeviations = (result.deviations || result.gpt_feedback?.deviations || []) as any[];
     
-    // Filter deviations to only show significant/mild deviations (not within_range)
-    const significantDeviations = deviations.filter((d: any) => 
-      d.deviation_type && d.deviation_type !== 'within_range' && d.deviation_type !== 'not_determinable'
+    // Filter out 'within_range' and 'not_determinable' deviations
+    const relevantDeviations = allDeviations.filter(
+      (dev: any) => 
+        dev.deviation_type && 
+        dev.deviation_type !== 'within_range' && 
+        dev.deviation_type !== 'not_determinable'
     );
     
-    // Combine all sources, prioritizing technical_flaws > flaws > deviations
-    const flaws = technicalFlaws.length > 0 ? technicalFlaws : 
-                  oldFlaws.length > 0 ? oldFlaws : 
-                  significantDeviations;
+    // Get confirmed_faults for recommendations (if available)
+    const confirmedFaults = result.gpt_feedback?.technical_flaws || result.gpt_feedback?.confirmed_faults || [];
+    const faultsMap = new Map();
+    confirmedFaults.forEach((fault: any) => {
+      if (fault.feature) {
+        faultsMap.set(fault.feature, fault);
+      }
+    });
     
-    if (flaws.length === 0) {
+    if (relevantDeviations.length === 0) {
       return (
         <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
           <Card.Content>
@@ -70,41 +75,39 @@ const ResultsScreen: React.FC = () => {
               🎉 Great Technique!
             </Text>
             <Text style={[styles.cardDescription, { color: theme.colors.onSurfaceVariant }]}>
-              No major flaws detected in your technique. Keep up the good work!
+              No major deviations detected in your technique. Keep up the good work!
             </Text>
           </Card.Content>
         </Card>
       );
     }
 
-    return flaws.map((flaw: any, index: number) => {
-      // Handle different formats
-      const hasIdealRange = 'ideal_range' in flaw && flaw.ideal_range;
-      const hasExpectedRange = 'expected_range' in flaw && flaw.expected_range;
-      const hasDeviation = 'deviation' in flaw && flaw.deviation;
+    return relevantDeviations.map((deviation: any, index: number) => {
+      const featureName = deviation.feature.replace(/_/g, ' ').toUpperCase();
       
-      const featureName = flaw.feature.replace(/_/g, ' ').toUpperCase();
+      // Format: "observed vs ideal_range"
+      const observedValue = deviation.observed || 'N/A';
+      const idealRange = deviation.ideal_range || 'N/A';
+      const deviationText = `${observedValue} vs ${idealRange}`;
       
-      // Format deviation text - handle different data structures
-      let deviationText = '';
-      if (hasDeviation) {
-        deviationText = flaw.deviation;
-      } else if (hasIdealRange) {
-        // Handle both number and string observed values
-        const observed = typeof flaw.observed === 'number' ? flaw.observed : flaw.observed;
-        deviationText = `${observed} vs ${flaw.ideal_range}`;
-      } else if (hasExpectedRange) {
-        const observed = typeof flaw.observed === 'number' ? flaw.observed : flaw.observed;
-        deviationText = `${observed} vs ${flaw.expected_range}`;
-      } else {
-        deviationText = flaw.observed || 'N/A';
-      }
+      // Get recommendation from confirmed_faults if available, otherwise use biomechanical_note
+      const fault = faultsMap.get(deviation.feature);
+      const recommendation = fault?.recommendation || fault?.why_it_matters || deviation.biomechanical_note || '';
+      const issue = fault?.why_it_matters || fault?.issue || deviation.biomechanical_note || '';
       
-      // Get issue text from different possible fields
-      const issueText = flaw.issue || flaw.why_it_matters || flaw.biomechanical_note || '';
+      // Get severity badge color based on deviation_type
+      const getSeverityColor = () => {
+        switch (deviation.deviation_type) {
+          case 'significant':
+            return colors.error;
+          case 'mild':
+            return colors.cricket.orange;
+          default:
+            return colors.cricket.blue;
+        }
+      };
       
-      // Get recommendation text
-      const recommendationText = flaw.recommendation || '';
+      const severityColor = getSeverityColor();
 
       return (
         <Card key={index} style={[styles.card, { backgroundColor: theme.colors.surface }]}>
@@ -113,30 +116,45 @@ const ResultsScreen: React.FC = () => {
               <Text style={[styles.flawTitle, { color: theme.colors.onSurface, flex: 1 }]}>
                 {featureName}
               </Text>
+              {deviation.deviation_type && (
+                <Chip 
+                  mode="flat" 
+                  textStyle={{ fontSize: 10, fontWeight: '600' }} 
+                  style={{ backgroundColor: severityColor + '20', marginLeft: spacing.xs }}
+                >
+                  {deviation.deviation_type.toUpperCase()}
+                </Chip>
+              )}
             </View>
             <View style={styles.flawChipContainer}>
-              <View style={[styles.flawChip, { borderColor: colors.error }]}>
-                <Text style={[styles.flawChipText, { color: colors.error }]}>
+              <View style={[styles.flawChip, { borderColor: severityColor }]}>
+                <Text style={[styles.flawChipText, { color: severityColor }]}>
                   {deviationText}
                 </Text>
               </View>
             </View>
             
-            {issueText && (
+            {issue && (
               <Text style={[styles.flawIssue, { color: theme.colors.onSurface }]}>
-                {issueText}
+                {issue}
               </Text>
             )}
             
-            {recommendationText && (
+            {recommendation && (
               <View style={styles.recommendationContainer}>
                 <Text style={[styles.recommendationLabel, { color: theme.colors.primary }]}>
                   💡 Recommendation:
                 </Text>
                 <Text style={[styles.recommendationText, { color: theme.colors.onSurface }]}>
-                  {recommendationText}
+                  {recommendation}
                 </Text>
               </View>
+            )}
+            
+            {deviation.confidence && (
+              <Text style={[styles.confidenceText, { color: theme.colors.onSurfaceVariant }]}>
+                Confidence: {deviation.confidence}
+              </Text>
             )}
           </Card.Content>
         </Card>
@@ -293,153 +311,93 @@ const ResultsScreen: React.FC = () => {
                   {/* New format: biomechanics with core/conditional/inferred */}
                   {result.gpt_feedback.biomechanics && (
                     <>
-                      {/* Helper function to get deviation data for a feature */}
-                      {(() => {
-                        const deviations = result.gpt_feedback.deviations || [];
-                        const getDeviationForFeature = (featureName: string) => {
-                          return deviations.find((d: any) => d.feature === featureName);
-                        };
-                        
-                        return (
-                          <>
-                            {result.gpt_feedback.biomechanics.core && Object.entries(result.gpt_feedback.biomechanics.core).map(([key, value]: [string, any], index) => {
-                              const deviation = getDeviationForFeature(key);
-                              const isStringValue = typeof value === 'string';
-                              const observedValue = isStringValue ? value : (value.observed || value);
-                              const idealRange = deviation?.ideal_range || value?.ideal_range;
-                              const analysisText = deviation?.biomechanical_note || value?.analysis || '';
-                              
-                              return (
-                                <View key={`core-${index}`} style={styles.biomechanicalItem}>
-                                  <View style={styles.biomechanicalHeader}>
-                                    <Text style={[styles.biomechanicalLabel, { color: theme.colors.onSurface }]}>
-                                      {key.replace(/_/g, ' ')}
-                                    </Text>
-                                    <Chip mode="flat" textStyle={{ fontSize: 10 }} style={{ backgroundColor: colors.cricket.green + '20' }}>
-                                      CORE
-                                    </Chip>
-                                  </View>
-                                  <View style={styles.biomechanicalValue}>
-                                    <Text style={[styles.biomechanicalObserved, { color: theme.colors.primary }]}>
-                                      Observed: {observedValue}
-                                    </Text>
-                                    {idealRange && (
-                                      <Text style={[styles.biomechanicalExpected, { color: theme.colors.onSurfaceVariant }]}>
-                                        Ideal: {idealRange}
-                                      </Text>
-                                    )}
-                                  </View>
-                                  {analysisText && (
-                                    <Text style={[styles.biomechanicalAnalysis, { color: theme.colors.onSurfaceVariant }]}>
-                                      {analysisText}
-                                    </Text>
-                                  )}
-                                </View>
-                              );
-                            })}
-                          </>
-                        );
-                      })()}
+                      {result.gpt_feedback.biomechanics.core && Object.entries(result.gpt_feedback.biomechanics.core).map(([key, value]: [string, any], index) => (
+                        <View key={`core-${index}`} style={styles.biomechanicalItem}>
+                          <View style={styles.biomechanicalHeader}>
+                            <Text style={[styles.biomechanicalLabel, { color: theme.colors.onSurface }]}>
+                              {key.replace(/_/g, ' ')}
+                            </Text>
+                            <Chip mode="flat" textStyle={{ fontSize: 10 }} style={{ backgroundColor: colors.cricket.green + '20' }}>
+                              CORE
+                            </Chip>
+                          </View>
+                          <View style={styles.biomechanicalValue}>
+                            <Text style={[styles.biomechanicalObserved, { color: theme.colors.primary }]}>
+                              Observed: {value.observed}
+                            </Text>
+                            {value.ideal_range && (
+                              <Text style={[styles.biomechanicalExpected, { color: theme.colors.onSurfaceVariant }]}>
+                                Ideal: {value.ideal_range}
+                              </Text>
+                            )}
+                          </View>
+                          <Text style={[styles.biomechanicalAnalysis, { color: theme.colors.onSurfaceVariant }]}>
+                            {value.analysis}
+                          </Text>
+                        </View>
+                      ))}
                       
-                      {(() => {
-                        const deviations = result.gpt_feedback.deviations || [];
-                        const getDeviationForFeature = (featureName: string) => {
-                          return deviations.find((d: any) => d.feature === featureName);
-                        };
-                        
-                        return result.gpt_feedback.biomechanics.conditional && Object.entries(result.gpt_feedback.biomechanics.conditional).map(([key, value]: [string, any], index) => {
-                          const deviation = getDeviationForFeature(key);
-                          const isStringValue = typeof value === 'string';
-                          const observedValue = isStringValue ? value : (value.observed || value);
-                          const idealRange = deviation?.ideal_range || value?.ideal_range;
-                          const analysisText = deviation?.biomechanical_note || value?.analysis || '';
-                          const confidence = deviation?.confidence || value?.confidence;
-                          
-                          return (
-                            <View key={`conditional-${index}`} style={styles.biomechanicalItem}>
-                              <View style={styles.biomechanicalHeader}>
-                                <Text style={[styles.biomechanicalLabel, { color: theme.colors.onSurface }]}>
-                                  {key.replace(/_/g, ' ')}
-                                </Text>
-                                <Chip mode="flat" textStyle={{ fontSize: 10 }} style={{ backgroundColor: colors.cricket.blue + '20' }}>
-                                  CONDITIONAL
-                                </Chip>
-                              </View>
-                              <View style={styles.biomechanicalValue}>
-                                <Text style={[styles.biomechanicalObserved, { color: theme.colors.primary }]}>
-                                  Observed: {observedValue}
-                                </Text>
-                                {idealRange && (
-                                  <Text style={[styles.biomechanicalExpected, { color: theme.colors.onSurfaceVariant }]}>
-                                    Ideal: {idealRange}
-                                  </Text>
-                                )}
-                              </View>
-                              {confidence && (
-                                <Text style={[styles.biomechanicalConfidence, { color: theme.colors.onSurfaceVariant }]}>
-                                  Confidence: {confidence}
-                                </Text>
-                              )}
-                              {analysisText && (
-                                <Text style={[styles.biomechanicalAnalysis, { color: theme.colors.onSurfaceVariant }]}>
-                                  {analysisText}
-                                </Text>
-                              )}
-                            </View>
-                          );
-                        });
-                      })()}
+                      {result.gpt_feedback.biomechanics.conditional && Object.entries(result.gpt_feedback.biomechanics.conditional).map(([key, value]: [string, any], index) => (
+                        <View key={`conditional-${index}`} style={styles.biomechanicalItem}>
+                          <View style={styles.biomechanicalHeader}>
+                            <Text style={[styles.biomechanicalLabel, { color: theme.colors.onSurface }]}>
+                              {key.replace(/_/g, ' ')}
+                            </Text>
+                            <Chip mode="flat" textStyle={{ fontSize: 10 }} style={{ backgroundColor: colors.cricket.blue + '20' }}>
+                              CONDITIONAL
+                            </Chip>
+                          </View>
+                          <View style={styles.biomechanicalValue}>
+                            <Text style={[styles.biomechanicalObserved, { color: theme.colors.primary }]}>
+                              Observed: {value.observed}
+                            </Text>
+                            {value.ideal_range && (
+                              <Text style={[styles.biomechanicalExpected, { color: theme.colors.onSurfaceVariant }]}>
+                                Ideal: {value.ideal_range}
+                              </Text>
+                            )}
+                          </View>
+                          {value.confidence && (
+                            <Text style={[styles.biomechanicalConfidence, { color: theme.colors.onSurfaceVariant }]}>
+                              Confidence: {value.confidence}
+                            </Text>
+                          )}
+                          <Text style={[styles.biomechanicalAnalysis, { color: theme.colors.onSurfaceVariant }]}>
+                            {value.analysis}
+                          </Text>
+                        </View>
+                      ))}
                       
-                      {(() => {
-                        const deviations = result.gpt_feedback.deviations || [];
-                        const getDeviationForFeature = (featureName: string) => {
-                          return deviations.find((d: any) => d.feature === featureName);
-                        };
-                        
-                        return result.gpt_feedback.biomechanics.inferred && Object.entries(result.gpt_feedback.biomechanics.inferred).map(([key, value]: [string, any], index) => {
-                          const deviation = getDeviationForFeature(key);
-                          const isStringValue = typeof value === 'string';
-                          const observedValue = isStringValue ? value : (value.observed || value);
-                          const idealRange = deviation?.ideal_range || value?.ideal_range;
-                          const analysisText = deviation?.biomechanical_note || value?.analysis || '';
-                          const isEstimated = value?.estimated || deviation?.confidence === 'low';
-                          
-                          return (
-                            <View key={`inferred-${index}`} style={styles.biomechanicalItem}>
-                              <View style={styles.biomechanicalHeader}>
-                                <Text style={[styles.biomechanicalLabel, { color: theme.colors.onSurface }]}>
-                                  {key.replace(/_/g, ' ')}
-                                </Text>
-                                <Chip mode="flat" textStyle={{ fontSize: 10 }} style={{ backgroundColor: colors.cricket.orange + '20' }}>
-                                  INFERRED
-                                </Chip>
-                              </View>
-                              <View style={styles.biomechanicalValue}>
-                                <Text style={[styles.biomechanicalObserved, { color: theme.colors.primary }]}>
-                                  {typeof observedValue === 'string' && !observedValue.includes('Observed:') 
-                                    ? `Observed: ${observedValue}` 
-                                    : observedValue}
-                                </Text>
-                                {idealRange && (
-                                  <Text style={[styles.biomechanicalExpected, { color: theme.colors.onSurfaceVariant }]}>
-                                    Ideal: {idealRange}
-                                  </Text>
-                                )}
-                              </View>
-                              {isEstimated && (
-                                <Text style={[styles.biomechanicalConfidence, { color: theme.colors.onSurfaceVariant, fontStyle: 'italic' }]}>
-                                  Estimated value
-                                </Text>
-                              )}
-                              {analysisText && (
-                                <Text style={[styles.biomechanicalAnalysis, { color: theme.colors.onSurfaceVariant }]}>
-                                  {analysisText}
-                                </Text>
-                              )}
-                            </View>
-                          );
-                        });
-                      })()}
+                      {result.gpt_feedback.biomechanics.inferred && Object.entries(result.gpt_feedback.biomechanics.inferred).map(([key, value]: [string, any], index) => (
+                        <View key={`inferred-${index}`} style={styles.biomechanicalItem}>
+                          <View style={styles.biomechanicalHeader}>
+                            <Text style={[styles.biomechanicalLabel, { color: theme.colors.onSurface }]}>
+                              {key.replace(/_/g, ' ')}
+                            </Text>
+                            <Chip mode="flat" textStyle={{ fontSize: 10 }} style={{ backgroundColor: colors.cricket.orange + '20' }}>
+                              INFERRED
+                            </Chip>
+                          </View>
+                          <View style={styles.biomechanicalValue}>
+                            <Text style={[styles.biomechanicalObserved, { color: theme.colors.primary }]}>
+                              {typeof value.observed === 'string' ? value.observed : `Observed: ${value.observed}`}
+                            </Text>
+                            {value.ideal_range && (
+                              <Text style={[styles.biomechanicalExpected, { color: theme.colors.onSurfaceVariant }]}>
+                                Ideal: {value.ideal_range}
+                              </Text>
+                            )}
+                          </View>
+                          {value.estimated && (
+                            <Text style={[styles.biomechanicalConfidence, { color: theme.colors.onSurfaceVariant, fontStyle: 'italic' }]}>
+                              Estimated value
+                            </Text>
+                          )}
+                          <Text style={[styles.biomechanicalAnalysis, { color: theme.colors.onSurfaceVariant }]}>
+                            {value.analysis}
+                          </Text>
+                        </View>
+                      ))}
                     </>
                   )}
                   
@@ -607,6 +565,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   flawHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: spacing.xs,
   },
   flawTitle: {
@@ -647,6 +608,11 @@ const styles = StyleSheet.create({
   recommendationText: {
     fontSize: 14,
     lineHeight: 20,
+  },
+  confidenceText: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    marginTop: spacing.xs,
   },
   tipItem: {
     flexDirection: 'row',

@@ -5,6 +5,15 @@ export interface User {
   avatar?: string;
 }
 
+export interface Deviation {
+  feature: string;
+  observed: number | string;
+  ideal_range: string;
+  deviation_type: 'within_range' | 'mild' | 'significant' | 'not_determinable';
+  biomechanical_note: string;
+  confidence: string;
+}
+
 export interface AnalysisResult {
   success: boolean;
   player_type: 'batsman' | 'bowler';
@@ -34,9 +43,23 @@ export interface AnalysisResult {
     };
     technical_flaws?: Array<{
       feature: string;
-      deviation: string;
-      issue: string;
-      recommendation: string;
+      observed?: string;
+      ideal_range?: string;
+      deviation?: string;
+      issue?: string;
+      recommendation?: string;
+      severity?: string;
+      why_it_matters?: string;
+    }>;
+    confirmed_faults?: Array<{
+      feature: string;
+      observed?: string;
+      ideal_range?: string;
+      deviation?: string;
+      issue?: string;
+      recommendation?: string;
+      severity?: string;
+      why_it_matters?: string;
     }>;
     selected_features?: {
       core?: string[];
@@ -49,7 +72,9 @@ export interface AnalysisResult {
       reason: string;
     }>;
     general_tips?: string[];
+    deviations?: Deviation[]; // Deviations can also be in gpt_feedback
   };
+  deviations?: Deviation[]; // Deviations at top level from backend
   filename: string;
   user_id?: number;
   username?: string;

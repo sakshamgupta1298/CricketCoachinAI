@@ -751,9 +751,7 @@ REQUIRED JSON OUTPUT
         # Biomechanics data (excluding biomechanical_features for frontend)
         "data_quality": biomechanics_report.get("data_quality", {}),
         "selected_features": biomechanics_report.get("selected_features", {}),
-        "deviations": biomechanics_report.get("deviations", []),
-        "biomechanics": biomechanics_report.get("biomechanics", {}),
-        "injury_risk_assessment": biomechanics_report.get("injury_risk_assessment", [])
+        "deviations": biomechanics_report.get("deviations", [])
     }
     
     logger.info("Two-stage bowling analysis completed successfully")
@@ -1310,9 +1308,7 @@ REQUIRED JSON OUTPUT
         # Biomechanics data (excluding biomechanical_features for frontend)
         "data_quality": biomechanics_report.get("data_quality", {}),
         "selected_features": biomechanics_report.get("selected_features", {}),
-        "deviations": biomechanics_report.get("deviations", []),
-        "biomechanics": biomechanics_report.get("biomechanics", {}),
-        "injury_risk_assessment": biomechanics_report.get("injury_risk_assessment", [])
+        "deviations": biomechanics_report.get("deviations", [])
     }
     
     logger.info("Two-stage analysis completed successfully")
