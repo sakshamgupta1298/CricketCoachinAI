@@ -602,10 +602,10 @@ Biomechanics Report (JSON):
 ────────────────────────
 INTERPRETATION RULES (STRICT)
 ────────────────────────
-- Only "significant" deviations may become confirmed faults
+- Only "significant and mild" deviations may become confirmed faults
 - "Mild" deviations may be monitored, not corrected
 - Inferred features may NOT be the primary reason for a fault
-- Limit confirmed faults to a maximum of 3
+- Limit confirmed faults to a maximum of 10
 - Injury risks should be addressed but not cause alarm unless High risk
 - Data Mapping: Carry over the 'observed' and 'ideal_range' values exactly as they appear in the Biomechanics Report for the chosen faults.
 
@@ -755,6 +755,7 @@ REQUIRED JSON OUTPUT
     }
     
     logger.info("Two-stage bowling analysis completed successfully")
+    logger.info(f"Combined result: {combined_result}")
     return combined_result
 
 
@@ -1187,10 +1188,10 @@ Biomechanics Report (JSON):
 ────────────────────────
 INTERPRETATION RULES (STRICT)
 ────────────────────────
-- Only "significant" deviations may become confirmed faults
+- Only "significant and mild" deviations may become confirmed faults
 - "Mild" deviations may be monitored, not corrected
 - Inferred features may NOT be the primary reason for a fault
-- Limit confirmed faults to a maximum of 3
+- Limit confirmed faults to a maximum of 10
 - Data Mapping: Carry over the 'observed' and 'ideal_range' values exactly as they appear in the Biomechanics Report for the chosen faults.
 
 ────────────────────────

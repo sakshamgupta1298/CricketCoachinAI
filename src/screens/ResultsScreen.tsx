@@ -2,18 +2,18 @@ import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import React from 'react';
 import {
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  View,
+    ScrollView,
+    StyleSheet,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import {
-  Card,
-  Chip,
-  IconButton,
-  Surface,
-  Text,
-  useTheme
+    Card,
+    Chip,
+    IconButton,
+    Surface,
+    Text,
+    useTheme
 } from 'react-native-paper';
 import { borderRadius, colors, shadows, spacing } from '../theme';
 import { AnalysisResult } from '../types';
@@ -47,27 +47,10 @@ const ResultsScreen: React.FC = () => {
   };
 
   const renderFlaws = () => {
-    // Get deviations from backend - check both top level and gpt_feedback
-    const allDeviations = (result.deviations || result.gpt_feedback?.deviations || []) as any[];
+    // Support both old format (flaws) and new format (technical_flaws)
+    const flaws = result.gpt_feedback.technical_flaws || result.gpt_feedback.flaws || [];
     
-    // Filter out 'within_range' and 'not_determinable' deviations
-    const relevantDeviations = allDeviations.filter(
-      (dev: any) => 
-        dev.deviation_type && 
-        dev.deviation_type !== 'within_range' && 
-        dev.deviation_type !== 'not_determinable'
-    );
-    
-    // Get confirmed_faults for recommendations (if available)
-    const confirmedFaults = result.gpt_feedback?.technical_flaws || result.gpt_feedback?.confirmed_faults || [];
-    const faultsMap = new Map();
-    confirmedFaults.forEach((fault: any) => {
-      if (fault.feature) {
-        faultsMap.set(fault.feature, fault);
-      }
-    });
-    
-    if (relevantDeviations.length === 0) {
+    if (flaws.length === 0) {
       return (
         <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
           <Card.Content>
@@ -75,39 +58,32 @@ const ResultsScreen: React.FC = () => {
               🎉 Great Technique!
             </Text>
             <Text style={[styles.cardDescription, { color: theme.colors.onSurfaceVariant }]}>
-              No major deviations detected in your technique. Keep up the good work!
+              No major flaws detected in your technique. Keep up the good work!
             </Text>
           </Card.Content>
         </Card>
       );
     }
 
-    return relevantDeviations.map((deviation: any, index: number) => {
-      const featureName = deviation.feature.replace(/_/g, ' ').toUpperCase();
+    return flaws.map((flaw: any, index: number) => {
+      // Handle both old and new format
+      // New format has ideal_range (from confirmed_faults), old format has expected_range
+      const hasIdealRange = 'ideal_range' in flaw && flaw.ideal_range;
+      const hasExpectedRange = 'expected_range' in flaw && flaw.expected_range;
+      const hasDeviation = 'deviation' in flaw && flaw.deviation;
       
-      // Format: "observed vs ideal_range"
-      const observedValue = deviation.observed || 'N/A';
-      const idealRange = deviation.ideal_range || 'N/A';
-      const deviationText = `${observedValue} vs ${idealRange}`;
+      const featureName = flaw.feature.replace(/_/g, ' ').toUpperCase();
       
-      // Get recommendation from confirmed_faults if available, otherwise use biomechanical_note
-      const fault = faultsMap.get(deviation.feature);
-      const recommendation = fault?.recommendation || fault?.why_it_matters || deviation.biomechanical_note || '';
-      const issue = fault?.why_it_matters || fault?.issue || deviation.biomechanical_note || '';
-      
-      // Get severity badge color based on deviation_type
-      const getSeverityColor = () => {
-        switch (deviation.deviation_type) {
-          case 'significant':
-            return colors.error;
-          case 'mild':
-            return colors.cricket.orange;
-          default:
-            return colors.cricket.blue;
-        }
-      };
-      
-      const severityColor = getSeverityColor();
+      let deviationText = '';
+      if (hasDeviation) {
+        deviationText = flaw.deviation;
+      } else if (hasIdealRange) {
+        deviationText = `${flaw.observed} vs ${flaw.ideal_range}`;
+      } else if (hasExpectedRange) {
+        deviationText = `${flaw.observed} vs ${flaw.expected_range}`;
+      } else {
+        deviationText = flaw.observed || 'N/A';
+      }
 
       return (
         <Card key={index} style={[styles.card, { backgroundColor: theme.colors.surface }]}>
@@ -116,46 +92,27 @@ const ResultsScreen: React.FC = () => {
               <Text style={[styles.flawTitle, { color: theme.colors.onSurface, flex: 1 }]}>
                 {featureName}
               </Text>
-              {deviation.deviation_type && (
-                <Chip 
-                  mode="flat" 
-                  textStyle={{ fontSize: 10, fontWeight: '600' }} 
-                  style={{ backgroundColor: severityColor + '20', marginLeft: spacing.xs }}
-                >
-                  {deviation.deviation_type.toUpperCase()}
-                </Chip>
-              )}
             </View>
             <View style={styles.flawChipContainer}>
-              <View style={[styles.flawChip, { borderColor: severityColor }]}>
-                <Text style={[styles.flawChipText, { color: severityColor }]}>
+              <View style={[styles.flawChip, { borderColor: colors.error }]}>
+                <Text style={[styles.flawChipText, { color: colors.error }]}>
                   {deviationText}
                 </Text>
               </View>
             </View>
             
-            {issue && (
-              <Text style={[styles.flawIssue, { color: theme.colors.onSurface }]}>
-                {issue}
-              </Text>
-            )}
+            <Text style={[styles.flawIssue, { color: theme.colors.onSurface }]}>
+              {flaw.issue}
+            </Text>
             
-            {recommendation && (
-              <View style={styles.recommendationContainer}>
-                <Text style={[styles.recommendationLabel, { color: theme.colors.primary }]}>
-                  💡 Recommendation:
-                </Text>
-                <Text style={[styles.recommendationText, { color: theme.colors.onSurface }]}>
-                  {recommendation}
-                </Text>
-              </View>
-            )}
-            
-            {deviation.confidence && (
-              <Text style={[styles.confidenceText, { color: theme.colors.onSurfaceVariant }]}>
-                Confidence: {deviation.confidence}
+            <View style={styles.recommendationContainer}>
+              <Text style={[styles.recommendationLabel, { color: theme.colors.primary }]}>
+                💡 Recommendation:
               </Text>
-            )}
+              <Text style={[styles.recommendationText, { color: theme.colors.onSurface }]}>
+                {flaw.recommendation}
+              </Text>
+            </View>
           </Card.Content>
         </Card>
       );
@@ -565,9 +522,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   flawHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     marginBottom: spacing.xs,
   },
   flawTitle: {
@@ -608,11 +562,6 @@ const styles = StyleSheet.create({
   recommendationText: {
     fontSize: 14,
     lineHeight: 20,
-  },
-  confidenceText: {
-    fontSize: 12,
-    fontStyle: 'italic',
-    marginTop: spacing.xs,
   },
   tipItem: {
     flexDirection: 'row',
