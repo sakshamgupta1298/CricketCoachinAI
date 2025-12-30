@@ -766,7 +766,15 @@ REQUIRED JSON OUTPUT
             logger.warning(f"Flaw missing observed or ideal_range: {flaw.get('feature', 'unknown')}")
     
     logger.info("Two-stage bowling analysis completed successfully")
-    logger.info(f"Combined result: {combined_result}")
+    logger.info("=" * 80)
+    logger.info("COMBINED RESULT (BOWLING) - BEFORE RETURNING:")
+    logger.info("=" * 80)
+    logger.info(f"Number of flaws: {len(combined_result.get('flaws', []))}")
+    for i, flaw in enumerate(combined_result.get("flaws", [])):
+        logger.info(f"Flaw {i+1}: {json.dumps(flaw, indent=2, default=str)}")
+    logger.info("=" * 80)
+    logger.info(f"Full combined result: {json.dumps(combined_result, indent=2, default=str)}")
+    logger.info("=" * 80)
     return combined_result
 
 
@@ -1355,6 +1363,15 @@ REQUIRED JSON OUTPUT
             logger.warning(f"Flaw missing observed or ideal_range: {flaw.get('feature', 'unknown')}")
     
     logger.info("Two-stage analysis completed successfully")
+    logger.info("=" * 80)
+    logger.info("COMBINED RESULT (BATTING) - BEFORE RETURNING:")
+    logger.info("=" * 80)
+    logger.info(f"Number of flaws: {len(combined_result.get('flaws', []))}")
+    for i, flaw in enumerate(combined_result.get("flaws", [])):
+        logger.info(f"Flaw {i+1}: {json.dumps(flaw, indent=2, default=str)}")
+    logger.info("=" * 80)
+    logger.info(f"Full combined result: {json.dumps(combined_result, indent=2, default=str)}")
+    logger.info("=" * 80)
     return combined_result
 
 
@@ -1825,6 +1842,27 @@ def api_upload_file():
                 logger.info(f"Results saved to: {results_file}")
 
             logger.info("Processing completed successfully")
+            
+            # Print what backend is sending to frontend
+            logger.info("=" * 80)
+            logger.info("RESPONSE BEING SENT TO FRONTEND:")
+            logger.info("=" * 80)
+            logger.info(json.dumps(results, indent=2, default=str))
+            logger.info("=" * 80)
+            
+            # Also print flaws details specifically
+            if results.get("gpt_feedback"):
+                flaws = results["gpt_feedback"].get("flaws", []) or results["gpt_feedback"].get("technical_flaws", [])
+                logger.info(f"Number of flaws: {len(flaws)}")
+                for i, flaw in enumerate(flaws):
+                    logger.info(f"Flaw {i+1}:")
+                    logger.info(f"  - feature: {flaw.get('feature', 'N/A')}")
+                    logger.info(f"  - observed: {flaw.get('observed', 'N/A')}")
+                    logger.info(f"  - ideal_range: {flaw.get('ideal_range', 'N/A')}")
+                    logger.info(f"  - deviation: {flaw.get('deviation', 'N/A')}")
+                    logger.info(f"  - issue: {flaw.get('issue', 'N/A')[:100]}...")
+            logger.info("=" * 80)
+            
             return jsonify(results)
             
         except Exception as e:
