@@ -607,7 +607,8 @@ INTERPRETATION RULES (STRICT)
 - Inferred features may NOT be the primary reason for a fault
 - Limit confirmed faults to a maximum of 10
 - Injury risks should be addressed but not cause alarm unless High risk
-- Data Mapping: Carry over the 'observed' and 'ideal_range' values exactly as they appear in the Biomechanics Report for the chosen faults.
+- CRITICAL: For each flaw, you MUST include both "observed" (numeric value) and "ideal_range" (string range) from the Biomechanics Report
+- Data Mapping: Carry over the 'observed' and 'ideal_range' values EXACTLY as they appear in the Biomechanics Report for the chosen faults
 
 ────────────────────────
 SKILL-LEVEL ADAPTATION
@@ -650,30 +651,31 @@ RULES (STRICT)
 REQUIRED JSON OUTPUT
 ────────────────────────
 {{
-  "coaching_focus": "Primary technical theme for this session",
+  "analysis_summary": "Comprehensive summary of the biomechanical analysis and coaching focus for this session. Include key findings, primary technical themes, and overall assessment.",
 
-  "confirmed_faults": [
+  "flaws": [
     {{
       "feature": "feature_name",
-      "observed": "<numeric_value_from_report>", 
-      "ideal_range": "<numeric_value_from_report>",
-      "severity": "minor | moderate | major",
-      "why_it_matters": "Bowling-type-specific explanation",
-      "recommendation": "Drill name — setup — execution cue — reps"
+      "observed": <numeric_value_from_biomechanics_report>,  # REQUIRED: Must be a number from the deviations array
+      "ideal_range": "<string_range_from_biomechanics_report>",  # REQUIRED: Must be the exact ideal_range string from the deviations array
+      "issue": "Bowling-type-specific explanation of why this deviation matters",
+      "recommendation": "Drill name — setup — execution cue — reps",
+      "deviation": "Brief description of the deviation (optional, can be derived from observed vs ideal_range)"
     }}
   ],
 
-  "injury_risk_guidance": [
+  "injury_risk_assessment": [
     {{
       "body_part": "Lower back | Shoulder | Elbow | Knee | Ankle",
       "risk_level": "Low | Moderate | High",
-      "guidance": "Practical advice to reduce risk"
+      "reason": "Biomechanical explanation of why this body part is at risk"
     }}
   ],
 
-  "coach_notes": [
+  "general_tips": [
     "What to keep doing well",
-    "What not to overcorrect"
+    "What not to overcorrect",
+    "Additional coaching tips and reminders"
   ]
 }}
 """
@@ -706,53 +708,39 @@ REQUIRED JSON OUTPUT
             "stage": "coaching_interpretation"
         }
 
-    # Combine both reports - structure for backward compatibility
-    # Frontend expects: technical_flaws, flaws, injury_risk_assessment, etc.
+    # Simplified result - only fields that frontend actually uses
     combined_result = {
-        # New structure with both reports
-        "biomechanics_report": biomechanics_report,
-        "coaching_feedback": coaching_feedback,
-        "bowler_type": bowler_type,
-        "bowling_type": bowling_type,
-        "player_level": player_level,
+        # Analysis summary - from Prompt B (coaching), fallback to Prompt A (biomechanics)
+        "analysis_summary": coaching_feedback.get("analysis_summary", biomechanics_report.get("analysis_summary", "")),
+        "analysis": coaching_feedback.get("analysis_summary", biomechanics_report.get("analysis_summary", "")),  # Backward compatibility
         
-        # Backward compatibility: flatten key fields for frontend
-        "analysis_summary": biomechanics_report.get("analysis_summary", ""),
-        "analysis": biomechanics_report.get("analysis_summary", ""),
+        # Flaws - from Prompt B (coaching feedback)
+        # Each flaw includes: feature, observed (numeric), ideal_range (string), issue, recommendation, deviation
+        "flaws": coaching_feedback.get("flaws", []),
+        "technical_flaws": coaching_feedback.get("flaws", []),  # Backward compatibility alias
         
-        # Extract flaws from coaching feedback (confirmed_faults) for frontend compatibility
-        "confirmed_faults": coaching_feedback.get("confirmed_faults", []),
-        "flaws": [
-            {
-                "feature": fault.get("feature", ""),
-                "severity": fault.get("severity", ""),
-                "deviation": fault.get("why_it_matters", ""),
-                "issue": fault.get("why_it_matters", ""),
-                "recommendation": fault.get("recommendation", "")
-            }
-            for fault in coaching_feedback.get("confirmed_faults", [])
-        ],
-        "technical_flaws": coaching_feedback.get("confirmed_faults", []),
+        # General tips - from Prompt B (coaching feedback)
+        "general_tips": coaching_feedback.get("general_tips", []),
         
-        # Coach notes
-        "coach_notes": coaching_feedback.get("coach_notes", []),
-        "coaching_focus": coaching_feedback.get("coaching_focus", ""),
-        "general_tips": coaching_feedback.get("coach_notes", []),
-        
-        # Injury risks - combine from both reports
-        "injury_risk_assessment": biomechanics_report.get("injury_risk_assessment", []),
-        "injury_risk_guidance": coaching_feedback.get("injury_risk_guidance", []),
+        # Injury risks - combine from both reports (coaching_feedback takes priority)
+        "injury_risk_assessment": (
+            coaching_feedback.get("injury_risk_assessment", []) + 
+            biomechanics_report.get("injury_risk_assessment", [])
+        ),
         "injury_risks": [
-            f"{risk.get('body_part', 'Unknown')} - {risk.get('risk_level', 'Unknown')}: {risk.get('reason', risk.get('guidance', ''))}"
-            for risk in (biomechanics_report.get("injury_risk_assessment", []) + 
-                        coaching_feedback.get("injury_risk_guidance", []))
+            f"{risk.get('body_part', 'Unknown')} - {risk.get('risk_level', 'Unknown')}: {risk.get('reason', '')}"
+            for risk in (coaching_feedback.get("injury_risk_assessment", []) + 
+                        biomechanics_report.get("injury_risk_assessment", []))
         ],
         
-        # Biomechanics data (excluding biomechanical_features for frontend)
-        "data_quality": biomechanics_report.get("data_quality", {}),
-        "selected_features": biomechanics_report.get("selected_features", {}),
-        "deviations": biomechanics_report.get("deviations", [])
+        # Biomechanics data from Prompt A (for collapsible section in frontend)
+        "biomechanics": biomechanics_report.get("biomechanics", {})
     }
+    
+    # Verify that flaws include observed and ideal_range
+    for flaw in combined_result.get("flaws", []):
+        if "observed" not in flaw or "ideal_range" not in flaw:
+            logger.warning(f"Flaw missing observed or ideal_range: {flaw.get('feature', 'unknown')}")
     
     logger.info("Two-stage bowling analysis completed successfully")
     logger.info(f"Combined result: {combined_result}")
@@ -1192,7 +1180,8 @@ INTERPRETATION RULES (STRICT)
 - "Mild" deviations may be monitored, not corrected
 - Inferred features may NOT be the primary reason for a fault
 - Limit confirmed faults to a maximum of 10
-- Data Mapping: Carry over the 'observed' and 'ideal_range' values exactly as they appear in the Biomechanics Report for the chosen faults.
+- CRITICAL: For each flaw, you MUST include both "observed" (numeric value) and "ideal_range" (string range) from the Biomechanics Report
+- Data Mapping: Carry over the 'observed' and 'ideal_range' values EXACTLY as they appear in the Biomechanics Report for the chosen faults
 
 ────────────────────────
 SKILL-LEVEL ADAPTATION
@@ -1208,7 +1197,8 @@ COACHING TASKS
 2. Decide which deviations are true technical faults
 3. Rank faults by impact on the selected shot
 4. Provide ONE drill per fault using standardized format
-5. Reinforce strengths that should not be overcorrected
+5. Address injury risks with appropriate caution level (if any biomechanical deviations suggest injury risk)
+6. Reinforce strengths that should not be overcorrected
 
 ────────────────────────
 DRILL FORMAT (MANDATORY)
@@ -1227,22 +1217,31 @@ RULES (STRICT)
 REQUIRED JSON OUTPUT
 ────────────────────────
 {{
-  "coaching_focus": "Primary technical theme for this session",
+  "analysis_summary": "Comprehensive summary of the biomechanical analysis and coaching focus for this session. Include key findings, primary technical themes, and overall assessment for the {action_type} shot.",
 
-  "confirmed_faults": [
+  "flaws": [
     {{
       "feature": "feature_name",
-      "observed": "<numeric_value_from_report>", 
-      "ideal_range": "<numeric_value_from_report>",
-      "severity": "minor | moderate | major",
-      "why_it_matters": "Shot-specific explanation",
-      "recommendation": "Drill name — setup — execution cue — reps"
+      "observed": <numeric_value_from_biomechanics_report>,  # REQUIRED: Must be a number from the deviations array
+      "ideal_range": "<string_range_from_biomechanics_report>",  # REQUIRED: Must be the exact ideal_range string from the deviations array
+      "issue": "Shot-specific explanation of why this deviation matters",
+      "recommendation": "Drill name — setup — execution cue — reps",
+      "deviation": "Brief description of the deviation (optional, can be derived from observed vs ideal_range)"
     }}
   ],
 
-  "coach_notes": [
+  "injury_risk_assessment": [
+    {{
+      "body_part": "Lower back | Shoulder | Elbow | Wrist | Knee | Ankle",
+      "risk_level": "Low | Moderate | High",
+      "reason": "Biomechanical explanation of why this body part is at risk based on the batting technique"
+    }}
+  ],
+
+  "general_tips": [
     "What to keep doing well",
-    "What not to overcorrect"
+    "What not to overcorrect",
+    "Additional coaching tips and reminders"
   ]
 }}
 """
@@ -1275,42 +1274,39 @@ REQUIRED JSON OUTPUT
             "stage": "coaching_interpretation"
         }
 
-    # Combine both reports - structure for backward compatibility
-    # Frontend expects: flaws, technical_flaws, analysis, analysis_summary, etc.
+    # Simplified result - only fields that frontend actually uses
     combined_result = {
-        # New structure with both reports
-        "biomechanics_report": biomechanics_report,
-        "coaching_feedback": coaching_feedback,
-        "shot_type": action_type,
-        "player_level": player_level,
+        # Analysis summary - from Prompt B (coaching), fallback to Prompt A (biomechanics)
+        "analysis_summary": coaching_feedback.get("analysis_summary", biomechanics_report.get("analysis_summary", "")),
+        "analysis": coaching_feedback.get("analysis_summary", biomechanics_report.get("analysis_summary", "")),  # Backward compatibility
         
-        # Backward compatibility: flatten key fields for frontend
-        "analysis_summary": biomechanics_report.get("analysis_summary", ""),
-        "analysis": biomechanics_report.get("analysis_summary", ""),
+        # Flaws - from Prompt B (coaching feedback)
+        # Each flaw includes: feature, observed (numeric), ideal_range (string), issue, recommendation, deviation
+        "flaws": coaching_feedback.get("flaws", []),
+        "technical_flaws": coaching_feedback.get("flaws", []),  # Backward compatibility alias
         
-        # Extract flaws from coaching feedback (confirmed_faults) for frontend compatibility
-        "confirmed_faults": coaching_feedback.get("confirmed_faults", []),
-        "flaws": [
-            {
-                "feature": fault.get("feature", ""),
-                "severity": fault.get("severity", ""),
-                "issue": fault.get("why_it_matters", ""),
-                "recommendation": fault.get("recommendation", "")
-            }
-            for fault in coaching_feedback.get("confirmed_faults", [])
+        # General tips - from Prompt B (coaching feedback)
+        "general_tips": coaching_feedback.get("general_tips", []),
+        
+        # Injury risks - combine from both reports (coaching_feedback takes priority)
+        "injury_risk_assessment": (
+            coaching_feedback.get("injury_risk_assessment", []) + 
+            biomechanics_report.get("injury_risk_assessment", [])
+        ),
+        "injury_risks": [
+            f"{risk.get('body_part', 'Unknown')} - {risk.get('risk_level', 'Unknown')}: {risk.get('reason', '')}"
+            for risk in (coaching_feedback.get("injury_risk_assessment", []) + 
+                        biomechanics_report.get("injury_risk_assessment", []))
         ],
-        "technical_flaws": coaching_feedback.get("confirmed_faults", []),
         
-        # Coach notes
-        "coach_notes": coaching_feedback.get("coach_notes", []),
-        "coaching_focus": coaching_feedback.get("coaching_focus", ""),
-        "general_tips": coaching_feedback.get("coach_notes", []),
-        
-        # Biomechanics data (excluding biomechanical_features for frontend)
-        "data_quality": biomechanics_report.get("data_quality", {}),
-        "selected_features": biomechanics_report.get("selected_features", {}),
-        "deviations": biomechanics_report.get("deviations", [])
+        # Biomechanics data from Prompt A (for collapsible section in frontend)
+        "biomechanics": biomechanics_report.get("biomechanics", {})
     }
+    
+    # Verify that flaws include observed and ideal_range
+    for flaw in combined_result.get("flaws", []):
+        if "observed" not in flaw or "ideal_range" not in flaw:
+            logger.warning(f"Flaw missing observed or ideal_range: {flaw.get('feature', 'unknown')}")
     
     logger.info("Two-stage analysis completed successfully")
     return combined_result
@@ -1331,34 +1327,19 @@ def generate_training_plan(gpt_feedback, player_type='batsman', shot_type=None, 
             logger.error(f"Failed to read report file: {e}", exc_info=True)
     
     # Create a comprehensive summary for Gemini
-    # Handle both old format and new two-stage format
+    # Simplified format: flat structure with all fields directly accessible
     if isinstance(gpt_feedback, dict):
-        # New format: has biomechanics_report and coaching_feedback
-        if 'biomechanics_report' in gpt_feedback and 'coaching_feedback' in gpt_feedback:
-            biomechanics = gpt_feedback.get('biomechanics_report', {})
-            coaching = gpt_feedback.get('coaching_feedback', {})
-            summary = {
-                "player_type": player_type,
-                "shot_type": shot_type,
-                "bowler_type": bowler_type,
-                "flaws": gpt_feedback.get('flaws', []),
-                "confirmed_faults": coaching.get('confirmed_faults', []),
-                "deviations": biomechanics.get('deviations', []),
-                "coaching_focus": coaching.get('coaching_focus', ''),
-                "coach_notes": coaching.get('coach_notes', []),
-                "general_tips": gpt_feedback.get('general_tips', coaching.get('coach_notes', [])),
-                "injury_risks": gpt_feedback.get('injury_risks', [])
-            }
-        else:
-            # Old format: flat structure
-            summary = {
-                "player_type": player_type,
-                "shot_type": shot_type,
-                "bowler_type": bowler_type,
-                "flaws": gpt_feedback.get('flaws', []),
-                "general_tips": gpt_feedback.get('general_tips', []),
-                "injury_risks": gpt_feedback.get('injury_risks', [])
-            }
+        summary = {
+            "player_type": player_type,
+            "shot_type": shot_type,
+            "bowler_type": bowler_type,
+            "flaws": gpt_feedback.get('flaws', []),
+            "technical_flaws": gpt_feedback.get('technical_flaws', []),
+            "analysis_summary": gpt_feedback.get('analysis_summary', ''),
+            "general_tips": gpt_feedback.get('general_tips', []),
+            "injury_risks": gpt_feedback.get('injury_risks', []),
+            "injury_risk_assessment": gpt_feedback.get('injury_risk_assessment', [])
+        }
     else:
         summary = {
             "player_type": player_type,

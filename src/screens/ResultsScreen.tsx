@@ -2,18 +2,18 @@ import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import React from 'react';
 import {
-    ScrollView,
-    StyleSheet,
-    TouchableOpacity,
-    View,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import {
-    Card,
-    Chip,
-    IconButton,
-    Surface,
-    Text,
-    useTheme
+  Card,
+  Chip,
+  IconButton,
+  Surface,
+  Text,
+  useTheme
 } from 'react-native-paper';
 import { borderRadius, colors, shadows, spacing } from '../theme';
 import { AnalysisResult } from '../types';
