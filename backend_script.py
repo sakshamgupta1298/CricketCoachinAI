@@ -94,6 +94,10 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+def normalize_feature(name: str) -> str:
+    return name.lower().strip()
+
+
 # JWT Functions
 def generate_jwt_token(user_id, username):
     """Generate JWT token for user"""
@@ -713,29 +717,69 @@ REQUIRED JSON OUTPUT
     deviations = biomechanics_report.get("deviations", [])
     
     # Create a lookup map from feature name to deviation data
-    deviation_map = {}
-    for dev in deviations:
-        feature_name = dev.get("feature", "")
-        if feature_name:
-            deviation_map[feature_name] = dev
+    # deviation_map = {}
+    # for dev in deviations:
+    #     feature_name = dev.get("feature", "")
+    #     if feature_name:
+    #         deviation_map[feature_name] = dev
+    deviation_map = {
+        normalize_feature(dev.get("feature", "")): dev
+        for dev in deviations
+    }
     
-    # Fill in missing ideal_range and observed from biomechanics report
-    for flaw in flaws:
-        feature_name = flaw.get("feature", "")
-        if feature_name in deviation_map:
-            dev = deviation_map[feature_name]
-            if "ideal_range" not in flaw or not flaw.get("ideal_range"):
-                flaw["ideal_range"] = dev.get("ideal_range", "")
-                logger.info(f"Filled missing ideal_range for {feature_name}: {dev.get('ideal_range', '')}")
-            if "observed" not in flaw or flaw.get("observed") is None:
-                flaw["observed"] = dev.get("observed")
-                logger.info(f"Filled missing observed for {feature_name}: {dev.get('observed')}")
+    # ALWAYS overwrite ideal_range and observed from biomechanics report to ensure data consistency
+    # Prompt B may not reliably carry these values forward, so we enforce them from Prompt A
+    # for flaw in flaws:
+    #     feature_name = flaw.get("feature", "")
+    #     if feature_name in deviation_map:
+    #         dev = deviation_map[feature_name]
+    #         # Always overwrite ideal_range from biomechanics report if it exists
+    #         if dev.get("ideal_range"):
+    #             flaw["ideal_range"] = dev.get("ideal_range")
+    #             logger.info(f"Overwrote ideal_range for {feature_name} from biomechanics: {dev.get('ideal_range')}")
+    #         elif "ideal_range" not in flaw or not flaw.get("ideal_range"):
+    #             flaw["ideal_range"] = dev.get("ideal_range", "")
+    #             logger.info(f"Filled missing ideal_range for {feature_name}: {dev.get('ideal_range', '')}")
+    #         # Always overwrite observed from biomechanics report if it exists
+    #         if dev.get("observed") is not None:
+    #             flaw["observed"] = dev.get("observed")
+    #             logger.info(f"Overwrote observed for {feature_name} from biomechanics: {dev.get('observed')}")
+    #         elif "observed" not in flaw or flaw.get("observed") is None:
+    #             flaw["observed"] = dev.get("observed")
+    #             logger.info(f"Filled missing observed for {feature_name}: {dev.get('observed')}")
 
-    # Simplified result - only fields that frontend actually uses
+    for flaw in flaws:
+        feature_name = normalize_feature(flaw.get("feature", ""))
+
+        if feature_name not in deviation_map:
+            continue
+
+        dev = deviation_map[feature_name]
+
+        # ✅ Only enforce biomechanics values if this is a real deviation
+        if dev.get("deviation_type") in ("mild", "significant"):
+
+            # Overwrite ideal_range ONLY for real deviations
+            if dev.get("ideal_range"):
+                flaw["ideal_range"] = dev["ideal_range"]
+                logger.info(
+                    f"Enforced ideal_range for {feature_name} from biomechanics: {dev['ideal_range']}"
+                )
+
+            # Overwrite observed ONLY for real deviations
+            if dev.get("observed") is not None:
+                flaw["observed"] = dev["observed"]
+                logger.info(
+                    f"Enforced observed for {feature_name} from biomechanics: {dev['observed']}"
+                )
+
+
+    # Simplified result - only fields that frontend actually uses'
+    analysis_text = coaching_feedback.get("analysis_summary",biomechanics_report.get("analysis_summary", ""))
     combined_result = {
         # Analysis summary - from Prompt B (coaching), fallback to Prompt A (biomechanics)
-        "analysis_summary": coaching_feedback.get("analysis_summary", biomechanics_report.get("analysis_summary", "")),
-        "analysis": coaching_feedback.get("analysis_summary", biomechanics_report.get("analysis_summary", "")),  # Backward compatibility
+        "analysis_summary": analysis_text,
+        "analysis": analysis_text,  # Backward compatibility
         
         # Flaws - from Prompt B (coaching feedback), enriched with biomechanics data
         # Each flaw includes: feature, observed (numeric), ideal_range (string), issue, recommendation, deviation
@@ -747,13 +791,11 @@ REQUIRED JSON OUTPUT
         
         # Injury risks - combine from both reports (coaching_feedback takes priority)
         "injury_risk_assessment": (
-            coaching_feedback.get("injury_risk_assessment", []) + 
-            biomechanics_report.get("injury_risk_assessment", [])
+            coaching_feedback.get("injury_risk_assessment", [])
         ),
         "injury_risks": [
             f"{risk.get('body_part', 'Unknown')} - {risk.get('risk_level', 'Unknown')}: {risk.get('reason', '')}"
-            for risk in (coaching_feedback.get("injury_risk_assessment", []) + 
-                        biomechanics_report.get("injury_risk_assessment", []))
+            for risk in (coaching_feedback.get("injury_risk_assessment", []))
         ],
         
         # Biomechanics data from Prompt A (for collapsible section in frontend)
@@ -1310,30 +1352,78 @@ REQUIRED JSON OUTPUT
     deviations = biomechanics_report.get("deviations", [])
     
     # Create a lookup map from feature name to deviation data
-    deviation_map = {}
-    for dev in deviations:
-        feature_name = dev.get("feature", "")
-        if feature_name:
-            deviation_map[feature_name] = dev
+    # deviation_map = {}
+
+    deviation_map = {
+    normalize_feature(dev.get("feature", "")): dev
+    for dev in deviations
+    }
+    # for dev in deviations:
+    #     feature_name = dev.get("feature", "")
+    #     if feature_name:
+    #         deviation_map[feature_name] = dev
+
     
-    # Fill in missing ideal_range and observed from biomechanics report
+    
+    # ALWAYS overwrite ideal_range and observed from biomechanics report to ensure data consistency
+    # Prompt B may not reliably carry these values forward, so we enforce them from Prompt A
+    # for flaw in flaws:
+    #     # feature_name = flaw.get("feature", "")
+    #     feature_name = normalize_feature(flaw.get("feature", ""))
+    #     if feature_name in deviation_map:
+    #         dev = deviation_map[feature_name]
+    #         # Always overwrite ideal_range from biomechanics report if it exists
+    #         if dev.get("ideal_range"):
+    #             flaw["ideal_range"] = dev.get("ideal_range")
+    #             logger.info(f"Overwrote ideal_range for {feature_name} from biomechanics: {dev.get('ideal_range')}")
+    #         elif "ideal_range" not in flaw or not flaw.get("ideal_range"):
+    #             flaw["ideal_range"] = dev.get("ideal_range", "")
+    #             logger.info(f"Filled missing ideal_range for {feature_name}: {dev.get('ideal_range', '')}")
+    #         # Always overwrite observed from biomechanics report if it exists
+    #         if dev.get("observed") is not None:
+    #             flaw["observed"] = dev.get("observed")
+    #             logger.info(f"Overwrote observed for {feature_name} from biomechanics: {dev.get('observed')}")
+    #         elif "observed" not in flaw or flaw.get("observed") is None:
+    #             flaw["observed"] = dev.get("observed")
+    #             logger.info(f"Filled missing observed for {feature_name}: {dev.get('observed')}")
+
     for flaw in flaws:
-        feature_name = flaw.get("feature", "")
-        if feature_name in deviation_map:
-            dev = deviation_map[feature_name]
-            if "ideal_range" not in flaw or not flaw.get("ideal_range"):
-                flaw["ideal_range"] = dev.get("ideal_range", "")
-                logger.info(f"Filled missing ideal_range for {feature_name}: {dev.get('ideal_range', '')}")
-            if "observed" not in flaw or flaw.get("observed") is None:
-                flaw["observed"] = dev.get("observed")
-                logger.info(f"Filled missing observed for {feature_name}: {dev.get('observed')}")
+        feature_name = normalize_feature(flaw.get("feature", ""))
+
+        if feature_name not in deviation_map:
+            continue
+
+        dev = deviation_map[feature_name]
+
+        # ✅ Only enforce biomechanics values if this is a real deviation
+        if dev.get("deviation_type") in ("mild", "significant"):
+
+            # Overwrite ideal_range ONLY for real deviations
+            if dev.get("ideal_range"):
+                flaw["ideal_range"] = dev["ideal_range"]
+                logger.info(
+                    f"Enforced ideal_range for {feature_name} from biomechanics: {dev['ideal_range']}"
+                )
+
+            # Overwrite observed ONLY for real deviations
+            if dev.get("observed") is not None:
+                flaw["observed"] = dev["observed"]
+                logger.info(
+                    f"Enforced observed for {feature_name} from biomechanics: {dev['observed']}"
+                )
+
 
     # Simplified result - only fields that frontend actually uses
+    analysis_text = coaching_feedback.get("analysis_summary",biomechanics_report.get("analysis_summary", ""))
+
     combined_result = {
         # Analysis summary - from Prompt B (coaching), fallback to Prompt A (biomechanics)
-        "analysis_summary": coaching_feedback.get("analysis_summary", biomechanics_report.get("analysis_summary", "")),
-        "analysis": coaching_feedback.get("analysis_summary", biomechanics_report.get("analysis_summary", "")),  # Backward compatibility
-        
+        # "analysis_summary": coaching_feedback.get("analysis_summary", biomechanics_report.get("analysis_summary", "")),
+        # "analysis": coaching_feedback.get("analysis_summary", biomechanics_report.get("analysis_summary", "")),  # Backward compatibility
+
+        "analysis_summary": analysis_text,
+        "analysis": analysis_text,  # DEPRECATED: remove in v2
+
         # Flaws - from Prompt B (coaching feedback), enriched with biomechanics data
         # Each flaw includes: feature, observed (numeric), ideal_range (string), issue, recommendation, deviation
         "flaws": flaws,
@@ -1344,13 +1434,11 @@ REQUIRED JSON OUTPUT
         
         # Injury risks - combine from both reports (coaching_feedback takes priority)
         "injury_risk_assessment": (
-            coaching_feedback.get("injury_risk_assessment", []) + 
-            biomechanics_report.get("injury_risk_assessment", [])
+            coaching_feedback.get("injury_risk_assessment", [])
         ),
         "injury_risks": [
             f"{risk.get('body_part', 'Unknown')} - {risk.get('risk_level', 'Unknown')}: {risk.get('reason', '')}"
-            for risk in (coaching_feedback.get("injury_risk_assessment", []) + 
-                        biomechanics_report.get("injury_risk_assessment", []))
+            for risk in (coaching_feedback.get("injury_risk_assessment", []))
         ],
         
         # Biomechanics data from Prompt A (for collapsible section in frontend)

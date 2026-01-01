@@ -68,21 +68,27 @@ const ResultsScreen: React.FC = () => {
     return flaws.map((flaw: any, index: number) => {
       // Handle both old and new format
       // New format has ideal_range (from confirmed_faults), old format has expected_range
-      const hasIdealRange = 'ideal_range' in flaw && flaw.ideal_range;
-      const hasExpectedRange = 'expected_range' in flaw && flaw.expected_range;
-      const hasDeviation = 'deviation' in flaw && flaw.deviation;
+      // Check if ideal_range exists and is not null/undefined, and is a non-empty string
+      const idealRange = flaw.ideal_range;
+      const expectedRange = flaw.expected_range;
+      const deviation = flaw.deviation;
+      
+      const hasIdealRange = idealRange !== undefined && idealRange !== null && typeof idealRange === 'string' && idealRange.trim() !== '';
+      const hasExpectedRange = expectedRange !== undefined && expectedRange !== null && typeof expectedRange === 'string' && expectedRange.trim() !== '';
+      const hasDeviation = deviation !== undefined && deviation !== null && typeof deviation === 'string' && deviation.trim() !== '';
       
       const featureName = flaw.feature.replace(/_/g, ' ').toUpperCase();
       
       let deviationText = '';
-      if (hasDeviation) {
-        deviationText = flaw.deviation;
-      } else if (hasIdealRange) {
-        deviationText = `${flaw.observed} vs ${flaw.ideal_range}`;
-      } else if (hasExpectedRange) {
-        deviationText = `${flaw.observed} vs ${flaw.expected_range}`;
+      // Prioritize showing observed vs ideal_range if both are available
+      if (hasIdealRange && flaw.observed !== undefined && flaw.observed !== null) {
+        deviationText = `${flaw.observed} vs ${idealRange}`;
+      } else if (hasExpectedRange && flaw.observed !== undefined && flaw.observed !== null) {
+        deviationText = `${flaw.observed} vs ${expectedRange}`;
+      } else if (hasDeviation) {
+        deviationText = deviation;
       } else {
-        deviationText = flaw.observed || 'N/A';
+        deviationText = flaw.observed !== undefined && flaw.observed !== null ? String(flaw.observed) : 'N/A';
       }
 
       return (
