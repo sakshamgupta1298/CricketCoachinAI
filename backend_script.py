@@ -1486,7 +1486,7 @@ REQUIRED JSON OUTPUT
     return combined_result
 
 
-def generate_training_plan(gpt_feedback, player_type, shot_type=None, bowler_type=None, days=7, report_path):
+def generate_training_plan(gpt_feedback, player_type, shot_type=None, bowler_type=None, days=7, report_path=None):
     """
     Generate a personalized multi-day training plan using the Gemini model.
     Returns a dict with structure: { "plan": [ {"day": 1, "focus": "...", "warmup":[...], "drills":[...], "notes":"..."}, ... ] }
