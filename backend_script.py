@@ -2294,23 +2294,23 @@ def clear_analysis_history():
         if os.path.exists(user_folder):
             for file in os.listdir(user_folder):
                 if file.startswith('results_') and file.endswith('.json'):
-                    file_path = os.path.join(user_folder, file)
-                    files_to_delete.append(file_path)
-                    
-                    # Also try to delete associated files (reports, training plans, etc.)
-                    filename = file.replace('results_', '').replace('.json', '')
-                    # Delete report if exists
-                    report_pattern = f"report_*{filename}*.txt"
-                    report_files = glob.glob(os.path.join(user_folder, report_pattern))
-                    files_to_delete.extend(report_files)
-                    # Delete training plan if exists
-                    plan_file = os.path.join(user_folder, f"training_plan_{filename}.json")
-                    if os.path.exists(plan_file):
-                        files_to_delete.append(plan_file)
+                    try:
+                        file_path = os.path.join(user_folder, file)
+                        files_to_delete.append(file_path)
                         
-                except Exception as e:
-                    logging.warning(f"Failed to parse {file}: {e}")
-                    continue
+                        # Also try to delete associated files (reports, training plans, etc.)
+                        filename = file.replace('results_', '').replace('.json', '')
+                        # Delete report if exists
+                        report_pattern = f"report_*{filename}*.txt"
+                        report_files = glob.glob(os.path.join(user_folder, report_pattern))
+                        files_to_delete.extend(report_files)
+                        # Delete training plan if exists
+                        plan_file = os.path.join(user_folder, f"training_plan_{filename}.json")
+                        if os.path.exists(plan_file):
+                            files_to_delete.append(plan_file)
+                    except Exception as e:
+                        logging.warning(f"Failed to parse {file}: {e}")
+                        continue
         
         # Delete the files
         for file_path in files_to_delete:
