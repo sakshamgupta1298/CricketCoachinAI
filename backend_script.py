@@ -1935,7 +1935,7 @@ def api_upload_file():
                 
                 logger.info("Extracting pose keypoints...")
                 try:
-                    keypoints_path = extract_pose_keypoints(filepath, 'batting', user_folder=user_folder)
+                    keypoints_path = extract_pose_keypoints(filepath, 'batting')
                     logger.info("Keypoints extracted successfully")
                 except Exception as e:
                     logger.error(f"Error in keypoint extraction: {str(e)}", exc_info=True)
