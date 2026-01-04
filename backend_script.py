@@ -23,6 +23,7 @@ import bcrypt
 import sqlite3
 from functools import wraps
 import gdown
+import glob
 
 # ==================== LOGGING CONFIGURATION ====================
 # Create logging directory if it doesn't exist
@@ -156,6 +157,21 @@ keypoints_names = ["nose", "left_eye", "right_eye", "left_ear", "right_ear", "le
 # Configuration
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'mp4', 'avi', 'mov', 'mkv'}
+
+def get_user_upload_folder(user_id):
+    """
+    Get the upload folder path for a specific user.
+    Creates the folder if it doesn't exist.
+    
+    Args:
+        user_id: The user ID
+    
+    Returns:
+        Path to the user's upload folder
+    """
+    user_folder = os.path.join(UPLOAD_FOLDER, str(user_id))
+    os.makedirs(user_folder, exist_ok=True)
+    return user_folder
 
 # Model configuration
 MODEL_PATH = "slowfast_cricket.pth"
@@ -847,7 +863,14 @@ def extract_pose_keypoints(video_path, player_type):
 
     cap.release()
     df = pd.DataFrame(all_keypoints)
-    keypoints_path = os.path.join(UPLOAD_FOLDER, f'{player_type}_keypoints.csv')
+    
+    # Determine where to save keypoints - use user folder if video is in user folder
+    video_dir = os.path.dirname(video_path)
+    if os.path.basename(video_dir).isdigit():  # Check if parent directory is a user ID folder
+        keypoints_path = os.path.join(video_dir, f'{player_type}_keypoints.csv')
+    else:
+        keypoints_path = os.path.join(UPLOAD_FOLDER, f'{player_type}_keypoints.csv')
+    
     df.to_csv(keypoints_path, index=False)
     return keypoints_path
 
@@ -1463,28 +1486,38 @@ REQUIRED JSON OUTPUT
     return combined_result
 
 
-def generate_training_plan(gpt_feedback, player_type='batsman', shot_type=None, bowler_type=None, days=7, report_path=None):
+def generate_training_plan(gpt_feedback, player_type, shot_type=None, bowler_type=None, days=7, report_path):
     """
     Generate a personalized multi-day training plan using the Gemini model.
     Returns a dict with structure: { "plan": [ {"day": 1, "focus": "...", "warmup":[...], "drills":[...], "notes":"..."}, ... ] }
     """
-    # Read the report file if available
+    # Read the report file if available - this is critical for generating shot-specific plans
+    report_path = '/uploads/'
     report_content = ""
     if report_path and os.path.exists(report_path):
         try:
             with open(report_path, 'r', encoding='utf-8') as f:
                 report_content = f.read()
+                logger.info(f"Successfully loaded report from {report_path}")
         except Exception as e:
             logger.error(f"Failed to read report file: {e}", exc_info=True)
+    else:
+        if report_path:
+            logger.warning(f"Report path provided but file does not exist: {report_path}")
+        else:
+            logger.warning("No report path provided - training plan will be generated without detailed report context")
     
     # Create a comprehensive summary for Gemini
     # Simplified format: flat structure with all fields directly accessible
     if isinstance(gpt_feedback, dict):
+        # Extract flaws - prioritize technical_flaws if available, otherwise use flaws
+        all_flaws = gpt_feedback.get('technical_flaws', []) or gpt_feedback.get('flaws', [])
+        
         summary = {
             "player_type": player_type,
             "shot_type": shot_type,
             "bowler_type": bowler_type,
-            "flaws": gpt_feedback.get('flaws', []),
+            "flaws": all_flaws,
             "technical_flaws": gpt_feedback.get('technical_flaws', []),
             "analysis_summary": gpt_feedback.get('analysis_summary', ''),
             "general_tips": gpt_feedback.get('general_tips', []),
@@ -1501,29 +1534,79 @@ def generate_training_plan(gpt_feedback, player_type='batsman', shot_type=None, 
             "injury_risks": None
         }
 
+    # Build shot-specific context
+    shot_context = ""
+    if player_type == 'batsman' and shot_type:
+        shot_context = f"\n\nCRITICAL: This training plan is specifically for improving the {shot_type.replace('_', ' ').title()} shot. All drills must target the technical flaws identified for this specific shot."
+    elif player_type == 'bowler' and bowler_type:
+        shot_context = f"\n\nCRITICAL: This training plan is specifically for improving {bowler_type.replace('_', ' ').title()} bowling technique. All drills must target the technical flaws identified for this bowling style."
+
+    # Extract key flaws for emphasis
+    flaws_summary = ""
+    if summary.get('flaws') and len(summary['flaws']) > 0:
+        flaws_list = []
+        for flaw in summary['flaws'][:5]:  # Top 5 flaws
+            if isinstance(flaw, dict):
+                feature = flaw.get('feature', flaw.get('issue', 'Unknown'))
+                issue = flaw.get('issue', flaw.get('recommendation', ''))
+                flaws_list.append(f"- {feature}: {issue}")
+        if flaws_list:
+            flaws_summary = f"\n\nPRIMARY FLAWS TO ADDRESS:\n" + "\n".join(flaws_list)
+
     prompt = f"""
-You are an expert cricket coach and training planner. Based on the comprehensive analysis below, produce a {days}-day personalized training plan.
+You are an expert cricket coach and training planner. Based on the comprehensive analysis and detailed report below, produce a {days}-day personalized training plan that specifically addresses the identified technical flaws.
+
+PLAYER CONTEXT:
+- Player Type: {player_type.title()}
+- Shot/Bowling Type: {shot_type.replace('_', ' ').title() if shot_type else (bowler_type.replace('_', ' ').title() if bowler_type else 'Not specified')}
+{shot_context}
 
 ANALYSIS SUMMARY:
 {json.dumps(summary, indent=2)}
+{flaws_summary}
 
-DETAILED REPORT:
-{report_content}
+DETAILED REPORT (READ THIS CAREFULLY - IT CONTAINS THE COMPLETE ANALYSIS):
+{report_content if report_content else "No detailed report available - use the analysis summary above."}
 
-Requirements:
+TRAINING PLAN REQUIREMENTS:
 - Output must be valid JSON only.
 - The top-level JSON must contain a key "plan" whose value is a list of days (1..{days}).
-- Each day should include: "day" (int), "focus" (short string), "warmup" (list of steps), "drills" (list of drills with reps/sets/duration), "progression" (what to increase next session), and "notes" (short coaching notes).
+- Each day should include: "day" (int), "focus" (short string describing the main focus for that day), "warmup" (list of warmup steps), "drills" (list of drill objects with "name", "reps"/"sets"/"duration", and "notes"), "progression" (what to increase next session), and "notes" (short coaching notes).
 - Add a short "overall_notes" field at the top level with recovery and weekly tips.
 - Never return null values.
 - Respond ONLY in valid JSON.
 - Do not include explanations outside JSON.
 
-Example:
-{{ "plan": [{{"day":1,"focus":"...","warmup":[...],"drills":[...],"progression":"...","notes":"..."}}, ...], "overall_notes": "..." }}
+CRITICAL INSTRUCTIONS:
+1. The training plan MUST directly address the specific flaws identified in the analysis and report above.
+2. Each day's drills should progressively work on correcting the identified technical issues.
+3. For batsmen: Focus on improving the {shot_type.replace('_', ' ').title() if shot_type else 'specific shot'} technique based on the flaws found.
+4. For bowlers: Focus on improving {bowler_type.replace('_', ' ').title() if bowler_type else 'bowling'} technique based on the flaws found.
+5. Create drills that are realistic for a non-professional player to perform at a practice ground or at home.
+6. Prioritize drills that address the most critical flaws first.
+7. Include injury prevention exercises if injury risks were identified.
 
-Create drills that are realistic for a non-professional player to perform at a practice ground or at home.
-Focus on addressing the specific flaws and biomechanical issues identified in the analysis.
+Example JSON structure:
+{{
+  "plan": [
+    {{
+      "day": 1,
+      "focus": "Addressing [specific flaw from analysis]",
+      "warmup": ["5 min jogging", "Dynamic stretches"],
+      "drills": [
+        {{
+          "name": "Drill name targeting specific flaw",
+          "reps": "3x10",
+          "duration": "15 min",
+          "notes": "Focus on correcting [specific issue]"
+        }}
+      ],
+      "progression": "Increase reps to 3x12 next session",
+      "notes": "Pay attention to [specific technique point]"
+    }}
+  ],
+  "overall_notes": "Weekly recovery tips and general guidance"
+}}
 """
 
     try:
@@ -1557,7 +1640,23 @@ Focus on addressing the specific flaws and biomechanical issues identified in th
         return fallback
 
 
-def generate_report(results, player_type, shot_type=None, batter_side=None, bowler_side=None, bowler_type=None, filename=None):
+def generate_report(results, player_type, shot_type=None, batter_side=None, bowler_side=None, bowler_type=None, filename=None, user_id=None):
+    """
+    Generate a report file and save it to the user's folder.
+    
+    Args:
+        results: Analysis results dictionary
+        player_type: Type of player (batsman/bowler)
+        shot_type: Type of shot (for batsman)
+        batter_side: Side of batter
+        bowler_side: Side of bowler
+        bowler_type: Type of bowler
+        filename: Original filename
+        user_id: User ID to organize files in user folder
+    
+    Returns:
+        Path to the generated report file
+    """
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
     if player_type == 'batsman':
@@ -1687,8 +1786,18 @@ The biomechanical assessment reveals potential issues with run-up speed, deliver
 4. **Core Strength Drills:** Enhance overall stability and power.
 """
     
-    report_filename = f"report_{player_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-    report_path = os.path.join(UPLOAD_FOLDER, report_filename)
+    # Generate unique report filename with timestamp (including microseconds for absolute uniqueness)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')  # %f is microseconds
+    report_filename = f"report_{player_type}_{timestamp}.txt"
+    
+    # Save report to user's folder if user_id is provided
+    if user_id:
+        user_folder = get_user_upload_folder(user_id)
+        report_path = os.path.join(user_folder, report_filename)
+    else:
+        # Fallback to main upload folder if user_id not provided
+        report_path = os.path.join(UPLOAD_FOLDER, report_filename)
+    
     with open(report_path, 'w', encoding='utf-8') as f:
         f.write(report_content)
     return report_path
@@ -1791,7 +1900,10 @@ def api_upload_file():
     
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
-        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        
+        # Get user's upload folder and save file there
+        user_folder = get_user_upload_folder(user_id)
+        filepath = os.path.join(user_folder, filename)
         file.save(filepath)
         
         logger.info(f"File saved to {filepath}, starting processing...")
@@ -1823,7 +1935,7 @@ def api_upload_file():
                 
                 logger.info("Extracting pose keypoints...")
                 try:
-                    keypoints_path = extract_pose_keypoints(filepath, 'batting')
+                    keypoints_path = extract_pose_keypoints(filepath, 'batting', user_folder=user_folder)
                     logger.info("Keypoints extracted successfully")
                 except Exception as e:
                     logger.error(f"Error in keypoint extraction: {str(e)}", exc_info=True)
@@ -1860,15 +1972,15 @@ def api_upload_file():
                 # Generate and save report
                 logger.info("Generating report...")
                 try:
-                    report_path = generate_report(results, 'batsman', shot_type, batter_side, None, None, filename)
+                    report_path = generate_report(results, 'batsman', shot_type, batter_side, None, None, filename, user_id=user_id)
                     results['report_path'] = report_path
                     logger.info(f"Report saved to: {report_path}")
                 except Exception as e:
                     logger.error(f"Error generating report: {str(e)}", exc_info=True)
                     results['report_path'] = None
                 
-                # Save results as JSON for later retrieval
-                results_file = os.path.join(UPLOAD_FOLDER, f"results_{filename}.json")
+                # Save results as JSON for later retrieval in user's folder
+                results_file = os.path.join(user_folder, f"results_{filename}.json")
                 with open(results_file, 'w') as f:
                     json.dump(results, f, indent=2)
                 logger.info(f"Results saved to: {results_file}")
@@ -1916,15 +2028,15 @@ def api_upload_file():
                 # Generate and save report
                 logger.info("Generating bowling report...")
                 try:
-                    report_path = generate_report(results, 'bowler', None, None, bowler_side, bowler_type, filename)
+                    report_path = generate_report(results, 'bowler', None, None, bowler_side, bowler_type, filename, user_id=user_id)
                     results['report_path'] = report_path
                     logger.info(f"Report saved to: {report_path}")
                 except Exception as e:
                     logger.error(f"Error generating report: {str(e)}", exc_info=True)
                     results['report_path'] = None
                 
-                # Save results as JSON for later retrieval
-                results_file = os.path.join(UPLOAD_FOLDER, f"results_{filename}.json")
+                # Save results as JSON for later retrieval in user's folder
+                results_file = os.path.join(user_folder, f"results_{filename}.json")
                 with open(results_file, 'w') as f:
                     json.dump(results, f, indent=2)
                 logger.info(f"Results saved to: {results_file}")
@@ -1993,8 +2105,11 @@ def get_analysis_results(filename):
         username = request.user['username']
         print(f"Getting results for {filename} by user: {username} (ID: {user_id})")
         
-        # Look for the results in the upload folder
-        results_file = os.path.join(UPLOAD_FOLDER, f"results_{filename}.json")
+        # Get user's upload folder
+        user_folder = get_user_upload_folder(user_id)
+        
+        # Look for the results in the user's folder
+        results_file = os.path.join(user_folder, f"results_{filename}.json")
         if os.path.exists(results_file):
             with open(results_file, 'r') as f:
                 results = json.load(f)
@@ -2110,10 +2225,14 @@ def get_analysis_history():
         username = request.user['username']
         print(f"Getting history for user: {username} (ID: {user_id})")
         
+        # Get user's upload folder
+        user_folder = get_user_upload_folder(user_id)
+        
         history = []
-        for file in os.listdir(UPLOAD_FOLDER):
-            if file.startswith('results_') and file.endswith('.json'):
-                file_path = os.path.join(UPLOAD_FOLDER, file)
+        if os.path.exists(user_folder):
+            for file in os.listdir(user_folder):
+                if file.startswith('results_') and file.endswith('.json'):
+                    file_path = os.path.join(user_folder, file)
                 file_stats = os.stat(file_path)
                 
                 try:
@@ -2165,22 +2284,29 @@ def clear_analysis_history():
         username = request.user['username']
         print(f"Clearing history for user: {username} (ID: {user_id})")
         
+        # Get user's upload folder
+        user_folder = get_user_upload_folder(user_id)
+        
         deleted_count = 0
         files_to_delete = []
         
-        # Find all result files for this user
-        for file in os.listdir(UPLOAD_FOLDER):
-            if file.startswith('results_') and file.endswith('.json'):
-                file_path = os.path.join(UPLOAD_FOLDER, file)
-                
-                try:
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        result_data = json.load(f)
+        # Find all result files for this user in their folder
+        if os.path.exists(user_folder):
+            for file in os.listdir(user_folder):
+                if file.startswith('results_') and file.endswith('.json'):
+                    file_path = os.path.join(user_folder, file)
+                    files_to_delete.append(file_path)
                     
-                    # Check if this result belongs to the authenticated user
-                    result_user_id = result_data.get('user_id')
-                    if result_user_id == user_id:
-                        files_to_delete.append(file_path)
+                    # Also try to delete associated files (reports, training plans, etc.)
+                    filename = file.replace('results_', '').replace('.json', '')
+                    # Delete report if exists
+                    report_pattern = f"report_*{filename}*.txt"
+                    report_files = glob.glob(os.path.join(user_folder, report_pattern))
+                    files_to_delete.extend(report_files)
+                    # Delete training plan if exists
+                    plan_file = os.path.join(user_folder, f"training_plan_{filename}.json")
+                    if os.path.exists(plan_file):
+                        files_to_delete.append(plan_file)
                         
                 except Exception as e:
                     logging.warning(f"Failed to parse {file}: {e}")
@@ -2234,10 +2360,13 @@ def generate_training_plan_api():
         if not filename:
             return jsonify({'error': 'Filename is required'}), 400
         
-        # Get the analysis results
-        results_file = os.path.join(UPLOAD_FOLDER, f"results_{filename}.json")
+        # Get user's upload folder
+        user_folder = get_user_upload_folder(user_id)
+        
+        # Get the analysis results from user's folder
+        results_file = os.path.join(user_folder, f"results_{filename}.json")
         if not os.path.exists(results_file):
-            print(f"Analysis results not found for {filename}")
+            print(f"Analysis results not found for {filename} in user folder {user_folder}")
             return jsonify({'error': 'Analysis results not found'}), 404
         
         print(f"Found analysis results for {filename}")
@@ -2251,43 +2380,108 @@ def generate_training_plan_api():
             print(f"Access denied: User {username} tried to generate training plan for user ID {result_user_id}")
             return jsonify({'error': 'Access denied'}), 403
         
-        # Extract data for training plan
+        # Extract data for training plan - use player_type from results (report_player_type)
         gpt_feedback = results.get('gpt_feedback', {})
-        player_type = results.get('player_type', 'batsman')
+        player_type = results.get('player_type', 'batsman')  # This is the report_player_type
         shot_type = results.get('shot_type')
         bowler_type = results.get('bowler_type')
         
-        # Find the report file
+        print(f"Generating training plan for {player_type} - Shot: {shot_type}, Bowler Type: {bowler_type}")
+        
+        # Find the latest report file for this user - this is critical for generating shot-specific training plans
+        # Reports are uniquely named with timestamps: report_{player_type}_{timestamp}.txt
         report_path = None
+        latest_mtime = 0
+        
+        # First, try the report_path from current results if it exists and belongs to user
         if results.get('report_path'):
-            report_path = results.get('report_path')
-            print(f"Using report from results: {report_path}")
+            potential_path = results.get('report_path')
+            if os.path.exists(potential_path):
+                # Verify this report belongs to the current user by checking its modification time
+                # and that it's linked to a results file with this user_id
+                mtime = os.path.getmtime(potential_path)
+                report_path = potential_path
+                latest_mtime = mtime
+                print(f"Found report from current results: {report_path}")
+        
+        # Find the latest report created by this user (across all their analyses)
+        # This ensures we use the most recent report even if it's from a different analysis
+        try:
+            # Search through all results files in user's folder to find reports belonging to this user
+            results_files = glob.glob(os.path.join(user_folder, 'results_*.json'))
+            
+            for results_file in results_files:
+                try:
+                    with open(results_file, 'r') as f:
+                        other_results = json.load(f)
+                    
+                    # Check if this result belongs to the same user
+                    other_user_id = other_results.get('user_id')
+                    if other_user_id != user_id:
+                        continue
+                    
+                    # Get the report path from this result
+                    other_report_path = other_results.get('report_path')
+                    if other_report_path and os.path.exists(other_report_path):
+                        mtime = os.path.getmtime(other_report_path)
+                        # Use this report if it's newer than what we have
+                        if mtime > latest_mtime:
+                            latest_mtime = mtime
+                            report_path = other_report_path
+                            print(f"Found newer report for user: {report_path} (modified: {datetime.fromtimestamp(mtime)})")
+                except Exception as e:
+                    logger.debug(f"Error reading results file {results_file}: {e}")
+                    continue
+            
+            # If still no report found, try direct file search by pattern in user's folder
+            if not report_path:
+                # Get all report files for this player type in user's folder
+                report_pattern = f"report_{player_type}_*.txt"
+                report_files = glob.glob(os.path.join(user_folder, report_pattern))
+                
+                for report_file in report_files:
+                    try:
+                        mtime = os.path.getmtime(report_file)
+                        # Verify this report belongs to the user by checking if it's linked in any results file
+                        for results_file in results_files:
+                            try:
+                                with open(results_file, 'r') as f:
+                                    check_results = json.load(f)
+                                if (check_results.get('user_id') == user_id and 
+                                    check_results.get('report_path') == report_file):
+                                    if mtime > latest_mtime:
+                                        latest_mtime = mtime
+                                        report_path = report_file
+                                        print(f"Found report by pattern matching: {report_path}")
+                                    break
+                            except:
+                                continue
+                    except Exception as e:
+                        logger.debug(f"Error checking report file {report_file}: {e}")
+                        continue
+                        
+        except Exception as e:
+            logger.error(f"Error finding latest report for user: {e}", exc_info=True)
+        
+        if report_path and os.path.exists(report_path):
+            print(f"Report will be used for training plan generation: {report_path}")
         else:
-            # Try to find the report file by pattern
-            for file in os.listdir(UPLOAD_FOLDER):
-                if file.startswith('report_') and file.endswith('.txt'):
-                    # Check if this report is for the same analysis
-                    if filename in file or file.replace('report_', '').replace('.txt', '') in filename:
-                        report_path = os.path.join(UPLOAD_FOLDER, file)
-                        print(f"Found matching report: {report_path}")
-                        break
+            print(f"WARNING: No report file found for {filename}. Training plan will be generated from analysis summary only.")
+            print(f"This may result in a less specific training plan. Report should be available for best results.")
         
-        if not report_path:
-            print(f"No report file found for {filename}")
-        
-        # Generate training plan
-        print(f"Generating {days}-day training plan for {filename}...")
+        # Generate training plan with the report - this ensures the plan addresses specific shot flaws
+        print(f"Generating {days}-day training plan for {player_type} ({shot_type or bowler_type})...")
         training_plan = generate_training_plan(
             gpt_feedback=gpt_feedback,
-            player_type=player_type,
+            player_type=player_type,  # Using player_type from results (report_player_type)
             shot_type=shot_type,
             bowler_type=bowler_type,
             days=days,
-            report_path=report_path
+            report_path=report_path  # Pass the report so flaws can be addressed
         )
         
-        # Save training plan
-        plan_file = os.path.join(UPLOAD_FOLDER, f"training_plan_{filename}.json")
+        # Save training plan in user's folder
+        plan_file = os.path.join(user_folder, f"training_plan_{filename}.json")
         with open(plan_file, 'w') as f:
             json.dump(training_plan, f, indent=2)
         
@@ -2314,12 +2508,15 @@ def get_training_plan(filename):
         username = request.user['username']
         print(f"Getting training plan for {filename} by user: {username} (ID: {user_id})")
         
-        plan_file = os.path.join(UPLOAD_FOLDER, f"training_plan_{filename}.json")
+        # Get user's upload folder
+        user_folder = get_user_upload_folder(user_id)
+        
+        plan_file = os.path.join(user_folder, f"training_plan_{filename}.json")
         if os.path.exists(plan_file):
             print(f"Training plan found for {filename}")
             
             # Check if the corresponding analysis results belong to the authenticated user
-            results_file = os.path.join(UPLOAD_FOLDER, f"results_{filename}.json")
+            results_file = os.path.join(user_folder, f"results_{filename}.json")
             if os.path.exists(results_file):
                 with open(results_file, 'r') as f:
                     results = json.load(f)

@@ -171,10 +171,15 @@ const ResultsScreen: React.FC = () => {
 
   const renderInjuryRisks = () => {
     // Support both old format (injury_risks as string[]) and new format (injury_risk_assessment as objects)
-    const oldRisks = result.gpt_feedback.injury_risks || [];
+    // Prefer new format to avoid duplicates - only use old format if new format doesn't exist
     const newRisks = result.gpt_feedback.injury_risk_assessment || [];
+    const oldRisks = result.gpt_feedback.injury_risks || [];
     
-    if (oldRisks.length === 0 && newRisks.length === 0) {
+    // Only use oldRisks if newRisks is empty (backward compatibility)
+    const hasNewFormat = newRisks.length > 0;
+    const risksToRender = hasNewFormat ? newRisks : oldRisks;
+    
+    if (risksToRender.length === 0) {
       return null;
     }
 
@@ -184,29 +189,31 @@ const ResultsScreen: React.FC = () => {
           <Text style={[styles.cardTitle, { color: colors.error }]}>
             ⚠️ Injury Risks
           </Text>
-          {/* Render old format (strings) */}
-          {oldRisks.map((risk: string, index: number) => (
-            <View key={`old-${index}`} style={styles.riskItem}>
-              <Text style={styles.riskBullet}>⚠️</Text>
-              <Text style={[styles.riskText, { color: theme.colors.onSurface }]}>
-                {risk}
-              </Text>
-            </View>
-          ))}
-          {/* Render new format (objects) */}
-          {newRisks.map((risk: any, index: number) => (
-            <View key={`new-${index}`} style={styles.riskItem}>
-              <Text style={styles.riskBullet}>⚠️</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.riskText, { color: theme.colors.onSurface, fontWeight: '600' }]}>
-                  {risk.body_part} - {risk.risk_level}
-                </Text>
-                <Text style={[styles.riskText, { color: theme.colors.onSurfaceVariant, fontSize: 14, marginTop: 4 }]}>
-                  {risk.reason}
+          {/* Render new format (objects) if available, otherwise old format (strings) */}
+          {hasNewFormat ? (
+            newRisks.map((risk: any, index: number) => (
+              <View key={`risk-${index}`} style={styles.riskItem}>
+                <Text style={styles.riskBullet}>⚠️</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.riskText, { color: theme.colors.onSurface, fontWeight: '600' }]}>
+                    {risk.body_part} - {risk.risk_level}
+                  </Text>
+                  <Text style={[styles.riskText, { color: theme.colors.onSurfaceVariant, fontSize: 14, marginTop: 4 }]}>
+                    {risk.reason}
+                  </Text>
+                </View>
+              </View>
+            ))
+          ) : (
+            oldRisks.map((risk: string, index: number) => (
+              <View key={`risk-${index}`} style={styles.riskItem}>
+                <Text style={styles.riskBullet}>⚠️</Text>
+                <Text style={[styles.riskText, { color: theme.colors.onSurface }]}>
+                  {risk}
                 </Text>
               </View>
-            </View>
-          ))}
+            ))
+          )}
         </Card.Content>
       </Card>
     );
