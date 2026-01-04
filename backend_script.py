@@ -9,6 +9,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 from google import genai
+from openai import OpenAI
 import csv
 from torchvision import transforms as T
 from pytorchvideo.models.hub import slowfast_r50
@@ -176,6 +177,21 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Gemini client
 client = genai.Client(api_key="AIzaSyCNmpg89-pwOyrimMEmgyt4aT9d07MzYYc")
+
+# OpenAI client (for GPT-based feedback)
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+if OPENAI_API_KEY:
+    openai_client = OpenAI(api_key=OPENAI_API_KEY)
+else:
+    logger.warning("OPENAI_API_KEY not set. GPT-based feedback functions will not work.")
+    openai_client = None
+
+# AI Model Flag: "GPT" or "Gemini" (default: "Gemini" for backward compatibility)
+AI_MODEL_FLAG = "GPT"
+if AI_MODEL_FLAG not in ["GPT", "GEMINI"]:
+    logger.warning(f"Invalid AI_MODEL_FLAG: {AI_MODEL_FLAG}. Defaulting to 'Gemini'")
+    AI_MODEL_FLAG = "GEMINI"
+logger.info(f"AI Model Flag set to: {AI_MODEL_FLAG}")
 
 # Transform for video frames
 transform = T.Compose([
@@ -810,6 +826,490 @@ REQUIRED JSON OUTPUT
     logger.info("Two-stage bowling analysis completed successfully")
     logger.info("=" * 80)
     logger.info("COMBINED RESULT (BOWLING) - BEFORE RETURNING:")
+    logger.info("=" * 80)
+    logger.info(f"Number of flaws: {len(combined_result.get('flaws', []))}")
+    for i, flaw in enumerate(combined_result.get("flaws", [])):
+        logger.info(f"Flaw {i+1}: {json.dumps(flaw, indent=2, default=str)}")
+    logger.info("=" * 80)
+    logger.info(f"Full combined result: {json.dumps(combined_result, indent=2, default=str)}")
+    logger.info("=" * 80)
+    return combined_result
+
+
+def get_bowling_feedback_from_gpt_openai(keypoint_csv_path, bowler_type='fast_bowler', player_level='intermediate'):
+    """
+    GPT-based version of get_feedback_from_gpt_for_bowling using OpenAI API instead of Gemini.
+    Same two-stage logic: biomechanical analysis followed by coach interpretation.
+    """
+    logger.info(f"Getting GPT feedback for bowling type: {bowler_type}, player level: {player_level}")
+
+    if not openai_client:
+        logger.error("OpenAI client not initialized. Please set OPENAI_API_KEY environment variable.")
+        return {"error": "OpenAI client not initialized", "raw_content": "OPENAI_API_KEY not set"}
+
+    # Read CSV and convert to JSON
+    data = []
+    try:
+        with open(keypoint_csv_path, newline='') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                # Convert numeric fields to float
+                processed_row = {}
+                for k, v in row.items():
+                    try:
+                        # Try to convert to float if it's numeric
+                        processed_row[k] = float(v)
+                    except ValueError:
+                        # Keep as string if not numeric
+                        processed_row[k] = v
+                data.append(processed_row)
+    except Exception as e:
+        logger.error(f"Failed to read CSV file: {e}", exc_info=True)
+        return {"error": "Failed to read CSV file", "raw_content": str(e)}
+    
+    csv_json = json.dumps(data)
+    bowling_type = bowler_type.split("_")[0]
+    logger.debug(f"Bowling type extracted: {bowling_type}")
+
+# ================================
+# PROMPT A — BIOMECHANICAL ANALYST (BOWLING)
+# ================================
+
+    prompt_A = f"""
+    You are a **Cricket Biomechanics Analyst** specializing in bowling mechanics.
+
+    Your responsibility is STRICTLY LIMITED to:
+    - analyzing pose keypoint time-series data
+    - computing biomechanical features
+    - comparing them against established cricket bowling norms
+    - reporting deviations and data confidence
+    - assessing injury risk based on biomechanical deviations
+
+    You are NOT a coach.
+    You must NOT provide drills, cues, training advice, or subjective coaching opinions.
+
+            ────────────────────────
+            CONTEXT
+            ────────────────────────
+            Bowling Type: {bowling_type}   # fast | spin
+            Bowler Style: {bowler_type}   # right-arm / left-arm / overarm / off-spin / leg-spin
+
+            Each row of the input represents one video frame containing
+            body joint coordinates.
+
+            ────────────────────────
+            INPUT DATA
+            ────────────────────────
+            {csv_json}
+
+            ────────────────────────
+            CRICKET NORM CONSTRAINT (CRITICAL)
+            ────────────────────────
+            All "ideal_range" values MUST be derived from **established cricket bowling norms**
+            as defined in:
+            - ICC fast & spin bowling coaching manuals
+            - elite cricket academies
+            - published bowling biomechanics research
+
+            Do NOT invent generic athletic ranges.
+            Do NOT use single ideal values — ALWAYS use ranges.
+            Adjust ranges based on bowling type and style.
+
+            ────────────────────────
+            AUTO-FEATURE SELECTION LOGIC
+            ────────────────────────
+            1. Always compute CORE features supported by pose keypoints.
+            2. Compute CONDITIONAL features only when motion clarity supports them.
+            3. Infer ADVANCED features conservatively and mark them as "estimated".
+            4. Do NOT fabricate metrics that require sensors not present
+            (force plates, EMG, ball tracking).
+
+            ────────────────────────
+            FEATURE TIERS
+            ────────────────────────
+
+            ### TIER 1 — CORE (MANDATORY)
+            - Run-up speed (estimated m/s)
+            - Approach rhythm consistency
+            - Trunk lean at delivery
+            - Shoulder rotation angle
+            - Hip–shoulder separation (X-factor)
+            - Front knee flexion at front-foot contact
+            - Front-foot stride length
+            - Arm path plane (over-the-top / round-arm)
+            - Release height consistency
+
+    TIER 2 — CONDITIONAL
+    - Run-up acceleration profile
+    - Braking force at front-foot contact (inferred)
+    - Pelvic rotation velocity
+    - Bowling arm angular velocity
+    - Follow-through momentum dissipation
+
+    Mark all Tier 2 features with "confidence": "medium"
+
+    TIER 3 — INFERRED
+    - Wrist position at release
+    - Seam orientation stability
+    - Spin generation efficiency (spin bowlers)
+    - Pace transfer efficiency (fast bowlers)
+    - Kinetic chain sequencing quality
+
+    Mark all Tier 3 features with "estimated": true
+
+    ────────────────────────
+    BOWLING-TYPE NORM ADJUSTMENT
+    ────────────────────────
+    Adjust interpretation based on bowling type:
+
+    FAST BOWLING →
+    - Higher run-up speed & stride length norms
+    - Strong front-knee bracing norms
+    - Larger hip–shoulder separation norms
+    - Controlled trunk flexion norms
+
+    SPIN BOWLING →
+    - Moderate run-up speed norms
+    - Upright trunk posture norms
+    - Higher shoulder rotation control norms
+    - Wrist-dominant release norms
+
+    A deviation exists ONLY if values clearly fall outside
+    acceptable norms for the given bowling type.
+
+    ────────────────────────
+    INJURY RISK ASSESSMENT
+    ────────────────────────
+    When flagging injury risk, relate it biomechanically to:
+    - lumbar spine (hyperextension / lateral flexion)
+    - shoulder complex (over-rotation / load)
+    - elbow (especially for spinners)
+    - knee and ankle (braking forces)
+
+    Avoid over-alarmist language unless deviation is severe.
+    Only flag injury risk if biomechanical deviation is significant.
+
+    ────────────────────────
+    ANALYSIS TASKS
+    ────────────────────────
+    1. Select valid biomechanical features using tier rules
+    2. Compute or estimate realistic numeric values
+    3. Compare against cricket bowling norm ranges
+    4. Classify deviations without coaching interpretation
+    5. Assess injury risk based on biomechanical deviations
+    6. Report data quality and limitations
+
+    ────────────────────────
+    RULES (STRICT)
+    ────────────────────────
+    - Respond ONLY in valid JSON
+    - No coaching language
+    - No drills or recommendations
+    - No null, NaN, or empty objects
+    - Use realistic cricket bowling biomechanics values only
+
+    ────────────────────────
+    REQUIRED JSON OUTPUT
+    ────────────────────────
+    {{
+    "analysis_summary": "Neutral biomechanical assessment based on cricket bowling norms",
+
+    "data_quality": {{
+        "frame_coverage": "percentage",
+        "motion_clarity": "low | medium | high",
+        "analysis_limitations": "explicit limitations based on data"
+    }},
+
+    "selected_features": {{
+        "core": [],
+        "conditional": [],
+        "inferred": []
+    }},
+
+    "biomechanics": {{
+        "core": {{}},
+        "conditional": {{}},
+        "inferred": {{}}
+    }},
+
+    "deviations": [
+        {{
+        "feature": "feature_name",
+        "observed": 0.0,
+        "ideal_range": "cricket-norm range",
+        "deviation_type": "within_range | mild | significant",
+        "biomechanical_note": "Mechanical difference only",
+        "confidence": "high | medium"
+        }}
+    ],
+
+    "injury_risk_assessment": [
+        {{
+        "body_part": "Lower back | Shoulder | Elbow | Knee | Ankle",
+        "risk_level": "Low | Moderate | High",
+        "reason": "Biomechanical cause linked to norm deviation"
+        }}
+    ]
+    }}
+    """
+
+# ================================
+# STAGE 1: BIOMECHANICAL ANALYSIS
+# ================================
+    logger.info("Stage 1: Running biomechanical analysis for bowling (Prompt A) with GPT...")
+    try:
+        response_A = openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a cricket biomechanics analyst specializing in bowling. Respond only with valid JSON."},
+                {"role": "user", "content": prompt_A}
+            ],
+            temperature=0.3,
+            response_format={"type": "json_object"}
+        )
+
+        raw_content_A = response_A.choices[0].message.content
+        try:
+            biomechanics_report = json.loads(raw_content_A)
+            logger.info("Stage 1 completed: Biomechanical analysis received")
+        except Exception as e:
+            logger.error(f"Failed to parse Stage 1 (biomechanics) response: {e}", exc_info=True)
+            return {
+                "error": "Failed to parse biomechanics response", 
+                "raw_content": raw_content_A,
+                "stage": "biomechanics_analysis"
+            }
+    except Exception as e:
+        logger.error(f"Failed to get Stage 1 (biomechanics) response: {e}", exc_info=True)
+        return {
+            "error": "Failed to get biomechanics response", 
+            "raw_content": str(e),
+            "stage": "biomechanics_analysis"
+        }
+
+# ================================
+# STAGE 2: COACH INTERPRETATION (BOWLING)
+# ================================
+    logger.info("Stage 2: Running coach interpretation for bowling (Prompt B) with GPT...")
+
+    
+    # Convert biomechanics report to JSON string for prompt_B
+    biomechanics_report_json = json.dumps(biomechanics_report, indent=2)
+    logger.info(f"Biomechanics report: {biomechanics_report_json}")
+    
+    prompt_B = f"""
+You are an **elite Cricket Bowling Coach** interpreting a biomechanics report.
+
+Your role is to convert biomechanical deviations into
+clear, practical, bowling-type-specific coaching guidance.
+
+You do NOT recompute biomechanics.
+You rely ONLY on the provided analysis.
+
+────────────────────────
+COACHING PHILOSOPHY
+────────────────────────
+- Coach like an elite academy instructor
+- Prioritize fundamentals over micro-details
+- Ignore deviations that do not affect bowling performance
+- Be concise, actionable, and player-appropriate
+- Consider bowling type (fast vs spin) in all recommendations
+
+────────────────────────
+INPUTS
+────────────────────────
+Bowling Type: {bowling_type}   # fast | spin
+Bowler Style: {bowler_type}   # right-arm / left-arm / overarm / off-spin / leg-spin
+Player Level: {player_level}   # beginner | intermediate | advanced | elite
+
+Biomechanics Report (JSON):
+{biomechanics_report_json}
+
+────────────────────────
+INTERPRETATION RULES (STRICT)
+────────────────────────
+- Only "significant and mild" deviations may become confirmed faults
+- "Mild" deviations may be monitored, not corrected
+- Inferred features may NOT be the primary reason for a fault
+- Limit confirmed faults to a maximum of 10
+- Injury risks should be addressed but not cause alarm unless High risk
+- CRITICAL: For each flaw, you MUST include both "observed" (numeric value) and "ideal_range" (string range) from the Biomechanics Report
+- Data Mapping: Carry over the 'observed' and 'ideal_range' values EXACTLY as they appear in the Biomechanics Report for the chosen faults
+
+────────────────────────
+SKILL-LEVEL ADAPTATION
+────────────────────────
+- Beginner → simple language, run-up rhythm & basic action focus
+- Intermediate → standard technical cues
+- Advanced / Elite → sequencing, efficiency, and fine-tuning
+
+────────────────────────
+BOWLING-TYPE ADAPTATION
+────────────────────────
+- Fast Bowling → focus on pace generation, run-up speed, front-foot bracing
+- Spin Bowling → focus on wrist position, rotation control, release consistency
+
+────────────────────────
+COACHING TASKS
+────────────────────────
+1. Review deviations and data quality
+2. Decide which deviations are true technical faults
+3. Rank faults by impact on bowling performance
+4. Provide ONE drill per fault using standardized format
+5. Address injury risks with appropriate caution level
+6. Reinforce strengths that should not be overcorrected
+
+────────────────────────
+DRILL FORMAT (MANDATORY)
+────────────────────────
+"Drill name — setup — execution cue — reps"
+
+────────────────────────
+RULES (STRICT)
+────────────────────────
+- Respond ONLY in valid JSON
+- No biomechanics recalculation
+- No contradiction of analysis confidence
+- Use professional coaching language
+- Bowling-type appropriate recommendations
+
+────────────────────────
+REQUIRED JSON OUTPUT
+────────────────────────
+{{
+  "analysis_summary": "Comprehensive summary of the biomechanical analysis and coaching focus for this session. Include key findings, primary technical themes, and overall assessment.",
+
+  "flaws": [
+    {{
+      "feature": "feature_name",
+      "observed": <numeric_value_from_biomechanics_report>,  # REQUIRED: Must be a number from the deviations array
+      "ideal_range": "<string_range_from_biomechanics_report>",  # REQUIRED: Must be the exact ideal_range string from the deviations array
+      "issue": "Bowling-type-specific explanation of why this deviation matters",
+      "recommendation": "Drill name — setup — execution cue — reps",
+      "deviation": "Brief description of the deviation (optional, can be derived from observed vs ideal_range)"
+    }}
+  ],
+
+  "injury_risk_assessment": [
+    {{
+      "body_part": "Lower back | Shoulder | Elbow | Knee | Ankle",
+      "risk_level": "Low | Moderate | High",
+      "reason": "Biomechanical explanation of why this body part is at risk"
+    }}
+  ],
+
+  "general_tips": [
+    "What to keep doing well",
+    "What not to overcorrect",
+    "Additional coaching tips and reminders"
+  ]
+}}
+"""
+
+    try:
+        response_B = openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are an elite cricket bowling coach. Respond only with valid JSON."},
+                {"role": "user", "content": prompt_B}
+            ],
+            temperature=0.3,
+            response_format={"type": "json_object"}
+        )
+
+        raw_content_B = response_B.choices[0].message.content
+        try:
+            coaching_feedback = json.loads(raw_content_B)
+            logger.info("Stage 2 completed: Coaching feedback received")
+        except Exception as e:
+            logger.error(f"Failed to parse Stage 2 (coaching) response: {e}", exc_info=True)
+            # Return biomechanics report even if coaching fails
+            return {
+                "biomechanics_report": biomechanics_report,
+                "coaching_feedback": {"error": "Failed to parse coaching response", "raw_content": raw_content_B},
+                "stage": "coaching_interpretation"
+            }
+    except Exception as e:
+        logger.error(f"Failed to get Stage 2 (coaching) response: {e}", exc_info=True)
+        # Return biomechanics report even if coaching fails
+        return {
+            "biomechanics_report": biomechanics_report,
+            "coaching_feedback": {"error": "Failed to get coaching response", "raw_content": str(e)},
+            "stage": "coaching_interpretation"
+        }
+
+    # Enrich flaws with missing ideal_range and observed from biomechanics report
+    flaws = coaching_feedback.get("flaws", [])
+    deviations = biomechanics_report.get("deviations", [])
+    
+    # Create a lookup map from feature name to deviation data
+    deviation_map = {
+        normalize_feature(dev.get("feature", "")): dev
+        for dev in deviations
+    }
+    
+    for flaw in flaws:
+        feature_name = normalize_feature(flaw.get("feature", ""))
+
+        if feature_name not in deviation_map:
+            continue
+
+        dev = deviation_map[feature_name]
+
+        # ✅ Only enforce biomechanics values if this is a real deviation
+        if dev.get("deviation_type") in ("mild", "significant"):
+
+            # Overwrite ideal_range ONLY for real deviations
+            if dev.get("ideal_range"):
+                flaw["ideal_range"] = dev["ideal_range"]
+                logger.info(
+                    f"Enforced ideal_range for {feature_name} from biomechanics: {dev['ideal_range']}"
+                )
+
+            # Overwrite observed ONLY for real deviations
+            if dev.get("observed") is not None:
+                flaw["observed"] = dev["observed"]
+                logger.info(
+                    f"Enforced observed for {feature_name} from biomechanics: {dev['observed']}"
+                )
+
+
+    # Simplified result - only fields that frontend actually uses
+    analysis_text = coaching_feedback.get("analysis_summary",biomechanics_report.get("analysis_summary", ""))
+    combined_result = {
+        # Analysis summary - from Prompt B (coaching), fallback to Prompt A (biomechanics)
+        "analysis_summary": analysis_text,
+        "analysis": analysis_text,  # Backward compatibility
+        
+        # Flaws - from Prompt B (coaching feedback), enriched with biomechanics data
+        # Each flaw includes: feature, observed (numeric), ideal_range (string), issue, recommendation, deviation
+        "flaws": flaws,
+        "technical_flaws": flaws,  # Backward compatibility alias
+        
+        # General tips - from Prompt B (coaching feedback)
+        "general_tips": coaching_feedback.get("general_tips", []),
+        
+        # Injury risks - combine from both reports (coaching_feedback takes priority)
+        "injury_risk_assessment": (
+            coaching_feedback.get("injury_risk_assessment", [])
+        ),
+        "injury_risks": [
+            f"{risk.get('body_part', 'Unknown')} - {risk.get('risk_level', 'Unknown')}: {risk.get('reason', '')}"
+            for risk in (coaching_feedback.get("injury_risk_assessment", []))
+        ],
+        
+        # Biomechanics data from Prompt A (for collapsible section in frontend)
+        "biomechanics": biomechanics_report.get("biomechanics", {})
+    }
+    
+    # Verify that flaws include observed and ideal_range
+    for flaw in combined_result.get("flaws", []):
+        if "observed" not in flaw or "ideal_range" not in flaw:
+            logger.warning(f"Flaw missing observed or ideal_range: {flaw.get('feature', 'unknown')}")
+    
+    logger.info("Two-stage bowling analysis completed successfully (GPT)")
+    logger.info("=" * 80)
+    logger.info("COMBINED RESULT (BOWLING) - BEFORE RETURNING (GPT):")
     logger.info("=" * 80)
     logger.info(f"Number of flaws: {len(combined_result.get('flaws', []))}")
     for i, flaw in enumerate(combined_result.get("flaws", [])):
@@ -1463,6 +1963,508 @@ REQUIRED JSON OUTPUT
     return combined_result
 
 
+def get_batting_feedback_from_gpt_openai(action_type, keypoint_csv_path, player_level='intermediate'):
+    """
+    GPT-based version of get_feedback_from_gpt using OpenAI API instead of Gemini.
+    Same two-stage logic: biomechanical analysis followed by coach interpretation.
+    """
+    logger.info(f"Getting GPT feedback for shot type: {action_type}, player level: {player_level}")
+    
+    if not openai_client:
+        logger.error("OpenAI client not initialized. Please set OPENAI_API_KEY environment variable.")
+        return {"error": "OpenAI client not initialized", "raw_content": "OPENAI_API_KEY not set"}
+    
+    # Read CSV and convert to JSON
+    data = []
+    try:
+        with open(keypoint_csv_path, newline='') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                # Convert numeric fields to float
+                processed_row = {}
+                for k, v in row.items():
+                    try:
+                        # Try to convert to float if it's numeric
+                        processed_row[k] = float(v)
+                    except ValueError:
+                        # Keep as string if not numeric
+                        processed_row[k] = v
+                data.append(processed_row)
+    except Exception as e:
+        logger.error(f"Failed to read CSV file: {e}", exc_info=True)
+        return {"error": "Failed to read CSV file", "raw_content": str(e)}
+    
+    csv_json = json.dumps(data)
+
+# ================================
+# PROMPT A — BIOMECHANICAL ANALYST
+# ================================
+
+    prompt_A = f"""
+    You are a **Cricket Biomechanics Analyst** specializing in batting mechanics.
+
+    Your responsibility is STRICTLY LIMITED to:
+    - analyzing pose keypoint time-series data
+    - computing biomechanical features
+    - comparing them against established cricket norms
+    - reporting deviations and data confidence
+
+    You are NOT a coach.
+    You must NOT provide drills, cues, training advice, or subjective coaching opinions.
+
+    ────────────────────────
+    ANALYSIS PHILOSOPHY
+    ────────────────────────
+    - Be conservative, neutral, and data-driven
+    - Prefer under-reporting over over-interpretation
+    - If data quality is insufficient, explicitly state limitations
+    - Use cricket-specific biomechanical norms only
+
+    ────────────────────────
+    CONTEXT
+    ────────────────────────
+    Shot Type: {action_type}
+
+    Each row of the input represents one video frame containing
+    body joint coordinates and bat reference points (if available).
+
+    ────────────────────────
+    INPUT DATA
+    ────────────────────────
+    {csv_json}
+
+    ────────────────────────
+    CRICKET NORM CONSTRAINT (CRITICAL)
+    ────────────────────────
+    All ideal ranges MUST be derived from:
+    - ICC coaching manuals
+    - Elite cricket academies
+    - Peer-reviewed cricket biomechanics research
+
+    - Do NOT invent arbitrary athletic ranges
+    - Do NOT use single ideal values — ALWAYS use ranges
+
+    ────────────────────────
+    AUTO-FEATURE SELECTION LOGIC
+    ────────────────────────
+    1. Compute CORE features whenever required keypoints exist
+    2. Compute CONDITIONAL features ONLY if motion clarity supports reliable temporal or velocity calculation
+    3. Infer ADVANCED features conservatively and label them as estimated
+    4. NEVER fabricate metrics requiring sensors not present (e.g., eye tracking, grip pressure, ball tracking)
+
+    ────────────────────────
+    FEATURE SELECTION GATING (STRICT)
+    ────────────────────────
+    - TIER 1: Include only if keypoints exist in ≥70% of frames
+    - TIER 2: Include only if ≥80% frame continuity allows velocity or timing computation
+    - TIER 3: Include only if supported by Tier 1 or Tier 2 signals
+
+    Never promote or demote features across tiers.
+    Never infer beyond available data.
+
+    ────────────────────────
+    FEATURE TIERS
+    ────────────────────────
+    TIER 1 — CORE
+    - Head stability (lateral & vertical displacement)
+    - Trunk lean
+    - Spine angle change (setup → impact)
+    - Shoulder rotation angle
+    - Hip–shoulder separation
+    - Front knee flexion at impact
+    - Front-foot stride length
+    - Backlift angle
+    - Bat proximity to torso
+
+    TIER 2 — CONDITIONAL
+    - Hip rotation velocity
+    - Bat angular velocity
+    - Downswing duration
+    - Center of mass shift
+    - Peak bat speed timing
+
+    Mark all Tier 2 features with "confidence": "medium"
+
+    TIER 3 — INFERRED
+    - Bat face stability
+    - Wrist release timing
+    - Sweet-spot contact probability
+    - Kinetic chain sequencing quality
+
+    Mark all Tier 3 features with "estimated": true
+
+    ────────────────────────
+    SHOT-SPECIFIC NORM ADJUSTMENT
+    ────────────────────────
+    Adjust interpretation based on shot type:
+    - Defensive → compact mechanics, minimal displacement
+    - Cover Drive → balance, front-knee stability, bat control
+    - Cut Shot → late bat swing, controlled wrists
+    - Pull / Hook → increased trunk rotation and bat arc
+    - Lofted Shot → increased separation and bat speed
+
+    A deviation exists ONLY if values clearly fall outside
+    acceptable norms for the given shot type.
+
+    ────────────────────────
+    ANALYSIS TASKS
+    ────────────────────────
+    1. Select valid biomechanical features using tier rules
+    2. Compute or estimate realistic numeric values
+    3. Compare against cricket-norm ranges
+    4. Classify deviations without coaching interpretation
+    5. Report data quality and limitations
+
+    ────────────────────────
+    RULES (STRICT)
+    ────────────────────────
+    - Respond ONLY in valid JSON
+    - No coaching language
+    - No drills or recommendations
+    - No null, NaN, or empty objects
+    - Use realistic cricket biomechanics values only
+
+    ────────────────────────
+    REQUIRED JSON OUTPUT
+    ────────────────────────
+    {{
+    "analysis_summary": "Neutral biomechanical assessment based on cricket norms",
+
+    "data_quality": {{
+        "frame_coverage": "percentage",
+        "motion_clarity": "low | medium | high",
+        "analysis_limitations": "explicit limitations based on data"
+    }},
+
+    "selected_features": {{
+        "core": [],
+        "conditional": [],
+        "inferred": []
+    }},
+
+    "biomechanics": {{
+        "core": {{}},
+        "conditional": {{}},
+        "inferred": {{}}
+    }},
+
+    "deviations": [
+        {{
+        "feature": "feature_name",
+        "observed": 0.0,
+        "ideal_range": "cricket-norm range",
+        "deviation_type": "within_range | mild | significant",
+        "biomechanical_note": "Mechanical difference only",
+        "confidence": "high | medium"
+        }}
+    ]
+    }}
+    """
+
+
+# ================================
+# STAGE 1: BIOMECHANICAL ANALYSIS
+# ================================
+    logger.info("Stage 1: Running biomechanical analysis (Prompt A) with GPT...")
+    try:
+        response_A = openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a cricket biomechanics analyst. Respond only with valid JSON."},
+                {"role": "user", "content": prompt_A}
+            ],
+            temperature=0.3,
+            response_format={"type": "json_object"}
+        )
+
+        raw_content_A = response_A.choices[0].message.content
+        try:
+            biomechanics_report = json.loads(raw_content_A)
+            logger.info("Stage 1 completed: Biomechanical analysis received")
+        except Exception as e:
+            logger.error(f"Failed to parse Stage 1 (biomechanics) response: {e}", exc_info=True)
+            return {
+                "error": "Failed to parse biomechanics response", 
+                "raw_content": raw_content_A,
+                "stage": "biomechanics_analysis"
+            }
+    except Exception as e:
+        logger.error(f"Failed to get Stage 1 (biomechanics) response: {e}", exc_info=True)
+        return {
+            "error": "Failed to get biomechanics response", 
+            "raw_content": str(e),
+            "stage": "biomechanics_analysis"
+        }
+
+# ================================
+# STAGE 2: COACH INTERPRETATION
+# ================================
+    logger.info("Stage 2: Running coach interpretation (Prompt B) with GPT...")
+    
+    # Convert biomechanics report to JSON string for prompt_B
+    biomechanics_report_json = json.dumps(biomechanics_report, indent=2)
+    logger.info(f"Biomechanics report: {biomechanics_report_json}")
+    
+    prompt_B = f"""
+You are an **elite Cricket Batting Coach** interpreting a biomechanics report.
+
+Your role is to convert biomechanical deviations into
+clear, practical, shot-specific coaching guidance.
+
+You do NOT recompute biomechanics.
+You rely ONLY on the provided analysis.
+
+────────────────────────
+COACHING PHILOSOPHY
+────────────────────────
+- Coach like an elite academy instructor
+- Prioritize fundamentals over micro-details
+- Ignore deviations that do not affect shot outcome
+- Be concise, actionable, and player-appropriate
+
+────────────────────────
+INPUTS
+────────────────────────
+Shot Type: {action_type}
+Player Level: {player_level}   # beginner | intermediate | advanced | elite
+
+Biomechanics Report (JSON):
+{biomechanics_report_json}
+
+────────────────────────
+INTERPRETATION RULES (STRICT)
+────────────────────────
+- Only "significant and mild" deviations may become confirmed faults
+- "Mild" deviations may be monitored, not corrected
+- Inferred features may NOT be the primary reason for a fault
+- Limit confirmed faults to a maximum of 10
+- CRITICAL: For each flaw, you MUST include both "observed" (numeric value) and "ideal_range" (string range) from the Biomechanics Report
+- Data Mapping: Carry over the 'observed' and 'ideal_range' values EXACTLY as they appear in the Biomechanics Report for the chosen faults
+
+────────────────────────
+SKILL-LEVEL ADAPTATION
+────────────────────────
+- Beginner → simple language, balance & head position focus
+- Intermediate → standard technical cues
+- Advanced / Elite → sequencing and efficiency
+
+────────────────────────
+COACHING TASKS
+────────────────────────
+1. Review deviations and data quality
+2. Decide which deviations are true technical faults
+3. Rank faults by impact on the selected shot
+4. Provide ONE drill per fault using standardized format
+5. Address injury risks with appropriate caution level (if any biomechanical deviations suggest injury risk)
+6. Reinforce strengths that should not be overcorrected
+
+────────────────────────
+DRILL FORMAT (MANDATORY)
+────────────────────────
+"Drill name — setup — execution cue — reps"
+
+────────────────────────
+RULES (STRICT)
+────────────────────────
+- Respond ONLY in valid JSON
+- No biomechanics recalculation
+- No contradiction of analysis confidence
+- Use professional coaching language
+
+────────────────────────
+REQUIRED JSON OUTPUT
+────────────────────────
+{{
+  "analysis_summary": "Comprehensive summary of the biomechanical analysis and coaching focus for this session. Include key findings, primary technical themes, and overall assessment for the {action_type} shot.",
+
+  "flaws": [
+    {{
+      "feature": "feature_name",
+      "observed": <numeric_value_from_biomechanics_report>,  # REQUIRED: Must be a number from the deviations array
+      "ideal_range": "<string_range_from_biomechanics_report>",  # REQUIRED: Must be the exact ideal_range string from the deviations array
+      "issue": "Shot-specific explanation of why this deviation matters",
+      "recommendation": "Drill name — setup — execution cue — reps",
+      "deviation": "Brief description of the deviation (optional, can be derived from observed vs ideal_range)"
+    }}
+  ],
+
+  "injury_risk_assessment": [
+    {{
+      "body_part": "Lower back | Shoulder | Elbow | Wrist | Knee | Ankle",
+      "risk_level": "Low | Moderate | High",
+      "reason": "Biomechanical explanation of why this body part is at risk based on the batting technique"
+    }}
+  ],
+
+  "general_tips": [
+    "What to keep doing well",
+    "What not to overcorrect",
+    "Additional coaching tips and reminders"
+  ]
+}}
+"""
+
+    try:
+        response_B = openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are an elite cricket batting coach. Respond only with valid JSON."},
+                {"role": "user", "content": prompt_B}
+            ],
+            temperature=0.3,
+            response_format={"type": "json_object"}
+        )
+
+        raw_content_B = response_B.choices[0].message.content
+        try:
+            coaching_feedback = json.loads(raw_content_B)
+            logger.info("Stage 2 completed: Coaching feedback received")
+        except Exception as e:
+            logger.error(f"Failed to parse Stage 2 (coaching) response: {e}", exc_info=True)
+            # Return biomechanics report even if coaching fails
+            return {
+                "biomechanics_report": biomechanics_report,
+                "coaching_feedback": {"error": "Failed to parse coaching response", "raw_content": raw_content_B},
+                "stage": "coaching_interpretation"
+            }
+    except Exception as e:
+        logger.error(f"Failed to get Stage 2 (coaching) response: {e}", exc_info=True)
+        # Return biomechanics report even if coaching fails
+        return {
+            "biomechanics_report": biomechanics_report,
+            "coaching_feedback": {"error": "Failed to get coaching response", "raw_content": str(e)},
+            "stage": "coaching_interpretation"
+        }
+
+    # Enrich flaws with missing ideal_range and observed from biomechanics report
+    flaws = coaching_feedback.get("flaws", [])
+    deviations = biomechanics_report.get("deviations", [])
+    
+    # Create a lookup map from feature name to deviation data
+    deviation_map = {
+        normalize_feature(dev.get("feature", "")): dev
+        for dev in deviations
+    }
+    
+    for flaw in flaws:
+        feature_name = normalize_feature(flaw.get("feature", ""))
+
+        if feature_name not in deviation_map:
+            continue
+
+        dev = deviation_map[feature_name]
+
+        # ✅ Only enforce biomechanics values if this is a real deviation
+        if dev.get("deviation_type") in ("mild", "significant"):
+
+            # Overwrite ideal_range ONLY for real deviations
+            if dev.get("ideal_range"):
+                flaw["ideal_range"] = dev["ideal_range"]
+                logger.info(
+                    f"Enforced ideal_range for {feature_name} from biomechanics: {dev['ideal_range']}"
+                )
+
+            # Overwrite observed ONLY for real deviations
+            if dev.get("observed") is not None:
+                flaw["observed"] = dev["observed"]
+                logger.info(
+                    f"Enforced observed for {feature_name} from biomechanics: {dev['observed']}"
+                )
+
+
+    # Simplified result - only fields that frontend actually uses
+    analysis_text = coaching_feedback.get("analysis_summary",biomechanics_report.get("analysis_summary", ""))
+
+    combined_result = {
+        # Analysis summary - from Prompt B (coaching), fallback to Prompt A (biomechanics)
+        "analysis_summary": analysis_text,
+        "analysis": analysis_text,  # DEPRECATED: remove in v2
+
+        # Flaws - from Prompt B (coaching feedback), enriched with biomechanics data
+        # Each flaw includes: feature, observed (numeric), ideal_range (string), issue, recommendation, deviation
+        "flaws": flaws,
+        "technical_flaws": flaws,  # Backward compatibility alias
+        
+        # General tips - from Prompt B (coaching feedback)
+        "general_tips": coaching_feedback.get("general_tips", []),
+        
+        # Injury risks - combine from both reports (coaching_feedback takes priority)
+        "injury_risk_assessment": (
+            coaching_feedback.get("injury_risk_assessment", [])
+        ),
+        "injury_risks": [
+            f"{risk.get('body_part', 'Unknown')} - {risk.get('risk_level', 'Unknown')}: {risk.get('reason', '')}"
+            for risk in (coaching_feedback.get("injury_risk_assessment", []))
+        ],
+        
+        # Biomechanics data from Prompt A (for collapsible section in frontend)
+        "biomechanics": biomechanics_report.get("biomechanics", {})
+    }
+    
+    # Verify that flaws include observed and ideal_range
+    for flaw in combined_result.get("flaws", []):
+        if "observed" not in flaw or "ideal_range" not in flaw:
+            logger.warning(f"Flaw missing observed or ideal_range: {flaw.get('feature', 'unknown')}")
+    
+    logger.info("Two-stage analysis completed successfully (GPT)")
+    logger.info("=" * 80)
+    logger.info("COMBINED RESULT (BATTING) - BEFORE RETURNING (GPT):")
+    logger.info("=" * 80)
+    logger.info(f"Number of flaws: {len(combined_result.get('flaws', []))}")
+    for i, flaw in enumerate(combined_result.get("flaws", [])):
+        logger.info(f"Flaw {i+1}: {json.dumps(flaw, indent=2, default=str)}")
+    logger.info("=" * 80)
+    logger.info(f"Full combined result: {json.dumps(combined_result, indent=2, default=str)}")
+    logger.info("=" * 80)
+    return combined_result
+
+
+# ================================
+# WRAPPER FUNCTIONS - ROUTE BASED ON AI_MODEL_FLAG
+# ================================
+
+def get_feedback_for_batting(action_type, keypoint_csv_path, player_level='intermediate'):
+    """
+    Wrapper function that routes to GPT or Gemini based on AI_MODEL_FLAG.
+    For batting analysis.
+    """
+    global AI_MODEL_FLAG
+    
+    # Allow override via request parameter if needed (for future flexibility)
+    model_flag = AI_MODEL_FLAG
+    
+    logger.info(f"Getting feedback for batting using {model_flag} (shot: {action_type}, level: {player_level})")
+    
+    if model_flag == "GPT":
+        if not openai_client:
+            logger.error("OpenAI client not initialized. Falling back to Gemini.")
+            return get_feedback_from_gpt(action_type, keypoint_csv_path, player_level)
+        return get_batting_feedback_from_gpt_openai(action_type, keypoint_csv_path, player_level)
+    else:  # GEMINI (default)
+        return get_feedback_from_gpt(action_type, keypoint_csv_path, player_level)
+
+
+def get_feedback_for_bowling(keypoint_csv_path, bowler_type='fast_bowler', player_level='intermediate'):
+    """
+    Wrapper function that routes to GPT or Gemini based on AI_MODEL_FLAG.
+    For bowling analysis.
+    """
+    global AI_MODEL_FLAG
+    
+    # Allow override via request parameter if needed (for future flexibility)
+    model_flag = AI_MODEL_FLAG
+    
+    logger.info(f"Getting feedback for bowling using {model_flag} (type: {bowler_type}, level: {player_level})")
+    
+    if model_flag == "GPT":
+        if not openai_client:
+            logger.error("OpenAI client not initialized. Falling back to Gemini.")
+            return get_feedback_from_gpt_for_bowling(keypoint_csv_path, bowler_type, player_level)
+        return get_bowling_feedback_from_gpt_openai(keypoint_csv_path, bowler_type, player_level)
+    else:  # GEMINI (default)
+        return get_feedback_from_gpt_for_bowling(keypoint_csv_path, bowler_type, player_level)
+
+
 def generate_training_plan(gpt_feedback, player_type='batsman', shot_type=None, bowler_type=None, days=7, report_path=None):
     """
     Generate a personalized multi-day training plan using the Gemini model.
@@ -1731,7 +2733,8 @@ def upload_file():
                 shot_type = predict_shot(filepath, model)
                 keypoints_path = extract_pose_keypoints(filepath, 'batting')
                 batter_side = request.form.get('batter_side', 'right')
-                gpt_feedback = get_feedback_from_gpt(shot_type, keypoints_path)
+                player_level = request.form.get('player_level', 'intermediate')
+                gpt_feedback = get_feedback_for_batting(shot_type, keypoints_path, player_level)
                 results = {
                     'player_type': 'batsman',
                     'shot_type': shot_type,
@@ -1743,7 +2746,8 @@ def upload_file():
                 keypoints_path = extract_pose_keypoints(filepath, 'bowling')
                 bowler_side = request.form.get('bowler_side', 'right')
                 bowler_type = request.form.get('bowler_type', 'fast_bowler')
-                gpt_feedback = get_feedback_from_gpt_for_bowling(keypoints_path, bowler_type)
+                player_level = request.form.get('player_level', 'intermediate')
+                gpt_feedback = get_feedback_for_bowling(keypoints_path, bowler_type, player_level)
                 results = {
                     'player_type': 'bowler',
                     'bowler_side': bowler_side,
@@ -1838,12 +2842,13 @@ def api_upload_file():
                     logger.error(f"Error in feature computation: {str(e)}", exc_info=True)
                     return jsonify({'error': f'Error computing features: {str(e)}'}), 500
                 
-                logger.info("Getting Gemini feedback...")
+                player_level = request.form.get('player_level', 'intermediate')
+                logger.info(f"Getting feedback using {AI_MODEL_FLAG}...")
                 try:
-                    gpt_feedback = get_feedback_from_gpt(shot_type, keypoints_path)
-                    logger.info("Gemini feedback received successfully")
+                    gpt_feedback = get_feedback_for_batting(shot_type, keypoints_path, player_level)
+                    logger.info(f"{AI_MODEL_FLAG} feedback received successfully")
                 except Exception as e:
-                    logger.error(f"Error in Gemini feedback: {str(e)}", exc_info=True)
+                    logger.error(f"Error in {AI_MODEL_FLAG} feedback: {str(e)}", exc_info=True)
                     gpt_feedback = "Unable to generate feedback at this time."
                 
                 results = {
@@ -1894,12 +2899,13 @@ def api_upload_file():
                     logger.error(f"Error in feature computation: {str(e)}", exc_info=True)
                     return jsonify({'error': f'Error computing features: {str(e)}'}), 500
                 
-                logger.info("Getting Gemini feedback for bowling...")
+                player_level = request.form.get('player_level', 'intermediate')
+                logger.info(f"Getting feedback for bowling using {AI_MODEL_FLAG}...")
                 try:
-                    gpt_feedback = get_feedback_from_gpt_for_bowling(keypoints_path, bowler_type)
-                    logger.info("Gemini feedback received successfully")
+                    gpt_feedback = get_feedback_for_bowling(keypoints_path, bowler_type, player_level)
+                    logger.info(f"{AI_MODEL_FLAG} feedback received successfully")
                 except Exception as e:
-                    logger.error(f"Error in Gemini feedback: {str(e)}", exc_info=True)
+                    logger.error(f"Error in {AI_MODEL_FLAG} feedback: {str(e)}", exc_info=True)
                     gpt_feedback = "Unable to generate feedback at this time."
                 
                 results = {

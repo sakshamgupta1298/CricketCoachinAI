@@ -1,14 +1,12 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import React from 'react';
 import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { Card, Chip, IconButton, Surface, Text, useTheme } from 'react-native-paper';
+import { Card, Chip, Surface, Text, useTheme } from 'react-native-paper';
 import { borderRadius, colors, shadows, spacing } from '../src/theme';
 import { AnalysisResult } from '../src/types';
 
 export default function ResultsScreen() {
   const theme = useTheme();
   const params = useLocalSearchParams();
-  const [isBiomechanicsExpanded, setIsBiomechanicsExpanded] = React.useState(false);
   
   // Parse the result from params
   const result: AnalysisResult = params.result ? JSON.parse(params.result as string) : null;
@@ -57,31 +55,47 @@ export default function ResultsScreen() {
 
     return flaws.map((flaw: any, index: number) => {
       // Handle both old and new format
-      const isNewFormat = 'deviation' in flaw;
+      // New format has ideal_range (from confirmed_faults), old format has expected_range
+      const idealRange = flaw.ideal_range;
+      const expectedRange = flaw.expected_range;
+      const deviation = flaw.deviation;
+      
+      const hasIdealRange = idealRange !== undefined && idealRange !== null && typeof idealRange === 'string' && idealRange.trim() !== '';
+      const hasExpectedRange = expectedRange !== undefined && expectedRange !== null && typeof expectedRange === 'string' && expectedRange.trim() !== '';
+      const hasDeviation = deviation !== undefined && deviation !== null && typeof deviation === 'string' && deviation.trim() !== '';
+      
       const featureName = flaw.feature.replace(/_/g, ' ').toUpperCase();
-      const deviationText = isNewFormat 
-        ? flaw.deviation 
-        : `${flaw.observed} vs ${flaw.expected_range}`;
+      
+      let deviationText = '';
+      // Prioritize showing observed vs ideal_range if both are available
+      if (hasIdealRange && flaw.observed !== undefined && flaw.observed !== null) {
+        deviationText = `${flaw.observed} vs ${idealRange}`;
+      } else if (hasExpectedRange && flaw.observed !== undefined && flaw.observed !== null) {
+        deviationText = `${flaw.observed} vs ${expectedRange}`;
+      } else if (hasDeviation) {
+        deviationText = deviation;
+      } else {
+        deviationText = flaw.observed !== undefined && flaw.observed !== null ? String(flaw.observed) : 'N/A';
+      }
 
       return (
       <Card key={index} style={[styles.card, { backgroundColor: theme.colors.surface }]}>
         <Card.Content>
           <View style={styles.flawHeader}>
             <Text style={[styles.flawTitle, { color: theme.colors.onSurface }]}>
-                {featureName}
+              {featureName}
             </Text>
-            <Chip
-              mode="outlined"
-              textStyle={{ color: colors.error }}
-              style={{ borderColor: colors.error }}
-            >
-                {deviationText}
-            </Chip>
+            {/* Deviation text below feature name */}
+            <Text style={[styles.deviationText, { color: colors.error }]}>
+              {deviationText}
+            </Text>
           </View>
           
-          <Text style={[styles.flawIssue, { color: theme.colors.onSurface }]}>
-            {flaw.issue}
-          </Text>
+          {flaw.issue && (
+            <Text style={[styles.flawIssue, { color: theme.colors.onSurface }]}>
+              {flaw.issue}
+            </Text>
+          )}
           
           <View style={styles.recommendationContainer}>
             <Text style={[styles.recommendationLabel, { color: theme.colors.primary }]}>
@@ -226,147 +240,6 @@ export default function ResultsScreen() {
           {renderFlaws()}
         </View>
 
-        {/* Biomechanical Features - Support both old and new format with collapsible dropdown */}
-        {(result.gpt_feedback.biomechanics || result.gpt_feedback.biomechanical_features) && (
-          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-            <Card.Content>
-              <TouchableOpacity
-                style={styles.biomechanicsHeader}
-                onPress={() => setIsBiomechanicsExpanded(!isBiomechanicsExpanded)}
-                activeOpacity={0.7}
-              >
-              <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
-                🔬 Biomechanical Features
-              </Text>
-                <IconButton
-                  icon={isBiomechanicsExpanded ? 'chevron-up' : 'chevron-down'}
-                  size={24}
-                  iconColor={theme.colors.onSurface}
-                  style={{ margin: 0 }}
-                />
-              </TouchableOpacity>
-              
-              {isBiomechanicsExpanded && (
-                <>
-                  {/* New format: biomechanics with core/conditional/inferred */}
-                  {result.gpt_feedback.biomechanics && (
-                    <>
-                      {result.gpt_feedback.biomechanics.core && Object.entries(result.gpt_feedback.biomechanics.core).map(([key, value]: [string, any], index) => (
-                        <View key={`core-${index}`} style={styles.biomechanicalItem}>
-                          <View style={styles.biomechanicalHeader}>
-                            <Text style={[styles.biomechanicalLabel, { color: theme.colors.onSurface }]}>
-                              {key.replace(/_/g, ' ')}
-                            </Text>
-                            <Chip mode="flat" textStyle={{ fontSize: 10 }} style={{ backgroundColor: colors.cricket.green + '20' }}>
-                              CORE
-                            </Chip>
-                          </View>
-                          <View style={styles.biomechanicalValue}>
-                            <Text style={[styles.biomechanicalObserved, { color: theme.colors.primary }]}>
-                              Observed: {value.observed}
-                            </Text>
-                            {value.ideal_range && (
-                              <Text style={[styles.biomechanicalExpected, { color: theme.colors.onSurfaceVariant }]}>
-                                Ideal: {value.ideal_range}
-                              </Text>
-                            )}
-                          </View>
-                          <Text style={[styles.biomechanicalAnalysis, { color: theme.colors.onSurfaceVariant }]}>
-                            {value.analysis}
-                          </Text>
-                        </View>
-                      ))}
-                      
-                      {result.gpt_feedback.biomechanics.conditional && Object.entries(result.gpt_feedback.biomechanics.conditional).map(([key, value]: [string, any], index) => (
-                        <View key={`conditional-${index}`} style={styles.biomechanicalItem}>
-                          <View style={styles.biomechanicalHeader}>
-                            <Text style={[styles.biomechanicalLabel, { color: theme.colors.onSurface }]}>
-                              {key.replace(/_/g, ' ')}
-                            </Text>
-                            <Chip mode="flat" textStyle={{ fontSize: 10 }} style={{ backgroundColor: colors.cricket.blue + '20' }}>
-                              CONDITIONAL
-                            </Chip>
-                          </View>
-                          <View style={styles.biomechanicalValue}>
-                            <Text style={[styles.biomechanicalObserved, { color: theme.colors.primary }]}>
-                              Observed: {value.observed}
-                            </Text>
-                            {value.ideal_range && (
-                              <Text style={[styles.biomechanicalExpected, { color: theme.colors.onSurfaceVariant }]}>
-                                Ideal: {value.ideal_range}
-                              </Text>
-                            )}
-                          </View>
-                          {value.confidence && (
-                            <Text style={[styles.biomechanicalConfidence, { color: theme.colors.onSurfaceVariant }]}>
-                              Confidence: {value.confidence}
-                            </Text>
-                          )}
-                          <Text style={[styles.biomechanicalAnalysis, { color: theme.colors.onSurfaceVariant }]}>
-                            {value.analysis}
-                          </Text>
-                        </View>
-                      ))}
-                      
-                      {result.gpt_feedback.biomechanics.inferred && Object.entries(result.gpt_feedback.biomechanics.inferred).map(([key, value]: [string, any], index) => (
-                        <View key={`inferred-${index}`} style={styles.biomechanicalItem}>
-                          <View style={styles.biomechanicalHeader}>
-                            <Text style={[styles.biomechanicalLabel, { color: theme.colors.onSurface }]}>
-                              {key.replace(/_/g, ' ')}
-                            </Text>
-                            <Chip mode="flat" textStyle={{ fontSize: 10 }} style={{ backgroundColor: colors.cricket.orange + '20' }}>
-                              INFERRED
-                            </Chip>
-                          </View>
-                          <View style={styles.biomechanicalValue}>
-                            <Text style={[styles.biomechanicalObserved, { color: theme.colors.primary }]}>
-                              {typeof value.observed === 'string' ? value.observed : `Observed: ${value.observed}`}
-                            </Text>
-                            {value.ideal_range && (
-                              <Text style={[styles.biomechanicalExpected, { color: theme.colors.onSurfaceVariant }]}>
-                                Ideal: {value.ideal_range}
-                              </Text>
-                            )}
-                          </View>
-                          {value.estimated && (
-                            <Text style={[styles.biomechanicalConfidence, { color: theme.colors.onSurfaceVariant, fontStyle: 'italic' }]}>
-                              Estimated value
-                            </Text>
-                          )}
-                          <Text style={[styles.biomechanicalAnalysis, { color: theme.colors.onSurfaceVariant }]}>
-                            {value.analysis}
-                          </Text>
-                        </View>
-                      ))}
-                    </>
-                  )}
-                  
-                  {/* Old format: biomechanical_features as flat object */}
-                  {result.gpt_feedback.biomechanical_features && !result.gpt_feedback.biomechanics && 
-                    Object.entries(result.gpt_feedback.biomechanical_features).map(([key, value]: [string, any], index) => (
-                      <View key={`old-${index}`} style={styles.biomechanicalItem}>
-                  <Text style={[styles.biomechanicalLabel, { color: theme.colors.onSurface }]}>
-                    {key.replace(/_/g, ' ').toUpperCase()}
-                  </Text>
-                  <View style={styles.biomechanicalValue}>
-                    <Text style={[styles.biomechanicalObserved, { color: theme.colors.primary }]}>
-                      Observed: {value.observed}
-                    </Text>
-                    <Text style={[styles.biomechanicalExpected, { color: theme.colors.onSurfaceVariant }]}>
-                      Expected: {value.expected_range}
-                    </Text>
-                  </View>
-                  <Text style={[styles.biomechanicalAnalysis, { color: theme.colors.onSurfaceVariant }]}>
-                    {value.analysis}
-                  </Text>
-                </View>
-                    ))
-                  }
-                </>
-              )}
-            </Card.Content>
-          </Card>
-        )}
 
         {/* Injury Risks */}
         {renderInjuryRisks()}
@@ -494,14 +367,18 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   flawHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
+    marginBottom: spacing.md,
   },
   flawTitle: {
     fontSize: 16,
     fontWeight: '600',
+    marginBottom: spacing.xs,
+  },
+  deviationText: {
+    fontSize: 14,
+    fontWeight: '500',
+    flexWrap: 'wrap',
+    flexShrink: 1,
   },
   flawIssue: {
     fontSize: 14,
