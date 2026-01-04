@@ -847,27 +847,14 @@ def get_bowling_feedback_from_gpt_openai(keypoint_csv_path, bowler_type='fast_bo
         logger.error("OpenAI client not initialized. Please set OPENAI_API_KEY environment variable.")
         return {"error": "OpenAI client not initialized", "raw_content": "OPENAI_API_KEY not set"}
 
-    # Read CSV and convert to JSON
-    data = []
+    # Read CSV file as raw text
     try:
-        with open(keypoint_csv_path, newline='') as csvfile:
-            reader = csv.DictReader(csvfile)
-            for row in reader:
-                # Convert numeric fields to float
-                processed_row = {}
-                for k, v in row.items():
-                    try:
-                        # Try to convert to float if it's numeric
-                        processed_row[k] = float(v)
-                    except ValueError:
-                        # Keep as string if not numeric
-                        processed_row[k] = v
-                data.append(processed_row)
+        with open(keypoint_csv_path, 'r', encoding='utf-8') as csvfile:
+            csv_content = csvfile.read()
     except Exception as e:
         logger.error(f"Failed to read CSV file: {e}", exc_info=True)
         return {"error": "Failed to read CSV file", "raw_content": str(e)}
     
-    csv_json = json.dumps(data)
     bowling_type = bowler_type.split("_")[0]
     logger.debug(f"Bowling type extracted: {bowling_type}")
 
@@ -900,7 +887,7 @@ def get_bowling_feedback_from_gpt_openai(keypoint_csv_path, bowler_type='fast_bo
             ────────────────────────
             INPUT DATA
             ────────────────────────
-            {csv_json}
+            {csv_content}
 
             ────────────────────────
             CRICKET NORM CONSTRAINT (CRITICAL)
@@ -1059,7 +1046,7 @@ def get_bowling_feedback_from_gpt_openai(keypoint_csv_path, bowler_type='fast_bo
     logger.info("Stage 1: Running biomechanical analysis for bowling (Prompt A) with GPT...")
     try:
         response_A = openai_client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5.2",
             messages=[
                 {"role": "system", "content": "You are a cricket biomechanics analyst specializing in bowling. Respond only with valid JSON."},
                 {"role": "user", "content": prompt_A}
@@ -1208,7 +1195,7 @@ REQUIRED JSON OUTPUT
 
     try:
         response_B = openai_client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5.2",
             messages=[
                 {"role": "system", "content": "You are an elite cricket bowling coach. Respond only with valid JSON."},
                 {"role": "user", "content": prompt_B}
@@ -1477,7 +1464,7 @@ def compute_features(keypoints_path, side='right', player_type='batsman'):
 # """
     
 #     response = client.chat.completions.create(
-#         model="gpt-4o",
+#         model="gpt-5.2",
 #         messages=[{"role": "user", "content": prompt}],
 #         temperature=0.3
 #     )
@@ -1974,27 +1961,13 @@ def get_batting_feedback_from_gpt_openai(action_type, keypoint_csv_path, player_
         logger.error("OpenAI client not initialized. Please set OPENAI_API_KEY environment variable.")
         return {"error": "OpenAI client not initialized", "raw_content": "OPENAI_API_KEY not set"}
     
-    # Read CSV and convert to JSON
-    data = []
+    # Read CSV file as raw text
     try:
-        with open(keypoint_csv_path, newline='') as csvfile:
-            reader = csv.DictReader(csvfile)
-            for row in reader:
-                # Convert numeric fields to float
-                processed_row = {}
-                for k, v in row.items():
-                    try:
-                        # Try to convert to float if it's numeric
-                        processed_row[k] = float(v)
-                    except ValueError:
-                        # Keep as string if not numeric
-                        processed_row[k] = v
-                data.append(processed_row)
+        with open(keypoint_csv_path, 'r', encoding='utf-8') as csvfile:
+            csv_content = csvfile.read()
     except Exception as e:
         logger.error(f"Failed to read CSV file: {e}", exc_info=True)
         return {"error": "Failed to read CSV file", "raw_content": str(e)}
-    
-    csv_json = json.dumps(data)
 
 # ================================
 # PROMPT A — BIOMECHANICAL ANALYST
@@ -2031,7 +2004,7 @@ def get_batting_feedback_from_gpt_openai(action_type, keypoint_csv_path, player_
     ────────────────────────
     INPUT DATA
     ────────────────────────
-    {csv_json}
+    {csv_content}
 
     ────────────────────────
     CRICKET NORM CONSTRAINT (CRITICAL)
@@ -2168,7 +2141,7 @@ def get_batting_feedback_from_gpt_openai(action_type, keypoint_csv_path, player_
     logger.info("Stage 1: Running biomechanical analysis (Prompt A) with GPT...")
     try:
         response_A = openai_client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5.2",
             messages=[
                 {"role": "system", "content": "You are a cricket biomechanics analyst. Respond only with valid JSON."},
                 {"role": "user", "content": prompt_A}
@@ -2306,7 +2279,7 @@ REQUIRED JSON OUTPUT
 
     try:
         response_B = openai_client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5.2",
             messages=[
                 {"role": "system", "content": "You are an elite cricket batting coach. Respond only with valid JSON."},
                 {"role": "user", "content": prompt_B}
