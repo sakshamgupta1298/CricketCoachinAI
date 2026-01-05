@@ -897,9 +897,16 @@ def create_annotated_video(video_path, keypoints_path, player_type):
         return None
     
     # Get video properties
-    fps = int(cap.get(cv2.CAP_PROP_FPS))
+    fps = int(cap.get(cv2.CAP_PROP_FPS)) or 30  # Default to 30 if fps is 0
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    
+    if fps == 0 or width == 0 or height == 0:
+        logger.error(f"Invalid video properties: fps={fps}, width={width}, height={height}")
+        cap.release()
+        return None
+    
+    logger.info(f"Video properties: fps={fps}, width={width}, height={height}")
     
     # Determine output path
     video_dir = os.path.dirname(video_path)
@@ -908,9 +915,18 @@ def create_annotated_video(video_path, keypoints_path, player_type):
     else:
         output_path = os.path.join(UPLOAD_FOLDER, f'annotated_{os.path.basename(video_path)}')
     
-    # Create video writer
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    # Create video writer - use H.264 codec for better compatibility
+    fourcc = cv2.VideoWriter_fourcc(*'avc1')  # H.264 codec
+    if fourcc == -1:
+        # Fallback to mp4v if avc1 is not available
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    
     out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+    
+    if not out.isOpened():
+        logger.error(f"Failed to create video writer for: {output_path}")
+        cap.release()
+        return None
     
     frame_idx = 0
     while True:
@@ -939,8 +955,16 @@ def create_annotated_video(video_path, keypoints_path, player_type):
     cap.release()
     out.release()
     
-    logger.info(f"Annotated video saved to: {output_path}")
-    return output_path
+    # Verify the file was created
+    if not os.path.exists(output_path):
+        logger.error(f"Annotated video file was not created: {output_path}")
+        return None
+    
+    file_size = os.path.getsize(output_path)
+    logger.info(f"Annotated video saved to: {output_path} (size: {file_size} bytes)")
+    
+    # Return just the filename for API access
+    return os.path.basename(output_path)
 
 def extract_pose_keypoints(video_path, player_type):
     cap = cv2.VideoCapture(video_path)

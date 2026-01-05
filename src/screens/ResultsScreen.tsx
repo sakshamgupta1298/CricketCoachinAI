@@ -58,6 +58,7 @@ const ResultsScreen: React.FC = () => {
   console.log('Batter Side:', result.batter_side);
   console.log('Bowler Side:', result.bowler_side);
   console.log('Filename:', result.filename);
+  console.log('Annotated Video Path:', result.annotated_video_path);
   console.log('GPT Feedback:', result.gpt_feedback);
   if (result.gpt_feedback) {
     console.log('  - Analysis Summary:', result.gpt_feedback.analysis_summary || result.gpt_feedback.analysis);
@@ -264,15 +265,23 @@ const ResultsScreen: React.FC = () => {
             </Text>
           </View>
           
-          {/* Video Player */}
-          {result.annotated_video_path && (
+          {/* Video Player - Show video if available, otherwise show filename as fallback */}
+          {result.annotated_video_path && result.annotated_video_path !== 'None' && result.annotated_video_path.trim() !== '' ? (
             <View style={styles.videoContainer}>
               <Video
                 source={{
                   uri: (() => {
-                    // Extract filename from path (handle both absolute and relative paths)
-                    const videoFilename = result.annotated_video_path.split('/').pop() || result.annotated_video_path.split('\\').pop() || result.annotated_video_path;
-                    return `${currentConfig.API_BASE_URL}/api/video/${encodeURIComponent(videoFilename)}`;
+                    // The backend now returns just the filename, but handle both cases
+                    const videoFilename = result.annotated_video_path.includes('/') 
+                      ? result.annotated_video_path.split('/').pop() 
+                      : result.annotated_video_path.includes('\\')
+                      ? result.annotated_video_path.split('\\').pop()
+                      : result.annotated_video_path;
+                    const videoUrl = `${currentConfig.API_BASE_URL}/api/video/${encodeURIComponent(videoFilename || result.annotated_video_path)}`;
+                    console.log('🎥 [VIDEO] Loading video from URL:', videoUrl);
+                    console.log('🎥 [VIDEO] Annotated video path from backend:', result.annotated_video_path);
+                    console.log('🎥 [VIDEO] Extracted filename:', videoFilename);
+                    return videoUrl;
                   })(),
                   headers: authToken ? {
                     'Authorization': `Bearer ${authToken}`,
@@ -282,10 +291,25 @@ const ResultsScreen: React.FC = () => {
                 controls={true}
                 resizeMode="contain"
                 paused={false}
+                onLoad={() => {
+                  console.log('✅ [VIDEO] Video loaded successfully');
+                }}
                 onError={(error: any) => {
-                  console.error('Video playback error:', error);
+                  console.error('❌ [VIDEO] Video playback error:', error);
+                  console.error('❌ [VIDEO] Error details:', JSON.stringify(error, null, 2));
                 }}
               />
+            </View>
+          ) : (
+            <View style={styles.fallbackContainer}>
+              <Text style={[styles.playerInfoText, { color: theme.colors.onSurfaceVariant }]}>
+                File: {result.filename}
+              </Text>
+              {!result.annotated_video_path && (
+                <Text style={[styles.fallbackText, { color: theme.colors.onSurfaceVariant }]}>
+                  Video processing in progress...
+                </Text>
+              )}
             </View>
           )}
         </Surface>
@@ -496,6 +520,15 @@ const styles = StyleSheet.create({
   video: {
     width: '100%',
     height: '100%',
+  },
+  fallbackContainer: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+  },
+  fallbackText: {
+    fontSize: 14,
+    fontStyle: 'italic',
+    marginTop: spacing.xs,
   },
 });
 
