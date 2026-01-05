@@ -1,15 +1,29 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Dimensions, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Card, Chip, Surface, Text, useTheme } from 'react-native-paper';
+import Video from 'react-native-video';
+import { currentConfig } from '../config';
+import apiService from '../src/services/api';
 import { borderRadius, colors, shadows, spacing } from '../src/theme';
 import { AnalysisResult } from '../src/types';
 
 export default function ResultsScreen() {
   const theme = useTheme();
   const params = useLocalSearchParams();
+  const [authToken, setAuthToken] = useState<string | null>(null);
   
   // Parse the result from params
   const result: AnalysisResult = params.result ? JSON.parse(params.result as string) : null;
+
+  // Get auth token for video access
+  useEffect(() => {
+    const loadToken = async () => {
+      const token = await apiService.getStoredToken();
+      setAuthToken(token);
+    };
+    loadToken();
+  }, []);
 
   if (!result) {
     return (
@@ -219,10 +233,53 @@ export default function ResultsScreen() {
                 Bowler Type: {result.bowler_type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
               </Text>
             )}
-            <Text style={[styles.playerInfoText, { color: theme.colors.onSurfaceVariant }]}>
-              File: {result.filename}
-            </Text>
           </View>
+          
+          {/* Video Player - Show video if available, otherwise show filename as fallback */}
+          {result.annotated_video_path && result.annotated_video_path !== 'None' && result.annotated_video_path.trim() !== '' ? (
+            <View style={styles.videoContainer}>
+              <Video
+                source={{
+                  uri: (() => {
+                    // The backend now returns just the filename, but handle both cases
+                    const videoFilename = result.annotated_video_path.includes('/') 
+                      ? result.annotated_video_path.split('/').pop() 
+                      : result.annotated_video_path.includes('\\')
+                      ? result.annotated_video_path.split('\\').pop()
+                      : result.annotated_video_path;
+                    const videoUrl = `${currentConfig.API_BASE_URL}/api/video/${encodeURIComponent(videoFilename || result.annotated_video_path)}`;
+                    console.log('🎥 [VIDEO] Loading video from URL:', videoUrl);
+                    console.log('🎥 [VIDEO] Annotated video path from backend:', result.annotated_video_path);
+                    return videoUrl;
+                  })(),
+                  headers: authToken ? {
+                    'Authorization': `Bearer ${authToken}`,
+                  } : undefined,
+                }}
+                style={styles.video}
+                controls={true}
+                resizeMode="contain"
+                paused={false}
+                onLoad={() => {
+                  console.log('✅ [VIDEO] Video loaded successfully');
+                }}
+                onError={(error: any) => {
+                  console.error('❌ [VIDEO] Video playback error:', error);
+                }}
+              />
+            </View>
+          ) : (
+            <View style={styles.fallbackContainer}>
+              <Text style={[styles.playerInfoText, { color: theme.colors.onSurfaceVariant }]}>
+                File: {result.filename}
+              </Text>
+              {!result.annotated_video_path && (
+                <Text style={[styles.fallbackText, { color: theme.colors.onSurfaceVariant }]}>
+                  Video processing in progress...
+                </Text>
+              )}
+            </View>
+          )}
         </Surface>
 
         {/* Analysis Summary - Support both old (analysis) and new (analysis_summary) format */}
@@ -468,5 +525,26 @@ const styles = StyleSheet.create({
   biomechanicalAnalysis: {
     fontSize: 14,
     lineHeight: 20,
+  },
+  videoContainer: {
+    width: '100%',
+    height: Dimensions.get('window').width * 0.75, // 4:3 aspect ratio
+    marginTop: spacing.md,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    backgroundColor: colors.gray[900],
+  },
+  video: {
+    width: '100%',
+    height: '100%',
+  },
+  fallbackContainer: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+  },
+  fallbackText: {
+    fontSize: 14,
+    fontStyle: 'italic',
+    marginTop: spacing.xs,
   },
 }); 
