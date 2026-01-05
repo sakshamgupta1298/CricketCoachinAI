@@ -836,6 +836,112 @@ REQUIRED JSON OUTPUT
     return combined_result
 
 
+def draw_pose_skeleton(frame, keypoints, keypoints_names):
+    """Draw pose skeleton on a frame"""
+    # Define connections between keypoints (skeleton structure)
+    # Format: (start_idx, end_idx) in keypoints_names
+    connections = [
+        # Face connections
+        (0, 1), (0, 2), (1, 3), (2, 4),  # nose to eyes, eyes to ears
+        # Upper body
+        (5, 6),  # left_shoulder to right_shoulder
+        (5, 7), (7, 9),  # left arm: shoulder -> elbow -> wrist
+        (6, 8), (8, 10),  # right arm: shoulder -> elbow -> wrist
+        # Torso
+        (5, 11), (6, 12),  # shoulders to hips
+        (11, 12),  # left_hip to right_hip
+        # Lower body
+        (11, 13), (13, 15),  # left leg: hip -> knee -> ankle
+        (12, 14), (14, 16),  # right leg: hip -> knee -> ankle
+    ]
+    
+    h, w = frame.shape[:2]
+    
+    # Draw connections (skeleton lines)
+    for start_idx, end_idx in connections:
+        if start_idx < len(keypoints) and end_idx < len(keypoints):
+            start_kp = keypoints[start_idx]
+            end_kp = keypoints[end_idx]
+            
+            # Check confidence threshold
+            if start_kp[2] > 0.3 and end_kp[2] > 0.3:
+                # Convert normalized coordinates to pixel coordinates
+                start_x = int(start_kp[1] * w)
+                start_y = int(start_kp[0] * h)
+                end_x = int(end_kp[1] * w)
+                end_y = int(end_kp[0] * h)
+                
+                # Draw line
+                cv2.line(frame, (start_x, start_y), (end_x, end_y), (0, 255, 0), 2)
+    
+    # Draw keypoints (joints)
+    for idx, kp in enumerate(keypoints):
+        if kp[2] > 0.3:  # Confidence threshold
+            x = int(kp[1] * w)
+            y = int(kp[0] * h)
+            cv2.circle(frame, (x, y), 4, (0, 0, 255), -1)
+    
+    return frame
+
+def create_annotated_video(video_path, keypoints_path, player_type):
+    """Create a video with pose detection overlay"""
+    logger.info(f"Creating annotated video from {video_path}")
+    
+    # Read keypoints CSV
+    df = pd.read_csv(keypoints_path)
+    
+    # Open original video
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        logger.error(f"Failed to open video: {video_path}")
+        return None
+    
+    # Get video properties
+    fps = int(cap.get(cv2.CAP_PROP_FPS))
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    
+    # Determine output path
+    video_dir = os.path.dirname(video_path)
+    if os.path.basename(video_dir).isdigit():  # Check if parent directory is a user ID folder
+        output_path = os.path.join(video_dir, f'annotated_{os.path.basename(video_path)}')
+    else:
+        output_path = os.path.join(UPLOAD_FOLDER, f'annotated_{os.path.basename(video_path)}')
+    
+    # Create video writer
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+    
+    frame_idx = 0
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        
+        # Get keypoints for this frame
+        if frame_idx < len(df):
+            row = df.iloc[frame_idx]
+            keypoints = []
+            for name in keypoints_names:
+                x = row.get(f'{name}_x', 0)
+                y = row.get(f'{name}_y', 0)
+                conf = row.get(f'{name}_conf', 0)
+                # Normalize coordinates (they're already normalized from 0-1)
+                keypoints.append([y, x, conf])
+            
+            # Draw skeleton on frame
+            frame = draw_pose_skeleton(frame, keypoints, keypoints_names)
+        
+        # Write frame
+        out.write(frame)
+        frame_idx += 1
+    
+    cap.release()
+    out.release()
+    
+    logger.info(f"Annotated video saved to: {output_path}")
+    return output_path
+
 def extract_pose_keypoints(video_path, player_type):
     cap = cv2.VideoCapture(video_path)
     all_keypoints, frame_idx = [], 0
@@ -872,7 +978,16 @@ def extract_pose_keypoints(video_path, player_type):
         keypoints_path = os.path.join(UPLOAD_FOLDER, f'{player_type}_keypoints.csv')
     
     df.to_csv(keypoints_path, index=False)
-    return keypoints_path
+    
+    # Create annotated video
+    try:
+        annotated_video_path = create_annotated_video(video_path, keypoints_path, player_type)
+        logger.info(f"Annotated video created: {annotated_video_path}")
+    except Exception as e:
+        logger.error(f"Error creating annotated video: {str(e)}", exc_info=True)
+        annotated_video_path = None
+    
+    return keypoints_path, annotated_video_path
 
 def calculate_angle(a, b, c):
     ba = np.array([a[0] - b[0], a[1] - b[1]])
@@ -1838,7 +1953,7 @@ def upload_file():
             if player_type == 'batsman':
                 model = get_shot_prediction_model()
                 shot_type = predict_shot(filepath, model)
-                keypoints_path = extract_pose_keypoints(filepath, 'batting')
+                keypoints_path, annotated_video_path = extract_pose_keypoints(filepath, 'batting')
                 batter_side = request.form.get('batter_side', 'right')
                 gpt_feedback = get_feedback_from_gpt(shot_type, keypoints_path)
                 results = {
@@ -1846,10 +1961,11 @@ def upload_file():
                     'shot_type': shot_type,
                     'batter_side': batter_side,
                     'gpt_feedback': gpt_feedback,
-                    'filename': filename
+                    'filename': filename,
+                    'annotated_video_path': annotated_video_path if annotated_video_path else None
                 }
             else:
-                keypoints_path = extract_pose_keypoints(filepath, 'bowling')
+                keypoints_path, annotated_video_path = extract_pose_keypoints(filepath, 'bowling')
                 bowler_side = request.form.get('bowler_side', 'right')
                 bowler_type = request.form.get('bowler_type', 'fast_bowler')
                 gpt_feedback = get_feedback_from_gpt_for_bowling(keypoints_path, bowler_type)
@@ -1858,7 +1974,8 @@ def upload_file():
                     'bowler_side': bowler_side,
                     'bowler_type': bowler_type,
                     'gpt_feedback': gpt_feedback,
-                    'filename': filename
+                    'filename': filename,
+                    'annotated_video_path': annotated_video_path if annotated_video_path else None
                 }
             report_path = generate_report(results, player_type, results.get('shot_type'), results.get('batter_side'), results.get('bowler_side'), results.get('bowler_type'), filename)
             results['report_path'] = report_path
@@ -1935,8 +2052,10 @@ def api_upload_file():
                 
                 logger.info("Extracting pose keypoints...")
                 try:
-                    keypoints_path = extract_pose_keypoints(filepath, 'batting')
+                    keypoints_path, annotated_video_path = extract_pose_keypoints(filepath, 'batting')
                     logger.info("Keypoints extracted successfully")
+                    if annotated_video_path:
+                        logger.info(f"Annotated video created: {annotated_video_path}")
                 except Exception as e:
                     logger.error(f"Error in keypoint extraction: {str(e)}", exc_info=True)
                     return jsonify({'error': f'Error extracting pose keypoints: {str(e)}'}), 500
@@ -1966,7 +2085,8 @@ def api_upload_file():
                     'shot_type': shot_type,
                     'batter_side': batter_side,
                     'gpt_feedback': gpt_feedback,
-                    'filename': filename
+                    'filename': filename,
+                    'annotated_video_path': annotated_video_path if annotated_video_path else None
                 }
                 
                 # Generate and save report
@@ -1990,8 +2110,10 @@ def api_upload_file():
                 logger.info("Starting bowling analysis...")
                 logger.info("Extracting pose keypoints for bowling...")
                 try:
-                    keypoints_path = extract_pose_keypoints(filepath, 'bowling')
+                    keypoints_path, annotated_video_path = extract_pose_keypoints(filepath, 'bowling')
                     logger.info("Keypoints extracted successfully")
+                    if annotated_video_path:
+                        logger.info(f"Annotated video created: {annotated_video_path}")
                 except Exception as e:
                     logger.error(f"Error in keypoint extraction: {str(e)}", exc_info=True)
                     return jsonify({'error': f'Error extracting pose keypoints: {str(e)}'}), 500
@@ -2022,7 +2144,8 @@ def api_upload_file():
                     'bowler_side': bowler_side,
                     'bowler_type': bowler_type,
                     'gpt_feedback': gpt_feedback,
-                    'filename': filename
+                    'filename': filename,
+                    'annotated_video_path': annotated_video_path if annotated_video_path else None
                 }
                 
                 # Generate and save report
@@ -2181,6 +2304,37 @@ def download_report(filename):
             return jsonify({'error': 'Report not found'}), 404
     except Exception as e:
         return jsonify({'error': f'Error downloading report: {str(e)}'}), 500
+
+@app.route('/api/video/<path:filename>', methods=['GET'])
+@require_auth
+def serve_video(filename):
+    """Serve video files (annotated or original)"""
+    try:
+        user_id = request.user['user_id']
+        
+        # Try user folder first
+        user_folder = get_user_upload_folder(user_id)
+        video_path = os.path.join(user_folder, filename)
+        
+        if not os.path.exists(video_path):
+            # Try general upload folder
+            video_path = os.path.join(UPLOAD_FOLDER, filename)
+        
+        if os.path.exists(video_path):
+            from flask import send_file
+            # Determine MIME type
+            mime_type = 'video/mp4'
+            if filename.lower().endswith('.mov'):
+                mime_type = 'video/quicktime'
+            elif filename.lower().endswith('.avi'):
+                mime_type = 'video/x-msvideo'
+            
+            return send_file(video_path, mimetype=mime_type)
+        else:
+            return jsonify({'error': 'Video not found'}), 404
+    except Exception as e:
+        logger.error(f"Error serving video: {str(e)}", exc_info=True)
+        return jsonify({'error': f'Error serving video: {str(e)}'}), 500
 
 @app.route('/api/files', methods=['GET'])
 def list_files():

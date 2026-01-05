@@ -56,6 +56,7 @@ export interface AnalysisResult {
   user_id?: number;
   username?: string;
   report_path?: string;
+  annotated_video_path?: string;
 }
 
 export interface BiomechanicalFeature {

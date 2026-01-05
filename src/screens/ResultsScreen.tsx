@@ -2,6 +2,7 @@ import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import React from 'react';
 import {
+  Dimensions,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
@@ -14,6 +15,9 @@ import {
   Text,
   useTheme
 } from 'react-native-paper';
+import Video from 'react-native-video';
+import { currentConfig } from '../../config';
+import apiService from '../services/api';
 import { borderRadius, colors, shadows, spacing } from '../theme';
 import { AnalysisResult } from '../types';
 
@@ -30,6 +34,16 @@ const ResultsScreen: React.FC = () => {
   const route = useRoute<ResultsScreenRouteProp>();
   const navigation = useNavigation<ResultsScreenNavigationProp>();
   const { result } = route.params;
+  const [authToken, setAuthToken] = React.useState<string | null>(null);
+
+  // Get auth token for video access
+  React.useEffect(() => {
+    const loadToken = async () => {
+      const token = await apiService.getStoredToken();
+      setAuthToken(token);
+    };
+    loadToken();
+  }, []);
 
   // Print the complete result data received from backend
   console.log('========================================');
@@ -248,10 +262,32 @@ const ResultsScreen: React.FC = () => {
             <Text style={[styles.playerInfoText, { color: theme.colors.onSurfaceVariant }]}>
               {result.player_type === 'batsman' ? 'Batting' : 'Bowling'} Side: {result.batter_side || result.bowler_side}
             </Text>
-            <Text style={[styles.playerInfoText, { color: theme.colors.onSurfaceVariant }]}>
-              File: {result.filename}
-            </Text>
           </View>
+          
+          {/* Video Player */}
+          {result.annotated_video_path && (
+            <View style={styles.videoContainer}>
+              <Video
+                source={{
+                  uri: (() => {
+                    // Extract filename from path (handle both absolute and relative paths)
+                    const videoFilename = result.annotated_video_path.split('/').pop() || result.annotated_video_path.split('\\').pop() || result.annotated_video_path;
+                    return `${currentConfig.API_BASE_URL}/api/video/${encodeURIComponent(videoFilename)}`;
+                  })(),
+                  headers: authToken ? {
+                    'Authorization': `Bearer ${authToken}`,
+                  } : undefined,
+                }}
+                style={styles.video}
+                controls={true}
+                resizeMode="contain"
+                paused={false}
+                onError={(error: any) => {
+                  console.error('Video playback error:', error);
+                }}
+              />
+            </View>
+          )}
         </Surface>
 
         {/* Analysis Summary - Support both old (analysis) and new (analysis_summary) format */}
@@ -448,6 +484,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: 'white',
+  },
+  videoContainer: {
+    width: '100%',
+    height: Dimensions.get('window').width * 0.75, // 4:3 aspect ratio
+    marginTop: spacing.md,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    backgroundColor: colors.gray[900],
+  },
+  video: {
+    width: '100%',
+    height: '100%',
   },
 });
 
