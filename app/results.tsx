@@ -25,6 +25,20 @@ export default function ResultsScreen() {
     loadToken();
   }, []);
 
+  // Debug logging
+  useEffect(() => {
+    if (result) {
+      console.log('🎥 [RESULTS] Annotated video path:', result.annotated_video_path);
+      console.log('🎥 [RESULTS] Annotated video path type:', typeof result.annotated_video_path);
+      console.log('🎥 [RESULTS] Annotated video path value check:', {
+        exists: !!result.annotated_video_path,
+        notNone: result.annotated_video_path !== 'None',
+        notEmpty: result.annotated_video_path?.trim() !== '',
+        fullCheck: result.annotated_video_path && result.annotated_video_path !== 'None' && result.annotated_video_path.trim() !== ''
+      });
+    }
+  }, [result]);
+
   if (!result) {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -236,50 +250,66 @@ export default function ResultsScreen() {
           </View>
           
           {/* Video Player - Show video if available, otherwise show filename as fallback */}
-          {result.annotated_video_path && result.annotated_video_path !== 'None' && result.annotated_video_path.trim() !== '' ? (
-            <View style={styles.videoContainer}>
-              <Video
-                source={{
-                  uri: (() => {
-                    // The backend now returns just the filename, but handle both cases
-                    const videoFilename = result.annotated_video_path.includes('/') 
-                      ? result.annotated_video_path.split('/').pop() 
-                      : result.annotated_video_path.includes('\\')
-                      ? result.annotated_video_path.split('\\').pop()
-                      : result.annotated_video_path;
-                    const videoUrl = `${currentConfig.API_BASE_URL}/api/video/${encodeURIComponent(videoFilename || result.annotated_video_path)}`;
-                    console.log('🎥 [VIDEO] Loading video from URL:', videoUrl);
-                    console.log('🎥 [VIDEO] Annotated video path from backend:', result.annotated_video_path);
-                    return videoUrl;
-                  })(),
-                  headers: authToken ? {
-                    'Authorization': `Bearer ${authToken}`,
-                  } : undefined,
-                }}
-                style={styles.video}
-                controls={true}
-                resizeMode="contain"
-                paused={false}
-                onLoad={() => {
-                  console.log('✅ [VIDEO] Video loaded successfully');
-                }}
-                onError={(error: any) => {
-                  console.error('❌ [VIDEO] Video playback error:', error);
-                }}
-              />
-            </View>
-          ) : (
-            <View style={styles.fallbackContainer}>
-              <Text style={[styles.playerInfoText, { color: theme.colors.onSurfaceVariant }]}>
-                File: {result.filename}
-              </Text>
-              {!result.annotated_video_path && (
-                <Text style={[styles.fallbackText, { color: theme.colors.onSurfaceVariant }]}>
-                  Video processing in progress...
-                </Text>
-              )}
-            </View>
-          )}
+          {(() => {
+            const hasVideoPath = result.annotated_video_path && 
+                                 result.annotated_video_path !== 'None' && 
+                                 result.annotated_video_path !== null && 
+                                 result.annotated_video_path !== undefined &&
+                                 String(result.annotated_video_path).trim() !== '';
+            
+            console.log('🎥 [VIDEO CHECK] hasVideoPath:', hasVideoPath);
+            console.log('🎥 [VIDEO CHECK] annotated_video_path value:', result.annotated_video_path);
+            
+            if (hasVideoPath) {
+              // The backend returns just the filename
+              const videoFilename = String(result.annotated_video_path).includes('/') 
+                ? String(result.annotated_video_path).split('/').pop() 
+                : String(result.annotated_video_path).includes('\\')
+                ? String(result.annotated_video_path).split('\\').pop()
+                : String(result.annotated_video_path);
+              const videoUrl = `${currentConfig.API_BASE_URL}/api/video/${encodeURIComponent(videoFilename)}`;
+              
+              console.log('🎥 [VIDEO] Loading video from URL:', videoUrl);
+              console.log('🎥 [VIDEO] Video filename:', videoFilename);
+              
+              return (
+                <View style={styles.videoContainer}>
+                  <Video
+                    source={{
+                      uri: videoUrl,
+                      headers: authToken ? {
+                        'Authorization': `Bearer ${authToken}`,
+                      } : undefined,
+                    }}
+                    style={styles.video}
+                    controls={true}
+                    resizeMode="contain"
+                    paused={false}
+                    onLoad={() => {
+                      console.log('✅ [VIDEO] Video loaded successfully');
+                    }}
+                    onError={(error: any) => {
+                      console.error('❌ [VIDEO] Video playback error:', error);
+                      console.error('❌ [VIDEO] Error details:', JSON.stringify(error, null, 2));
+                    }}
+                  />
+                </View>
+              );
+            } else {
+              return (
+                <View style={styles.fallbackContainer}>
+                  <Text style={[styles.playerInfoText, { color: theme.colors.onSurfaceVariant }]}>
+                    File: {result.filename}
+                  </Text>
+                  <Text style={[styles.fallbackText, { color: theme.colors.onSurfaceVariant }]}>
+                    {result.annotated_video_path 
+                      ? `Video path received: ${result.annotated_video_path} (but condition failed)` 
+                      : 'Video processing in progress...'}
+                  </Text>
+                </View>
+              );
+            }
+          })()}
         </Surface>
 
         {/* Analysis Summary - Support both old (analysis) and new (analysis_summary) format */}

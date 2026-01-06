@@ -2113,6 +2113,9 @@ def api_upload_file():
                     'annotated_video_path': annotated_video_path if annotated_video_path else None
                 }
                 
+                logger.info(f"📹 [RESPONSE] Annotated video path in results: {results.get('annotated_video_path')}")
+                logger.info(f"📹 [RESPONSE] Annotated video path type: {type(results.get('annotated_video_path'))}")
+                
                 # Generate and save report
                 logger.info("Generating report...")
                 try:
@@ -2171,6 +2174,9 @@ def api_upload_file():
                     'filename': filename,
                     'annotated_video_path': annotated_video_path if annotated_video_path else None
                 }
+                
+                logger.info(f"📹 [RESPONSE] Annotated video path in results: {results.get('annotated_video_path')}")
+                logger.info(f"📹 [RESPONSE] Annotated video path type: {type(results.get('annotated_video_path'))}")
                 
                 # Generate and save report
                 logger.info("Generating bowling report...")
