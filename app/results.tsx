@@ -1,8 +1,8 @@
+import { AVPlaybackStatus, ResizeMode, Video } from 'expo-av';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Dimensions, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Card, Chip, Surface, Text, useTheme } from 'react-native-paper';
-import Video from 'react-native-video';
 import { currentConfig } from '../config';
 import apiService from '../src/services/api';
 import { borderRadius, colors, shadows, spacing } from '../src/theme';
@@ -12,6 +12,7 @@ export default function ResultsScreen() {
   const theme = useTheme();
   const params = useLocalSearchParams();
   const [authToken, setAuthToken] = useState<string | null>(null);
+  const videoRef = useRef<Video>(null);
   
   // Parse the result from params
   const result: AnalysisResult = params.result ? JSON.parse(params.result as string) : null;
@@ -275,6 +276,7 @@ export default function ResultsScreen() {
               return (
                 <View style={styles.videoContainer}>
                   <Video
+                    ref={videoRef}
                     source={{
                       uri: videoUrl,
                       headers: authToken ? {
@@ -282,15 +284,14 @@ export default function ResultsScreen() {
                       } : undefined,
                     }}
                     style={styles.video}
-                    controls={true}
-                    resizeMode="contain"
-                    paused={false}
-                    onLoad={() => {
-                      console.log('✅ [VIDEO] Video loaded successfully');
+                    useNativeControls
+                    resizeMode={ResizeMode.CONTAIN}
+                    shouldPlay={false}
+                    onLoad={(status: AVPlaybackStatus) => {
+                      console.log('✅ [VIDEO] Video loaded successfully:', status);
                     }}
-                    onError={(error: any) => {
+                    onError={(error: string) => {
                       console.error('❌ [VIDEO] Video playback error:', error);
-                      console.error('❌ [VIDEO] Error details:', JSON.stringify(error, null, 2));
                     }}
                   />
                 </View>
