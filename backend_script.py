@@ -964,7 +964,9 @@ def create_annotated_video(video_path, keypoints_path, player_type):
     logger.info(f"Annotated video saved to: {output_path} (size: {file_size} bytes)")
     
     # Return just the filename for API access
-    return os.path.basename(output_path)
+    filename = os.path.basename(output_path)
+    logger.info(f"Returning annotated video filename: {filename}")
+    return filename
 
 def extract_pose_keypoints(video_path, player_type):
     cap = cv2.VideoCapture(video_path)
@@ -1004,6 +1006,7 @@ def extract_pose_keypoints(video_path, player_type):
     df.to_csv(keypoints_path, index=False)
     
     # Create annotated video
+    annotated_video_path = None
     try:
         annotated_video_path = create_annotated_video(video_path, keypoints_path, player_type)
         logger.info(f"Annotated video created: {annotated_video_path}")
@@ -1011,6 +1014,22 @@ def extract_pose_keypoints(video_path, player_type):
         logger.error(f"Error creating annotated video: {str(e)}", exc_info=True)
         annotated_video_path = None
     
+    # Fallback: Check if annotated video file exists even if function returned None
+    if not annotated_video_path:
+        video_dir = os.path.dirname(video_path)
+        if os.path.basename(video_dir).isdigit():
+            expected_path = os.path.join(video_dir, f'annotated_{os.path.basename(video_path)}')
+        else:
+            expected_path = os.path.join(UPLOAD_FOLDER, f'annotated_{os.path.basename(video_path)}')
+        
+        if os.path.exists(expected_path):
+            logger.info(f"Found annotated video file even though function returned None: {expected_path}")
+            annotated_video_path = os.path.basename(expected_path)
+            logger.info(f"Using fallback annotated video path: {annotated_video_path}")
+        else:
+            logger.warning(f"Annotated video file not found at expected path: {expected_path}")
+    
+    logger.info(f"Final annotated_video_path being returned: {annotated_video_path}")
     return keypoints_path, annotated_video_path
 
 def calculate_angle(a, b, c):
@@ -2101,6 +2120,7 @@ def api_upload_file():
                     logger.error(f"Error in Gemini feedback: {str(e)}", exc_info=True)
                     gpt_feedback = "Unable to generate feedback at this time."
                 
+                # Ensure annotated_video_path is included even if it's None (for debugging)
                 results = {
                     'success': True,
                     'user_id': user_id,
@@ -2110,11 +2130,13 @@ def api_upload_file():
                     'batter_side': batter_side,
                     'gpt_feedback': gpt_feedback,
                     'filename': filename,
-                    'annotated_video_path': annotated_video_path if annotated_video_path else None
+                    'annotated_video_path': annotated_video_path  # Keep as is, even if None
                 }
                 
+                logger.info(f"📹 [RESPONSE] Annotated video path variable: {annotated_video_path}")
                 logger.info(f"📹 [RESPONSE] Annotated video path in results: {results.get('annotated_video_path')}")
                 logger.info(f"📹 [RESPONSE] Annotated video path type: {type(results.get('annotated_video_path'))}")
+                logger.info(f"📹 [RESPONSE] Full results keys: {list(results.keys())}")
                 
                 # Generate and save report
                 logger.info("Generating report...")
@@ -2163,6 +2185,7 @@ def api_upload_file():
                     logger.error(f"Error in Gemini feedback: {str(e)}", exc_info=True)
                     gpt_feedback = "Unable to generate feedback at this time."
                 
+                # Ensure annotated_video_path is included even if it's None (for debugging)
                 results = {
                     'success': True,
                     'user_id': user_id,
@@ -2172,11 +2195,13 @@ def api_upload_file():
                     'bowler_type': bowler_type,
                     'gpt_feedback': gpt_feedback,
                     'filename': filename,
-                    'annotated_video_path': annotated_video_path if annotated_video_path else None
+                    'annotated_video_path': annotated_video_path  # Keep as is, even if None
                 }
                 
+                logger.info(f"📹 [RESPONSE] Annotated video path variable: {annotated_video_path}")
                 logger.info(f"📹 [RESPONSE] Annotated video path in results: {results.get('annotated_video_path')}")
                 logger.info(f"📹 [RESPONSE] Annotated video path type: {type(results.get('annotated_video_path'))}")
+                logger.info(f"📹 [RESPONSE] Full results keys: {list(results.keys())}")
                 
                 # Generate and save report
                 logger.info("Generating bowling report...")
