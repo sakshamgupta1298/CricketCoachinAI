@@ -151,31 +151,31 @@ def require_auth(f):
 shot_prediction_model = None
 pose_detection_model = None
 movenet_signature = None
-# keypoints_names = ["nose", "left_eye", "right_eye", "left_ear", "right_ear", "left_shoulder", "right_shoulder", "left_elbow", "right_elbow", "left_wrist", "right_wrist", "left_hip", "right_hip", "left_knee", "right_knee", "left_ankle", "right_ankle"]
-keypoints_names = [
-    # Head & Spine
-    "head_top", "forehead", "chin",
-    "c7_spine", "t12_spine", "l5_spine", "sternum",
+keypoints_names = ["nose", "left_eye", "right_eye", "left_ear", "right_ear", "left_shoulder", "right_shoulder", "left_elbow", "right_elbow", "left_wrist", "right_wrist", "left_hip", "right_hip", "left_knee", "right_knee", "left_ankle", "right_ankle"]
+# keypoints_names = [
+#     # Head & Spine
+#     "head_top", "forehead", "chin",
+#     "c7_spine", "t12_spine", "l5_spine", "sternum",
 
-    # Shoulders & Arms
-    "left_shoulder", "right_shoulder",
-    "left_elbow", "right_elbow",
-    "left_wrist", "right_wrist",
-    "left_hand_thumb", "left_hand_index",
-    "right_hand_thumb", "right_hand_index",
+#     # Shoulders & Arms
+#     "left_shoulder", "right_shoulder",
+#     "left_elbow", "right_elbow",
+#     "left_wrist", "right_wrist",
+#     "left_hand_thumb", "left_hand_index",
+#     "right_hand_thumb", "right_hand_index",
 
-    # Pelvis
-    "pelvis_center",
-    "left_asis", "right_asis",
-    "left_psis", "right_psis",
+#     # Pelvis
+#     "pelvis_center",
+#     "left_asis", "right_asis",
+#     "left_psis", "right_psis",
 
-    # Lower body
-    "left_hip", "right_hip",
-    "left_knee", "right_knee",
-    "left_ankle", "right_ankle",
-    "left_heel", "right_heel",
-    "left_toe", "right_toe"
-]
+#     # Lower body
+#     "left_hip", "right_hip",
+#     "left_knee", "right_knee",
+#     "left_ankle", "right_ankle",
+#     "left_heel", "right_heel",
+#     "left_toe", "right_toe"
+# ]
 
 
 # Configuration
