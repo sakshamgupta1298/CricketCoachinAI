@@ -1050,10 +1050,56 @@ def extract_pose_keypoints(video_path, player_type):
     all_keypoints, frame_idx = [], 0
 
     def detect_pose(frame):
-        img = tf.image.resize_with_pad(tf.expand_dims(frame, axis=0), 256, 256)
-        input_img = tf.cast(img, dtype=tf.int32)
+        # Get original frame dimensions
+        orig_height, orig_width = frame.shape[:2]
+        
+        # Resize with padding to 256x256
+        img_resized = tf.image.resize_with_pad(tf.expand_dims(frame, axis=0), 256, 256)
+        input_img = tf.cast(img_resized, dtype=tf.int32)
         outputs = movenet_signature(input_img)
-        return outputs['output_0'][0, 0, :, :].numpy()
+        keypoints_256 = outputs['output_0'][0, 0, :, :].numpy()
+        
+        # Calculate scaling and padding to transform coordinates back to original frame
+        # resize_with_pad maintains aspect ratio and adds padding
+        scale = min(256 / orig_width, 256 / orig_height)
+        new_width = int(orig_width * scale)
+        new_height = int(orig_height * scale)
+        
+        # Calculate padding offsets
+        pad_x = (256 - new_width) / 2.0
+        pad_y = (256 - new_height) / 2.0
+        
+        # Transform keypoints from 256x256 padded space to original frame space
+        keypoints_orig = np.zeros_like(keypoints_256)
+        for i in range(len(keypoints_256)):
+            # Normalized coordinates in 256x256 space (0-1)
+            x_norm_256 = keypoints_256[i][1]
+            y_norm_256 = keypoints_256[i][0]
+            conf = keypoints_256[i][2]
+            
+            # Convert to pixel coordinates in 256x256 space
+            x_256 = x_norm_256 * 256
+            y_256 = y_norm_256 * 256
+            
+            # Remove padding offset
+            x_unpadded = x_256 - pad_x
+            y_unpadded = y_256 - pad_y
+            
+            # Scale back to original dimensions
+            x_orig = x_unpadded / scale
+            y_orig = y_unpadded / scale
+            
+            # Normalize to original frame dimensions (0-1)
+            x_norm_orig = x_orig / orig_width
+            y_norm_orig = y_orig / orig_height
+            
+            # Clamp to valid range
+            x_norm_orig = np.clip(x_norm_orig, 0.0, 1.0)
+            y_norm_orig = np.clip(y_norm_orig, 0.0, 1.0)
+            
+            keypoints_orig[i] = [y_norm_orig, x_norm_orig, conf]
+        
+        return keypoints_orig
 
     while True:
         ret, frame = cap.read()
