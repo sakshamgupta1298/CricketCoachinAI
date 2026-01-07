@@ -909,88 +909,141 @@ def draw_pose_skeleton(frame, keypoints, keypoints_names):
 
 def create_annotated_video(video_path, keypoints_path, player_type):
     """Create a video with pose detection overlay"""
-    logger.info(f"Creating annotated video from {video_path}")
+    logger.info(f"🎬 [ANNOTATED_VIDEO] Starting creation from {video_path}")
+    logger.info(f"🎬 [ANNOTATED_VIDEO] Keypoints path: {keypoints_path}")
     
-    # Read keypoints CSV
-    df = pd.read_csv(keypoints_path)
-    
-    # Open original video
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        logger.error(f"Failed to open video: {video_path}")
-        return None
-    
-    # Get video properties
-    fps = int(cap.get(cv2.CAP_PROP_FPS)) or 30  # Default to 30 if fps is 0
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    
-    if fps == 0 or width == 0 or height == 0:
-        logger.error(f"Invalid video properties: fps={fps}, width={width}, height={height}")
-        cap.release()
-        return None
-    
-    logger.info(f"Video properties: fps={fps}, width={width}, height={height}")
-    
-    # Determine output path
-    video_dir = os.path.dirname(video_path)
-    if os.path.basename(video_dir).isdigit():  # Check if parent directory is a user ID folder
-        output_path = os.path.join(video_dir, f'annotated_{os.path.basename(video_path)}')
-    else:
-        output_path = os.path.join(UPLOAD_FOLDER, f'annotated_{os.path.basename(video_path)}')
-    
-    # Create video writer - use H.264 codec for better compatibility
-    fourcc = cv2.VideoWriter_fourcc(*'avc1')  # H.264 codec
-    if fourcc == -1:
-        # Fallback to mp4v if avc1 is not available
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    
-    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
-    
-    if not out.isOpened():
-        logger.error(f"Failed to create video writer for: {output_path}")
-        cap.release()
-        return None
-    
-    frame_idx = 0
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
+    try:
+        # Read keypoints CSV
+        if not os.path.exists(keypoints_path):
+            logger.error(f"🎬 [ANNOTATED_VIDEO] Keypoints file not found: {keypoints_path}")
+            return None
         
-        # Get keypoints for this frame
-        if frame_idx < len(df):
-            row = df.iloc[frame_idx]
-            keypoints = []
-            for name in keypoints_names:
-                x = row.get(f'{name}_x', 0)
-                y = row.get(f'{name}_y', 0)
-                conf = row.get(f'{name}_conf', 0)
-                # Normalize coordinates (they're already normalized from 0-1)
-                keypoints.append([y, x, conf])
+        df = pd.read_csv(keypoints_path)
+        logger.info(f"🎬 [ANNOTATED_VIDEO] Loaded {len(df)} keypoint frames")
+        
+        # Open original video
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            logger.error(f"🎬 [ANNOTATED_VIDEO] Failed to open video: {video_path}")
+            return None
+        
+        # Get video properties
+        fps = int(cap.get(cv2.CAP_PROP_FPS)) or 30  # Default to 30 if fps is 0
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        
+        logger.info(f"🎬 [ANNOTATED_VIDEO] Video properties: fps={fps}, width={width}, height={height}, frames={frame_count}")
+        
+        if fps == 0 or width == 0 or height == 0:
+            logger.error(f"🎬 [ANNOTATED_VIDEO] Invalid video properties: fps={fps}, width={width}, height={height}")
+            cap.release()
+            return None
+        
+        # Determine output path
+        video_dir = os.path.dirname(video_path)
+        if os.path.basename(video_dir).isdigit():  # Check if parent directory is a user ID folder
+            output_path = os.path.join(video_dir, f'annotated_{os.path.basename(video_path)}')
+        else:
+            output_path = os.path.join(UPLOAD_FOLDER, f'annotated_{os.path.basename(video_path)}')
+        
+        logger.info(f"🎬 [ANNOTATED_VIDEO] Output path: {output_path}")
+        
+        # Try different codecs in order of preference
+        codecs_to_try = [
+            ('mp4v', 'MPEG-4'),
+            ('XVID', 'XVID'),
+            ('MJPG', 'Motion JPEG'),
+        ]
+        
+        out = None
+        fourcc = None
+        codec_name = None
+        
+        for codec, name in codecs_to_try:
+            try:
+                fourcc = cv2.VideoWriter_fourcc(*codec)
+                if fourcc != -1:
+                    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+                    if out.isOpened():
+                        codec_name = name
+                        logger.info(f"🎬 [ANNOTATED_VIDEO] Successfully created video writer with codec: {name}")
+                        break
+                    else:
+                        out.release()
+                        logger.warning(f"🎬 [ANNOTATED_VIDEO] Codec {name} failed to open writer")
+            except Exception as e:
+                logger.warning(f"🎬 [ANNOTATED_VIDEO] Error trying codec {name}: {str(e)}")
+                continue
+        
+        if not out or not out.isOpened():
+            logger.error(f"🎬 [ANNOTATED_VIDEO] Failed to create video writer with any codec for: {output_path}")
+            cap.release()
+            return None
+    
+        frame_idx = 0
+        frames_written = 0
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
             
-            # Draw skeleton on frame
-            frame = draw_pose_skeleton(frame, keypoints, keypoints_names)
+            # Get keypoints for this frame
+            if frame_idx < len(df):
+                row = df.iloc[frame_idx]
+                keypoints = []
+                for name in keypoints_names:
+                    x = row.get(f'{name}_x', 0)
+                    y = row.get(f'{name}_y', 0)
+                    conf = row.get(f'{name}_conf', 0)
+                    # Normalize coordinates (they're already normalized from 0-1)
+                    keypoints.append([y, x, conf])
+                
+                # Draw skeleton on frame
+                frame = draw_pose_skeleton(frame, keypoints, keypoints_names)
+            
+            # Write frame
+            write_success = out.write(frame)
+            if write_success:
+                frames_written += 1
+            frame_idx += 1
         
-        # Write frame
-        out.write(frame)
-        frame_idx += 1
-    
-    cap.release()
-    out.release()
-    
-    # Verify the file was created
-    if not os.path.exists(output_path):
-        logger.error(f"Annotated video file was not created: {output_path}")
+        cap.release()
+        out.release()
+        
+        logger.info(f"🎬 [ANNOTATED_VIDEO] Processed {frame_idx} frames, wrote {frames_written} frames")
+        
+        # Give the file system a moment to flush
+        import time
+        time.sleep(0.5)
+        
+        # Verify the file was created
+        if not os.path.exists(output_path):
+            logger.error(f"🎬 [ANNOTATED_VIDEO] File was not created: {output_path}")
+            logger.error(f"🎬 [ANNOTATED_VIDEO] Directory exists: {os.path.exists(os.path.dirname(output_path))}")
+            logger.error(f"🎬 [ANNOTATED_VIDEO] Directory is writable: {os.access(os.path.dirname(output_path), os.W_OK)}")
+            return None
+        
+        file_size = os.path.getsize(output_path)
+        logger.info(f"🎬 [ANNOTATED_VIDEO] Video saved successfully: {output_path} (size: {file_size} bytes)")
+        
+        if file_size == 0:
+            logger.error(f"🎬 [ANNOTATED_VIDEO] File created but is empty (0 bytes)")
+            os.remove(output_path)
+            return None
+        
+        # Return just the filename for API access
+        filename = os.path.basename(output_path)
+        logger.info(f"🎬 [ANNOTATED_VIDEO] Returning filename: {filename}")
+        return filename
+        
+    except Exception as e:
+        logger.error(f"🎬 [ANNOTATED_VIDEO] Exception during video creation: {str(e)}", exc_info=True)
+        if 'cap' in locals():
+            cap.release()
+        if 'out' in locals() and out:
+            out.release()
         return None
-    
-    file_size = os.path.getsize(output_path)
-    logger.info(f"Annotated video saved to: {output_path} (size: {file_size} bytes)")
-    
-    # Return just the filename for API access
-    filename = os.path.basename(output_path)
-    logger.info(f"Returning annotated video filename: {filename}")
-    return filename
 
 def extract_pose_keypoints(video_path, player_type):
     cap = cv2.VideoCapture(video_path)
@@ -1031,11 +1084,19 @@ def extract_pose_keypoints(video_path, player_type):
     
     # Create annotated video
     annotated_video_path = None
+    logger.info(f"🎬 [EXTRACT_KEYPOINTS] About to create annotated video")
+    logger.info(f"🎬 [EXTRACT_KEYPOINTS] Video path: {video_path}")
+    logger.info(f"🎬 [EXTRACT_KEYPOINTS] Keypoints path: {keypoints_path}")
+    logger.info(f"🎬 [EXTRACT_KEYPOINTS] Player type: {player_type}")
+    
     try:
         annotated_video_path = create_annotated_video(video_path, keypoints_path, player_type)
-        logger.info(f"Annotated video created: {annotated_video_path}")
+        if annotated_video_path:
+            logger.info(f"✅ [EXTRACT_KEYPOINTS] Annotated video created successfully: {annotated_video_path}")
+        else:
+            logger.warning(f"⚠️ [EXTRACT_KEYPOINTS] create_annotated_video returned None")
     except Exception as e:
-        logger.error(f"Error creating annotated video: {str(e)}", exc_info=True)
+        logger.error(f"❌ [EXTRACT_KEYPOINTS] Exception creating annotated video: {str(e)}", exc_info=True)
         annotated_video_path = None
     
     # Fallback: Check if annotated video file exists even if function returned None
