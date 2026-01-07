@@ -2565,38 +2565,38 @@ def get_analysis_history():
             for file in os.listdir(user_folder):
                 if file.startswith('results_') and file.endswith('.json'):
                     file_path = os.path.join(user_folder, file)
-                file_stats = os.stat(file_path)
-                
-                try:
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        result_data = json.load(f)
+                    file_stats = os.stat(file_path)
                     
-                    # Only include results for the authenticated user
-                    result_user_id = result_data.get('user_id')
-                    if result_user_id != user_id:
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            result_data = json.load(f)
+                        
+                        # Only include results for the authenticated user
+                        result_user_id = result_data.get('user_id')
+                        if result_user_id != user_id:
+                            continue
+                        
+                        # Extract filename from results_ prefix
+                        original_filename = file.replace('results_', '').replace('.json', '')
+                        
+                        history_item = {
+                            'id': file,
+                            'filename': original_filename,
+                            'player_type': result_data.get('player_type', 'unknown'),
+                            'shot_type': result_data.get('shot_type'),
+                            'bowler_type': result_data.get('bowler_type'),
+                            'batter_side': result_data.get('batter_side'),
+                            'bowler_side': result_data.get('bowler_side'),
+                            'created': datetime.fromtimestamp(file_stats.st_ctime).strftime('%Y-%m-%d %H:%M:%S'),
+                            'modified': datetime.fromtimestamp(file_stats.st_mtime).strftime('%Y-%m-%d %H:%M:%S'),
+                            'size': file_stats.st_size,
+                            'success': result_data.get('success', True),
+                            'has_gpt_feedback': 'gpt_feedback' in result_data and result_data['gpt_feedback'] is not None
+                        }
+                        history.append(history_item)
+                    except Exception as e:
+                        logging.warning(f"Failed to parse {file}: {e}")
                         continue
-                    
-                    # Extract filename from results_ prefix
-                    original_filename = file.replace('results_', '').replace('.json', '')
-                    
-                    history_item = {
-                        'id': file,
-                        'filename': original_filename,
-                        'player_type': result_data.get('player_type', 'unknown'),
-                        'shot_type': result_data.get('shot_type'),
-                        'bowler_type': result_data.get('bowler_type'),
-                        'batter_side': result_data.get('batter_side'),
-                        'bowler_side': result_data.get('bowler_side'),
-                        'created': datetime.fromtimestamp(file_stats.st_ctime).strftime('%Y-%m-%d %H:%M:%S'),
-                        'modified': datetime.fromtimestamp(file_stats.st_mtime).strftime('%Y-%m-%d %H:%M:%S'),
-                        'size': file_stats.st_size,
-                        'success': result_data.get('success', True),
-                        'has_gpt_feedback': 'gpt_feedback' in result_data and result_data['gpt_feedback'] is not None
-                    }
-                    history.append(history_item)
-                except Exception as e:
-                    logging.warning(f"Failed to parse {file}: {e}")
-                    continue
         
         # Sort by creation time (newest first)
         history.sort(key=lambda x: x['created'], reverse=True)
