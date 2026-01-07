@@ -365,6 +365,89 @@ def predict_shot(video_path, model):
         logger.error(f"Full traceback: {traceback.format_exc()}")
         return 'coverdrive'  # Default fallback
 
+def parse_json_from_response(raw_content):
+    """
+    Robustly extract and parse JSON from GPT/Gemini response.
+    Handles markdown code blocks, trailing commas, and other common issues.
+    """
+    try:
+        # First, try to remove markdown code blocks if present
+        json_text = re.sub(r'```json\s*|\s*```|```', '', raw_content, flags=re.DOTALL).strip()
+        
+        # Try to find JSON object boundaries more accurately
+        # Look for the first { and last } to get the complete JSON
+        start_idx = json_text.find('{')
+        if start_idx == -1:
+            raise ValueError("No JSON object found in response")
+        
+        # Find matching closing brace
+        brace_count = 0
+        end_idx = start_idx
+        for i in range(start_idx, len(json_text)):
+            if json_text[i] == '{':
+                brace_count += 1
+            elif json_text[i] == '}':
+                brace_count -= 1
+                if brace_count == 0:
+                    end_idx = i + 1
+                    break
+        
+        if brace_count != 0:
+            # Fallback: use regex if brace matching fails
+            match = re.search(r'\{.*\}', json_text, re.DOTALL)
+            if match:
+                json_text = match.group()
+            else:
+                raise ValueError("Could not find complete JSON object")
+        else:
+            json_text = json_text[start_idx:end_idx]
+        
+        # Try to fix common JSON issues
+        # Remove trailing commas before closing braces/brackets (multiple passes for nested structures)
+        for _ in range(5):  # Multiple passes to handle nested trailing commas
+            json_text = re.sub(r',(\s*[}\]])', r'\1', json_text)
+        
+        # Remove trailing commas in arrays
+        json_text = re.sub(r',(\s*\])', r'\1', json_text)
+        
+        # Try parsing
+        try:
+            return json.loads(json_text)
+        except json.JSONDecodeError as e:
+            # Log the problematic JSON for debugging
+            logger.error(f"JSON parse error at position {e.pos}: {e.msg}")
+            error_context_start = max(0, e.pos - 100)
+            error_context_end = min(len(json_text), e.pos + 100)
+            logger.error(f"Problematic JSON snippet (pos {e.pos}): {json_text[error_context_start:error_context_end]}")
+            
+            # Try to fix more issues: remove comments, fix single quotes, etc.
+            # Remove single-line comments (not standard JSON but sometimes present)
+            json_text_cleaned = re.sub(r'//.*?$', '', json_text, flags=re.MULTILINE)
+            # Remove multi-line comments
+            json_text_cleaned = re.sub(r'/\*.*?\*/', '', json_text_cleaned, flags=re.DOTALL)
+            
+            # Replace single quotes with double quotes (carefully, avoiding strings that already have quotes)
+            # This is tricky, so we'll be conservative
+            json_text_cleaned = re.sub(r"'([^']*)':", r'"\1":', json_text_cleaned)
+            json_text_cleaned = re.sub(r":\s*'([^']*)'", r': "\1"', json_text_cleaned)
+            
+            # Remove trailing commas again after cleaning
+            for _ in range(5):
+                json_text_cleaned = re.sub(r',(\s*[}\]])', r'\1', json_text_cleaned)
+            
+            # Try parsing again
+            try:
+                return json.loads(json_text_cleaned)
+            except json.JSONDecodeError as e2:
+                # Last resort: log more details and raise
+                logger.error(f"JSON still invalid after cleaning. Error: {e2.msg} at position {e2.pos}")
+                raise ValueError(f"Could not parse JSON: {e.msg} at position {e.pos}. After cleaning: {e2.msg} at {e2.pos}")
+    
+    except Exception as e:
+        logger.error(f"Error extracting JSON: {e}", exc_info=True)
+        raise
+
+
 def get_feedback_from_gpt_for_bowling(keypoint_csv_path, bowler_type='fast_bowler', player_level='intermediate'):
     logger.info(f"Getting Gemini feedback for bowling type: {bowler_type}, player level: {player_level}")
 
@@ -585,16 +668,19 @@ def get_feedback_from_gpt_for_bowling(keypoint_csv_path, bowler_type='fast_bowle
         )
 
         raw_content_A = response_A.text
+        logger.debug(f"Raw Stage 1 response (first 500 chars): {raw_content_A[:500]}")
         try:
-            json_text_A = re.search(r"\{.*\}", raw_content_A, re.DOTALL).group()
-            biomechanics_report = json.loads(json_text_A)
+            biomechanics_report = parse_json_from_response(raw_content_A)
             logger.info("Stage 1 completed: Biomechanical analysis received")
         except Exception as e:
             logger.error(f"Failed to parse Stage 1 (biomechanics) response: {e}", exc_info=True)
+            logger.error(f"Full raw content length: {len(raw_content_A)}")
+            logger.error(f"Raw content (first 2000 chars): {raw_content_A[:2000]}")
             return {
                 "error": "Failed to parse biomechanics response", 
-                "raw_content": raw_content_A,
-                "stage": "biomechanics_analysis"
+                "raw_content": raw_content_A[:5000],  # Limit size for logging
+                "stage": "biomechanics_analysis",
+                "parse_error": str(e)
             }
     except Exception as e:
         logger.error(f"Failed to get Stage 1 (biomechanics) response: {e}", exc_info=True)
@@ -731,16 +817,22 @@ REQUIRED JSON OUTPUT
         )
 
         raw_content_B = response_B.text
+        logger.debug(f"Raw Stage 2 response (first 500 chars): {raw_content_B[:500]}")
         try:
-            json_text_B = re.search(r"\{.*\}", raw_content_B, re.DOTALL).group()
-            coaching_feedback = json.loads(json_text_B)
+            coaching_feedback = parse_json_from_response(raw_content_B)
             logger.info("Stage 2 completed: Coaching feedback received")
         except Exception as e:
             logger.error(f"Failed to parse Stage 2 (coaching) response: {e}", exc_info=True)
+            logger.error(f"Full raw content length: {len(raw_content_B)}")
+            logger.error(f"Raw content (first 2000 chars): {raw_content_B[:2000]}")
             # Return biomechanics report even if coaching fails
             return {
                 "biomechanics_report": biomechanics_report,
-                "coaching_feedback": {"error": "Failed to parse coaching response", "raw_content": raw_content_B},
+                "coaching_feedback": {
+                    "error": "Failed to parse coaching response", 
+                    "raw_content": raw_content_B[:5000],
+                    "parse_error": str(e)
+                },
                 "stage": "coaching_interpretation"
             }
     except Exception as e:
@@ -1504,16 +1596,19 @@ def get_feedback_from_gpt(action_type, keypoint_csv_path, player_level='intermed
         )
 
         raw_content_A = response_A.text
+        logger.debug(f"Raw Stage 1 response (first 500 chars): {raw_content_A[:500]}")
         try:
-            json_text_A = re.search(r"\{.*\}", raw_content_A, re.DOTALL).group()
-            biomechanics_report = json.loads(json_text_A)
+            biomechanics_report = parse_json_from_response(raw_content_A)
             logger.info("Stage 1 completed: Biomechanical analysis received")
         except Exception as e:
             logger.error(f"Failed to parse Stage 1 (biomechanics) response: {e}", exc_info=True)
+            logger.error(f"Full raw content length: {len(raw_content_A)}")
+            logger.error(f"Raw content (first 2000 chars): {raw_content_A[:2000]}")
             return {
                 "error": "Failed to parse biomechanics response", 
-                "raw_content": raw_content_A,
-                "stage": "biomechanics_analysis"
+                "raw_content": raw_content_A[:5000],
+                "stage": "biomechanics_analysis",
+                "parse_error": str(e)
             }
     except Exception as e:
         logger.error(f"Failed to get Stage 1 (biomechanics) response: {e}", exc_info=True)
@@ -1638,16 +1733,22 @@ REQUIRED JSON OUTPUT
         )
 
         raw_content_B = response_B.text
+        logger.debug(f"Raw Stage 2 response (first 500 chars): {raw_content_B[:500]}")
         try:
-            json_text_B = re.search(r"\{.*\}", raw_content_B, re.DOTALL).group()
-            coaching_feedback = json.loads(json_text_B)
+            coaching_feedback = parse_json_from_response(raw_content_B)
             logger.info("Stage 2 completed: Coaching feedback received")
         except Exception as e:
             logger.error(f"Failed to parse Stage 2 (coaching) response: {e}", exc_info=True)
+            logger.error(f"Full raw content length: {len(raw_content_B)}")
+            logger.error(f"Raw content (first 2000 chars): {raw_content_B[:2000]}")
             # Return biomechanics report even if coaching fails
             return {
                 "biomechanics_report": biomechanics_report,
-                "coaching_feedback": {"error": "Failed to parse coaching response", "raw_content": raw_content_B},
+                "coaching_feedback": {
+                    "error": "Failed to parse coaching response", 
+                    "raw_content": raw_content_B[:5000],
+                    "parse_error": str(e)
+                },
                 "stage": "coaching_interpretation"
             }
     except Exception as e:
