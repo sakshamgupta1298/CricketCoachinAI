@@ -1055,6 +1055,21 @@ def extract_pose_keypoints(video_path, player_type):
         outputs = movenet_signature(input_img)
         return outputs['output_0'][0, 0, :, :].numpy()
 
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    
+    # Calculate padding and scaling parameters that tf.image.resize_with_pad uses
+    input_size = 256
+    # Calculate scale and padding
+    if width > height:
+        scale = input_size / width
+        pad_y = (input_size - (height * scale)) / 2
+        pad_x = 0
+    else:
+        scale = input_size / height
+        pad_y = 0
+        pad_x = (input_size - (width * scale)) / 2
+
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -1064,9 +1079,32 @@ def extract_pose_keypoints(video_path, player_type):
 
         row = {'frame': frame_idx}
         for idx, name in enumerate(keypoints_names):
-            row[f'{name}_x'] = keypoints[idx][1]
-            row[f'{name}_y'] = keypoints[idx][0]
-            row[f'{name}_conf'] = keypoints[idx][2]
+            # Movenet returns normalized [0,1] coordinates relative to the 256x256 padded image
+            y_norm_padded = keypoints[idx][0]
+            x_norm_padded = keypoints[idx][1]
+            conf = keypoints[idx][2]
+            
+            # Convert to pixel coordinates in the 256x256 padded image
+            y_px_padded = y_norm_padded * input_size
+            x_px_padded = x_norm_padded * input_size
+            
+            # Remove padding to get scaled pixel coordinates
+            y_px_scaled = y_px_padded - pad_y
+            x_px_scaled = x_px_padded - pad_x
+            
+            # Divide by scale to get original pixel coordinates
+            y_px_original = y_px_scaled / scale
+            x_px_original = x_px_scaled / scale
+            
+            # Normalize back to [0, 1] relative to original image dimensions for the CSV
+            # This ensures draw_pose_skeleton works correctly (it multiplies by w and h)
+            y_final_norm = y_px_original / height
+            x_final_norm = x_px_original / width
+            
+            row[f'{name}_x'] = x_final_norm
+            row[f'{name}_y'] = y_final_norm
+            row[f'{name}_conf'] = conf
+            
         all_keypoints.append(row)
         frame_idx += 1
 
