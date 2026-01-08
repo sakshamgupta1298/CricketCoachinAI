@@ -1773,7 +1773,6 @@ def generate_training_plan(gpt_feedback, player_type, shot_type=None, bowler_typ
     Returns a dict with structure: { "plan": [ {"day": 1, "focus": "...", "warmup":[...], "drills":[...], "notes":"..."}, ... ] }
     """
     # Read the report file if available - this is critical for generating shot-specific plans
-    report_path = '/uploads/'
     report_content = ""
     if report_path and os.path.exists(report_path):
         try:
