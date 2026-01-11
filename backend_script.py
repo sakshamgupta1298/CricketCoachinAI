@@ -2890,6 +2890,12 @@ def register():
             logger.warning("Missing required fields in registration request")
             return jsonify({'error': 'Username, email, and password are required'}), 400
         
+        # Email format validation
+        email_pattern = r'^[^\s@]+@[^\s@]+\.[^\s@]+$'
+        if not re.match(email_pattern, email):
+            logger.warning(f"Invalid email format in registration request: {email}")
+            return jsonify({'error': 'Please enter a valid email address'}), 400
+        
         if len(password) < 6:
             logger.warning("Password too short in registration request")
             return jsonify({'error': 'Password must be at least 6 characters long'}), 400
@@ -2982,7 +2988,7 @@ def login():
         
         if not user:
             logger.warning(f"User not found in database: {username}")
-            return jsonify({'error': 'Invalid username or password'}), 401
+            return jsonify({'error': 'User not found. Please sign up first or check your username.'}), 401
         
         # Verify password
         logger.debug("Verifying password...")

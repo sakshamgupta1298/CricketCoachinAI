@@ -780,6 +780,29 @@ class ApiService {
       
       const response = await this.jsonApi.post('/api/auth/login', credentials);
       
+      // Check response status - handle 401/400 errors properly
+      if (response.status === 401 || response.status === 400) {
+        console.error('❌ [LOGIN] Login failed - Invalid credentials');
+        console.error('📊 [LOGIN] Response status:', response.status);
+        console.error('📄 [LOGIN] Response data:', response.data);
+        
+        const errorMessage = response.data?.error || 'Invalid username or password. Please check your credentials or sign up if you don\'t have an account.';
+        return {
+          success: false,
+          error: errorMessage,
+        };
+      }
+      
+      // Check if response has success flag and token
+      if (!response.data?.token || !response.data?.success) {
+        console.error('❌ [LOGIN] Login failed - No token or success flag in response');
+        console.error('📄 [LOGIN] Response data:', response.data);
+        return {
+          success: false,
+          error: response.data?.error || 'Login failed. Please try again or sign up if you don\'t have an account.',
+        };
+      }
+      
       console.log('✅ [LOGIN] Login successful!');
       console.log('📊 [LOGIN] Response status:', response.status);
       console.log('📄 [LOGIN] Response headers:', JSON.stringify(response.headers, null, 2));
@@ -847,16 +870,52 @@ class ApiService {
 
   async register(userData: { username: string; email: string; password: string }): Promise<ApiResponse<any>> {
     try {
+      console.log('📝 [REGISTER] Starting registration process...');
+      console.log('👤 [REGISTER] Username:', userData.username);
+      console.log('📧 [REGISTER] Email:', userData.email);
+      console.log('🌐 [REGISTER] API Base URL:', this.baseURL);
+      console.log('📡 [REGISTER] Making request to:', `${this.baseURL}/api/auth/register`);
+      
       const response = await this.jsonApi.post('/api/auth/register', userData);
+      
+      // Check response status - handle 400/409 errors properly
+      if (response.status === 400 || response.status === 409) {
+        console.error('❌ [REGISTER] Registration failed - Validation error');
+        console.error('📊 [REGISTER] Response status:', response.status);
+        console.error('📄 [REGISTER] Response data:', response.data);
+        
+        const errorMessage = response.data?.error || 'Registration failed. Please check your information and try again.';
+        return {
+          success: false,
+          error: errorMessage,
+        };
+      }
+      
+      // Check if response has success flag and token
+      if (!response.data?.token || !response.data?.success) {
+        console.error('❌ [REGISTER] Registration failed - No token or success flag in response');
+        console.error('📄 [REGISTER] Response data:', response.data);
+        return {
+          success: false,
+          error: response.data?.error || 'Registration failed. Please try again.',
+        };
+      }
+      
+      console.log('✅ [REGISTER] Registration successful!');
+      console.log('📊 [REGISTER] Response status:', response.status);
+      console.log('🔑 [REGISTER] Token received:', response.data.token ? 'Yes' : 'No');
+      
       return {
         success: true,
         data: response.data,
       };
     } catch (error: any) {
-      console.error('Register Error:', error);
+      console.error('❌ [REGISTER] Registration error:', error);
+      console.error('📊 [REGISTER] Response status:', error.response?.status);
+      console.error('📄 [REGISTER] Response data:', error.response?.data);
       return {
         success: false,
-        error: error.response?.data?.error || error.message,
+        error: error.response?.data?.error || error.message || 'Registration failed. Please try again.',
       };
     }
   }

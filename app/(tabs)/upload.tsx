@@ -2,11 +2,14 @@ import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { Button, Card, Menu, ProgressBar, RadioButton, Surface, Text, TextInput, useTheme } from 'react-native-paper';
+import { Menu, ProgressBar, RadioButton, Text, TextInput, useTheme } from 'react-native-paper';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import Toast from 'react-native-toast-message';
+import { PremiumButton } from '../../src/components/ui/PremiumButton';
+import { PremiumCard } from '../../src/components/ui/PremiumCard';
 import { useUpload } from '../../src/context/UploadContext';
 import apiService from '../../src/services/api';
-import { borderRadius, colors, shadows, spacing } from '../../src/theme';
+import { borderRadius, colors, spacing } from '../../src/theme';
 import { BowlerType, PlayerSide, PlayerType, UploadFormData } from '../../src/types';
 
 export default function UploadScreen() {
@@ -160,64 +163,98 @@ export default function UploadScreen() {
   };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <ScrollView 
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={styles.content}>
         {/* Header */}
-        <View style={styles.header}>
+        <Animated.View 
+          entering={FadeInDown.delay(100).springify()}
+          style={styles.header}
+        >
           <Text style={[styles.title, { color: theme.colors.onBackground }]}>
             Upload Video
           </Text>
           <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>
             Select a cricket video for AI analysis
           </Text>
-        </View>
+        </Animated.View>
 
         {/* Player Type Selection */}
-        <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-          <Card.Content>
+        <Animated.View entering={FadeInUp.delay(200).springify()}>
+          <PremiumCard variant="elevated" padding="large" style={styles.card}>
             <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
               Player Type
             </Text>
             <RadioButton.Group onValueChange={value => setPlayerType(value as PlayerType)} value={playerType}>
               <View style={styles.radioGroup}>
-                <View style={styles.radioItem}>
+                <TouchableOpacity
+                  style={[
+                    styles.radioOption,
+                    playerType === 'batsman' && { backgroundColor: theme.colors.primaryContainer }
+                  ]}
+                  onPress={() => setPlayerType('batsman')}
+                  activeOpacity={0.7}
+                >
                   <RadioButton value="batsman" />
                   <Text style={[styles.radioLabel, { color: theme.colors.onSurface }]}>Batsman</Text>
-                </View>
-                <View style={styles.radioItem}>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.radioOption,
+                    playerType === 'bowler' && { backgroundColor: theme.colors.primaryContainer }
+                  ]}
+                  onPress={() => setPlayerType('bowler')}
+                  activeOpacity={0.7}
+                >
                   <RadioButton value="bowler" />
                   <Text style={[styles.radioLabel, { color: theme.colors.onSurface }]}>Bowler</Text>
-                </View>
+                </TouchableOpacity>
               </View>
             </RadioButton.Group>
-          </Card.Content>
-        </Card>
+          </PremiumCard>
+        </Animated.View>
 
         {/* Player Side Selection */}
-        <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-          <Card.Content>
+        <Animated.View entering={FadeInUp.delay(300).springify()}>
+          <PremiumCard variant="elevated" padding="large" style={styles.card}>
             <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
               {playerType === 'batsman' ? 'Batting Side' : 'Bowling Side'}
             </Text>
             <RadioButton.Group onValueChange={value => setPlayerSide(value as PlayerSide)} value={playerSide}>
               <View style={styles.radioGroup}>
-                <View style={styles.radioItem}>
+                <TouchableOpacity
+                  style={[
+                    styles.radioOption,
+                    playerSide === 'right' && { backgroundColor: theme.colors.primaryContainer }
+                  ]}
+                  onPress={() => setPlayerSide('right')}
+                  activeOpacity={0.7}
+                >
                   <RadioButton value="right" />
                   <Text style={[styles.radioLabel, { color: theme.colors.onSurface }]}>Right</Text>
-                </View>
-                <View style={styles.radioItem}>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.radioOption,
+                    playerSide === 'left' && { backgroundColor: theme.colors.primaryContainer }
+                  ]}
+                  onPress={() => setPlayerSide('left')}
+                  activeOpacity={0.7}
+                >
                   <RadioButton value="left" />
                   <Text style={[styles.radioLabel, { color: theme.colors.onSurface }]}>Left</Text>
-                </View>
+                </TouchableOpacity>
               </View>
             </RadioButton.Group>
-          </Card.Content>
-        </Card>
+          </PremiumCard>
+        </Animated.View>
 
         {/* Shot Type Selection - Only for Batsman */}
         {playerType === 'batsman' && (
-          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-            <Card.Content>
+          <Animated.View entering={FadeInUp.delay(400).springify()}>
+            <PremiumCard variant="elevated" padding="large" style={styles.card}>
               <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
                 Shot Type (Optional)
               </Text>
@@ -235,6 +272,7 @@ export default function UploadScreen() {
                       borderColor: theme.colors.outline 
                     }]}
                     onPress={() => setShotTypeMenuVisible(true)}
+                    activeOpacity={0.7}
                   >
                     <Text style={[styles.dropdownText, { color: theme.colors.onSurface }]}>
                       {shotType ? getShotDisplayName(shotType) : 'Select Shot Type (Optional)'}
@@ -262,7 +300,7 @@ export default function UploadScreen() {
 
               {/* Custom Shot Type Input - Show when "Other" is selected */}
               {shotType === 'other' && (
-                <View style={styles.customShotContainer}>
+                <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.customShotContainer}>
                   <TextInput
                     label="Enter Shot Type"
                     value={customShotType}
@@ -270,63 +308,80 @@ export default function UploadScreen() {
                     mode="outlined"
                     placeholder="e.g., reverse_sweep, scoop"
                     style={styles.customShotInput}
+                    outlineColor={theme.colors.outline}
+                    activeOutlineColor={theme.colors.primary}
                   />
-                </View>
+                </Animated.View>
               )}
 
               {/* Clear Selection Button */}
               {shotType && (
-                <Button
-                  mode="text"
+                <TouchableOpacity
                   onPress={() => {
                     setShotType('');
                     setCustomShotType('');
                   }}
-                  style={styles.clearButton}
-                  textColor={theme.colors.error}
+                  style={styles.clearButtonContainer}
+                  activeOpacity={0.7}
                 >
-                  Clear Selection (Use Auto Detection)
-                </Button>
+                  <Text style={[styles.clearButtonText, { color: theme.colors.error }]}>
+                    Clear Selection (Use Auto Detection)
+                  </Text>
+                </TouchableOpacity>
               )}
-            </Card.Content>
-          </Card>
+            </PremiumCard>
+          </Animated.View>
         )}
 
         {/* Bowler Type Selection */}
         {playerType === 'bowler' && (
-          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-            <Card.Content>
+          <Animated.View entering={FadeInUp.delay(400).springify()}>
+            <PremiumCard variant="elevated" padding="large" style={styles.card}>
               <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
                 Bowler Type
               </Text>
               <RadioButton.Group onValueChange={value => setBowlerType(value as BowlerType)} value={bowlerType}>
                 <View style={styles.radioGroup}>
-                  <View style={styles.radioItem}>
+                  <TouchableOpacity
+                    style={[
+                      styles.radioOption,
+                      bowlerType === 'fast_bowler' && { backgroundColor: theme.colors.primaryContainer }
+                    ]}
+                    onPress={() => setBowlerType('fast_bowler')}
+                    activeOpacity={0.7}
+                  >
                     <RadioButton value="fast_bowler" />
                     <Text style={[styles.radioLabel, { color: theme.colors.onSurface }]}>Fast Bowler</Text>
-                  </View>
-                  <View style={styles.radioItem}>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.radioOption,
+                      bowlerType === 'spin_bowler' && { backgroundColor: theme.colors.primaryContainer }
+                    ]}
+                    onPress={() => setBowlerType('spin_bowler')}
+                    activeOpacity={0.7}
+                  >
                     <RadioButton value="spin_bowler" />
                     <Text style={[styles.radioLabel, { color: theme.colors.onSurface }]}>Spin Bowler</Text>
-                  </View>
+                  </TouchableOpacity>
                 </View>
               </RadioButton.Group>
-            </Card.Content>
-          </Card>
+            </PremiumCard>
+          </Animated.View>
         )}
 
         {/* Video Selection */}
-        <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-          <Card.Content>
+        <Animated.View entering={FadeInUp.delay(500).springify()}>
+          <PremiumCard variant="elevated" padding="large" style={styles.card}>
             <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
               Select Video
             </Text>
             
             {!selectedVideo ? (
               <TouchableOpacity
-                style={[styles.uploadButton, { borderColor: theme.colors.outline }]}
+                style={[styles.uploadButton, { borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryContainer + '20' }]}
                 onPress={pickVideo}
-                activeOpacity={0.7}
+                activeOpacity={0.8}
               >
                 <Text style={styles.uploadIcon}>📤</Text>
                 <Text style={[styles.uploadText, { color: theme.colors.primary }]}>
@@ -337,31 +392,34 @@ export default function UploadScreen() {
                 </Text>
               </TouchableOpacity>
             ) : (
-              <Surface style={[styles.videoInfo, { backgroundColor: theme.colors.surfaceVariant }]}>
-                <Text style={styles.videoIcon}>🎥</Text>
-                <View style={styles.videoDetails}>
-                  <Text style={[styles.videoName, { color: theme.colors.onSurface }]}>
-                    {selectedVideo.name}
-                  </Text>
-                  <Text style={[styles.videoSize, { color: theme.colors.onSurfaceVariant }]}>
-                    {formatFileSize(selectedVideo.size)}
-                  </Text>
+              <PremiumCard variant="outlined" padding="medium" style={styles.videoInfo}>
+                <View style={styles.videoContent}>
+                  <Text style={styles.videoIcon}>🎥</Text>
+                  <View style={styles.videoDetails}>
+                    <Text style={[styles.videoName, { color: theme.colors.onSurface }]}>
+                      {selectedVideo.name}
+                    </Text>
+                    <Text style={[styles.videoSize, { color: theme.colors.onSurfaceVariant }]}>
+                      {formatFileSize(selectedVideo.size)}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.removeButton}
+                    onPress={() => setSelectedVideo(null)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.removeIcon}>✕</Text>
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity
-                  style={styles.removeButton}
-                  onPress={() => setSelectedVideo(null)}
-                >
-                  <Text style={styles.removeIcon}>✕</Text>
-                </TouchableOpacity>
-              </Surface>
+              </PremiumCard>
             )}
-          </Card.Content>
-        </Card>
+          </PremiumCard>
+        </Animated.View>
 
         {/* Upload Progress */}
         {isUploading && (
-          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-            <Card.Content>
+          <Animated.View entering={FadeInUp.delay(600).springify()}>
+            <PremiumCard variant="elevated" padding="large" style={styles.card}>
               <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
                 Uploading...
               </Text>
@@ -373,28 +431,28 @@ export default function UploadScreen() {
               <Text style={[styles.progressText, { color: theme.colors.onSurfaceVariant }]}>
                 {progress}% Complete
               </Text>
-            </Card.Content>
-          </Card>
+            </PremiumCard>
+          </Animated.View>
         )}
 
         {/* Upload Button */}
-        <Button
-          mode="contained"
-          onPress={handleUpload}
-          disabled={!selectedVideo || isUploading}
-          loading={isUploading}
-          style={styles.uploadActionButton}
-          contentStyle={styles.uploadActionButtonContent}
-          labelStyle={styles.uploadActionButtonLabel}
-        >
-          {isUploading ? 'Analyzing...' : 'Start Analysis'}
-        </Button>
+        <Animated.View entering={FadeInUp.delay(600).springify()}>
+          <PremiumButton
+            title={isUploading ? 'Analyzing...' : 'Start Analysis'}
+            onPress={handleUpload}
+            variant="primary"
+            size="large"
+            loading={isUploading}
+            disabled={!selectedVideo || isUploading}
+            fullWidth
+          />
+        </Animated.View>
 
         {/* Tips */}
-        <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-          <Card.Content>
+        <Animated.View entering={FadeInUp.delay(700).springify()}>
+          <PremiumCard variant="outlined" padding="large" style={styles.card}>
             <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
-              Tips for Best Results
+              💡 Tips for Best Results
             </Text>
             <View style={styles.tipsList}>
               <Text style={[styles.tip, { color: theme.colors.onSurfaceVariant }]}>
@@ -410,8 +468,8 @@ export default function UploadScreen() {
                 • Include the complete action in the frame
               </Text>
             </View>
-          </Card.Content>
-        </Card>
+          </PremiumCard>
+        </Animated.View>
       </View>
     </ScrollView>
   );
@@ -439,16 +497,24 @@ const styles = StyleSheet.create({
   },
   card: {
     marginBottom: spacing.lg,
-    ...shadows.small,
   },
   cardTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
     marginBottom: spacing.md,
+    letterSpacing: 0.2,
   },
   radioGroup: {
     flexDirection: 'row',
     justifyContent: 'space-around',
+    gap: spacing.sm,
+  },
+  radioOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.sm,
+    borderRadius: borderRadius.md,
+    flex: 1,
   },
   radioItem: {
     flexDirection: 'row',
@@ -461,29 +527,33 @@ const styles = StyleSheet.create({
   uploadButton: {
     borderWidth: 2,
     borderStyle: 'dashed',
-    borderRadius: borderRadius.lg,
-    padding: spacing.xl,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl + 8,
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 180,
   },
   uploadIcon: {
-    fontSize: 48,
-    marginBottom: spacing.sm,
+    fontSize: 56,
+    marginBottom: spacing.md,
   },
   uploadText: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
     marginBottom: spacing.xs,
+    letterSpacing: 0.3,
   },
   uploadSubtext: {
-    fontSize: 14,
+    fontSize: 15,
     textAlign: 'center',
+    lineHeight: 20,
   },
   videoInfo: {
+    marginTop: spacing.md,
+  },
+  videoContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
   },
   videoIcon: {
     fontSize: 32,
@@ -513,17 +583,6 @@ const styles = StyleSheet.create({
   progressText: {
     fontSize: 14,
     textAlign: 'center',
-  },
-  uploadActionButton: {
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing.lg,
-  },
-  uploadActionButtonContent: {
-    paddingVertical: spacing.md,
-  },
-  uploadActionButtonLabel: {
-    fontSize: 18,
-    fontWeight: '600',
   },
   tipsList: {
     gap: spacing.sm,
@@ -560,7 +619,12 @@ const styles = StyleSheet.create({
   customShotInput: {
     marginBottom: spacing.sm,
   },
-  clearButton: {
-    marginTop: spacing.xs,
+  clearButtonContainer: {
+    marginTop: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  clearButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 }); 

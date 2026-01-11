@@ -1,11 +1,12 @@
 import { Tabs } from 'expo-router';
-import { Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 import { useTheme } from 'react-native-paper';
+import { borderRadius, shadows } from '../../src/theme';
 
 export default function TabLayout() {
   const theme = useTheme();
 
-  const TabBarIcon = ({ name, color }: { name: string; color: string }) => {
+  const TabBarIcon = ({ name, color, focused }: { name: string; color: string; focused: boolean }) => {
     const getIcon = () => {
       switch (name) {
         case 'home': return '🏠';
@@ -16,7 +17,20 @@ export default function TabLayout() {
       }
     };
 
-    return <Text style={{ fontSize: 20, color }}>{getIcon()}</Text>;
+    return (
+      <Text 
+        style={[
+          styles.icon, 
+          { 
+            color, 
+            fontSize: focused ? 24 : 22,
+            transform: [{ scale: focused ? 1.1 : 1 }],
+          }
+        ]}
+      >
+        {getIcon()}
+      </Text>
+    );
   };
 
   return (
@@ -27,7 +41,19 @@ export default function TabLayout() {
         tabBarInactiveTintColor: theme.colors.onSurfaceVariant,
         tabBarStyle: {
           backgroundColor: theme.colors.surface,
-          borderTopColor: theme.colors.outline,
+          borderTopWidth: 0,
+          height: 70,
+          paddingBottom: 10,
+          paddingTop: 10,
+          ...shadows.lg,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '600',
+          marginTop: 4,
+        },
+        tabBarItemStyle: {
+          paddingVertical: 4,
         },
       }}
     >
@@ -35,30 +61,36 @@ export default function TabLayout() {
         name="home"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => <TabBarIcon name="home" color={color} />,
+          tabBarIcon: ({ color, focused }) => <TabBarIcon name="home" color={color} focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="upload"
         options={{
           title: 'Upload',
-          tabBarIcon: ({ color }) => <TabBarIcon name="upload" color={color} />,
+          tabBarIcon: ({ color, focused }) => <TabBarIcon name="upload" color={color} focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="history"
         options={{
           title: 'History',
-          tabBarIcon: ({ color }) => <TabBarIcon name="history" color={color} />,
+          tabBarIcon: ({ color, focused }) => <TabBarIcon name="history" color={color} focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color }) => <TabBarIcon name="profile" color={color} />,
+          tabBarIcon: ({ color, focused }) => <TabBarIcon name="profile" color={color} focused={focused} />,
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  icon: {
+    textAlign: 'center',
+  },
+});

@@ -1,10 +1,14 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { Button, Surface, Text, TextInput, useTheme } from 'react-native-paper';
+import { ScrollView, StyleSheet, TouchableOpacity, View, KeyboardAvoidingView, Platform } from 'react-native';
+import { Text, TextInput, useTheme } from 'react-native-paper';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import Toast from 'react-native-toast-message';
+import { PremiumButton } from '../src/components/ui/PremiumButton';
+import { PremiumCard } from '../src/components/ui/PremiumCard';
 import apiService from '../src/services/api';
-import { borderRadius, shadows, spacing } from '../src/theme';
+import { borderRadius, spacing } from '../src/theme';
 
 export default function LoginScreen() {
   const theme = useTheme();
@@ -45,6 +49,20 @@ export default function LoginScreen() {
         text2: 'Email is required for registration',
       });
       return;
+    }
+
+    // Email format validation
+    if (!isLogin && email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        console.log('❌ [LOGIN_SCREEN] Validation failed: Invalid email format');
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: 'Please enter a valid email address',
+        });
+        return;
+      }
     }
 
     if (!isLogin && password !== confirmPassword) {
@@ -141,100 +159,158 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.appIcon}>🏏</Text>
-          <Text style={[styles.appTitle, { color: theme.colors.onBackground }]}>
-            CrickCoach AI
-          </Text>
-          <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>
-            {isLogin ? 'Welcome back!' : 'Create your account'}
-          </Text>
-        </View>
-
-        {/* Auth Card */}
-        <Surface style={[styles.authCard, { backgroundColor: theme.colors.surface }]}>
-          <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
-            {isLogin ? 'Login' : 'Register'}
-          </Text>
-
-          {/* Username Input */}
-          <TextInput
-            label="Username"
-            value={username}
-            onChangeText={setUsername}
-            mode="outlined"
-            style={styles.input}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-
-          {/* Email Input (Registration only) */}
-          {!isLogin && (
-            <TextInput
-              label="Email"
-              value={email}
-              onChangeText={setEmail}
-              mode="outlined"
-              style={styles.input}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          )}
-
-          {/* Password Input */}
-          <TextInput
-            label="Password"
-            value={password}
-            onChangeText={setPassword}
-            mode="outlined"
-            style={styles.input}
-            secureTextEntry
-          />
-
-          {/* Confirm Password (Registration only) */}
-          {!isLogin && (
-            <TextInput
-              label="Confirm Password"
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              mode="outlined"
-              style={styles.input}
-              secureTextEntry
-            />
-          )}
-
-          {/* Submit Button */}
-          <Button
-            mode="contained"
-            onPress={handleSubmit}
-            loading={loading}
-            disabled={loading}
-            style={styles.submitButton}
-            contentStyle={styles.submitButtonContent}
+    <KeyboardAvoidingView 
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <LinearGradient
+        colors={[theme.colors.primary + '15', theme.colors.secondary + '08']}
+        style={styles.gradient}
+      >
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Header */}
+          <Animated.View 
+            entering={FadeInDown.delay(100).springify()}
+            style={styles.header}
           >
-            {isLogin ? 'Login' : 'Register'}
-          </Button>
+            <Animated.Text 
+              entering={FadeInUp.delay(200).springify()}
+              style={styles.appIcon}
+            >
+              🏏
+            </Animated.Text>
+            <Animated.Text 
+              entering={FadeInDown.delay(300).springify()}
+              style={[styles.appTitle, { color: theme.colors.onBackground }]}
+            >
+              CrickCoach AI
+            </Animated.Text>
+            <Animated.Text 
+              entering={FadeInDown.delay(400).springify()}
+              style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}
+            >
+              {isLogin ? 'Welcome back!' : 'Create your account'}
+            </Animated.Text>
+          </Animated.View>
 
-          {/* Toggle Mode */}
-          <TouchableOpacity onPress={toggleMode} style={styles.toggleContainer}>
-            <Text style={[styles.toggleText, { color: theme.colors.primary }]}>
-              {isLogin ? "Don't have an account? Register" : 'Already have an account? Login'}
-            </Text>
-          </TouchableOpacity>
-        </Surface>
+          {/* Auth Card */}
+          <Animated.View entering={FadeInUp.delay(500).springify()}>
+            <PremiumCard variant="elevated" padding="large" style={styles.authCard}>
+              <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
+                {isLogin ? 'Login' : 'Register'}
+              </Text>
 
-        {/* Back to Landing */}
-        <TouchableOpacity onPress={() => router.back()} style={styles.backContainer}>
-          <Text style={[styles.backText, { color: theme.colors.onSurfaceVariant }]}>
-            ← Back to Home
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </View>
+              {/* Username Input */}
+              <TextInput
+                label="Username"
+                value={username}
+                onChangeText={setUsername}
+                mode="outlined"
+                style={styles.input}
+                autoCapitalize="none"
+                autoCorrect={false}
+                outlineColor={theme.colors.outline}
+                activeOutlineColor={theme.colors.primary}
+                contentStyle={styles.inputContent}
+              />
+
+              {/* Email Input (Registration only) */}
+              {!isLogin && (
+                <Animated.View entering={FadeInDown.delay(100).springify()}>
+                  <TextInput
+                    label="Email"
+                    value={email}
+                    onChangeText={setEmail}
+                    mode="outlined"
+                    style={styles.input}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    outlineColor={theme.colors.outline}
+                    activeOutlineColor={theme.colors.primary}
+                    contentStyle={styles.inputContent}
+                  />
+                </Animated.View>
+              )}
+
+              {/* Password Input */}
+              <TextInput
+                label="Password"
+                value={password}
+                onChangeText={setPassword}
+                mode="outlined"
+                style={styles.input}
+                secureTextEntry
+                outlineColor={theme.colors.outline}
+                activeOutlineColor={theme.colors.primary}
+                contentStyle={styles.inputContent}
+              />
+
+              {/* Confirm Password (Registration only) */}
+              {!isLogin && (
+                <Animated.View entering={FadeInDown.delay(200).springify()}>
+                  <TextInput
+                    label="Confirm Password"
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    mode="outlined"
+                    style={styles.input}
+                    secureTextEntry
+                    outlineColor={theme.colors.outline}
+                    activeOutlineColor={theme.colors.primary}
+                    contentStyle={styles.inputContent}
+                  />
+                </Animated.View>
+              )}
+
+              {/* Submit Button */}
+              <View style={styles.buttonContainer}>
+                <PremiumButton
+                  title={isLogin ? 'Login' : 'Register'}
+                  onPress={handleSubmit}
+                  variant="primary"
+                  size="large"
+                  loading={loading}
+                  disabled={loading}
+                  fullWidth
+                />
+              </View>
+
+              {/* Toggle Mode */}
+              <TouchableOpacity 
+                onPress={toggleMode} 
+                style={styles.toggleContainer}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.toggleText, { color: theme.colors.primary }]}>
+                  {isLogin ? "Don't have an account? " : 'Already have an account? '}
+                  <Text style={styles.toggleTextBold}>
+                    {isLogin ? 'Register' : 'Login'}
+                  </Text>
+                </Text>
+              </TouchableOpacity>
+            </PremiumCard>
+          </Animated.View>
+
+          {/* Back to Landing */}
+          <Animated.View entering={FadeInUp.delay(600).springify()}>
+            <TouchableOpacity 
+              onPress={() => router.back()} 
+              style={styles.backContainer}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.backText, { color: theme.colors.onSurfaceVariant }]}>
+                ← Back to Home
+              </Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </ScrollView>
+      </LinearGradient>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -242,62 +318,76 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  gradient: {
+    flex: 1,
+  },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
     padding: spacing.lg,
+    paddingTop: spacing.xxl,
+    paddingBottom: spacing.xl,
   },
   header: {
     alignItems: 'center',
     marginBottom: spacing.xl,
   },
   appIcon: {
-    fontSize: 64,
+    fontSize: 72,
     marginBottom: spacing.md,
   },
   appTitle: {
-    fontSize: 32,
-    fontWeight: 'bold',
+    fontSize: 36,
+    fontWeight: '700',
     marginBottom: spacing.sm,
+    letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 17,
     textAlign: 'center',
+    fontWeight: '500',
   },
   authCard: {
-    padding: spacing.xl,
-    borderRadius: borderRadius.lg,
-    ...shadows.medium,
+    marginBottom: spacing.lg,
   },
   cardTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 28,
+    fontWeight: '700',
     textAlign: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
+    letterSpacing: -0.3,
   },
   input: {
     marginBottom: spacing.md,
+    backgroundColor: 'transparent',
   },
-  submitButton: {
+  inputContent: {
+    fontSize: 16,
+  },
+  buttonContainer: {
     marginTop: spacing.md,
-    borderRadius: borderRadius.lg,
-  },
-  submitButtonContent: {
-    paddingVertical: spacing.md,
+    marginBottom: spacing.md,
   },
   toggleContainer: {
     marginTop: spacing.lg,
     alignItems: 'center',
+    paddingVertical: spacing.sm,
   },
   toggleText: {
     fontSize: 16,
     fontWeight: '500',
+    textAlign: 'center',
+  },
+  toggleTextBold: {
+    fontWeight: '700',
   },
   backContainer: {
     marginTop: spacing.xl,
     alignItems: 'center',
+    paddingVertical: spacing.sm,
   },
   backText: {
     fontSize: 16,
+    fontWeight: '500',
   },
 }); 
