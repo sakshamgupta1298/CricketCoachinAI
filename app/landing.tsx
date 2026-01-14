@@ -62,7 +62,7 @@ export default function LandingScreen() {
             style={styles.iconContainer}
           >
             <Image
-              source={require('../assets/images/logo_icon.png')}
+              source={require('../assets/images/logo-icon.png')}
               style={styles.appIcon}
               contentFit="contain"
             />
@@ -212,14 +212,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   appIcon: {
-    width: 260,
-    height: 260,
+    width: 180,
+    height: 180,
+    marginTop: 30,
   },
   appTitle: {
     fontSize: 42,
     fontWeight: '600',
     color: 'white',
-    marginTop: -80,
+    marginTop: -40,
     marginBottom: spacing.xs,
     textAlign: 'center',
     letterSpacing: -0.5,

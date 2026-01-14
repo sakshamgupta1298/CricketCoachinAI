@@ -148,7 +148,7 @@ def require_auth(f):
     return decorated_function
 
 # Global model variables - loaded once at startup
-shot_prediction_model = None
+# shot_prediction_model = None  # Commented out - users will select shot type manually
 pose_detection_model = None
 movenet_signature = None
 keypoints_names = ["nose", "left_eye", "right_eye", "left_ear", "right_ear", "left_shoulder", "right_shoulder", "left_elbow", "right_elbow", "left_wrist", "right_wrist", "left_hip", "right_hip", "left_knee", "right_knee", "left_ankle", "right_ankle"]
@@ -226,22 +226,24 @@ transform = T.Compose([
 ])
 
 def initialize_models():
-    global shot_prediction_model, pose_detection_model, movenet_signature
+    # global shot_prediction_model, pose_detection_model, movenet_signature  # shot_prediction_model commented out
+    global pose_detection_model, movenet_signature
     logger.info("Initializing models...")
-    shot_prediction_model = load_model()
-    logger.info("Shot prediction model loaded successfully")
+    # shot_prediction_model = load_model()  # Commented out - users will select shot type manually
+    # logger.info("Shot prediction model loaded successfully")
     pose_detection_model = hub.load("https://tfhub.dev/google/movenet/singlepose/thunder/4")
     movenet_signature = pose_detection_model.signatures['serving_default']
     logger.info("Pose detection model loaded successfully")
     logger.info("All models initialized successfully!")
 
-def get_shot_prediction_model():
-    global shot_prediction_model
-    if shot_prediction_model is None:
-        logger.warning("Shot prediction model not initialized, loading now...")
-        shot_prediction_model = load_model()
-        logger.info("Shot prediction model loaded")
-    return shot_prediction_model
+# def get_shot_prediction_model():
+#     global shot_prediction_model
+#     if shot_prediction_model is None:
+#         logger.warning("Shot prediction model not initialized, loading now...")
+#         shot_prediction_model = load_model()
+#         logger.info("Shot prediction model loaded")
+#     return shot_prediction_model
+# Commented out - users will select shot type manually
 
 def get_pose_detection_model():
     global pose_detection_model
@@ -285,85 +287,86 @@ def cleanup_old_files(folder, max_age_hours=24):
                 os.remove(filepath)
                 logger.info(f"Deleted old file: {filepath}")
 
-def predict_shot(video_path, model):
-    logger.info(f"Starting shot prediction for video: {video_path}")
-    logger.debug(f"Model type: {type(model)}")
-    logger.debug(f"Model in eval mode: {not model.training}")
-    
-    cap = cv2.VideoCapture(video_path)
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    logger.info(f"Total frames in video: {total_frames}")
-    
-    # Check if video has frames
-    if total_frames <= 0:
-        logger.error(f"Video file has no frames or is corrupted: {video_path}")
-        cap.release()
-        return 'coverdrive'  # Default fallback
-    
-    indices = sorted(torch.randperm(total_frames)[:32].tolist()) if total_frames >= 32 else list(range(total_frames)) + [total_frames - 1] * (32 - total_frames)
-    logger.debug(f"Selected frame indices: {indices[:5]}... (showing first 5)")
-
-    frames, current_idx, idx_set = [], 0, set(indices)
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-        if current_idx in idx_set:
-            try:
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                frame = transform(frame)
-                frames.append(frame)
-                if len(frames) == len(indices):
-                    break
-            except Exception as e:
-                logger.warning(f"Error processing frame {current_idx}: {e}")
-        current_idx += 1
-    cap.release()
-    
-    logger.info(f"Successfully extracted {len(frames)} frames")
-
-    # Check if we extracted any frames
-    if not frames:
-        logger.error(f"No frames extracted from video: {video_path}")
-        return 'coverdrive'  # Default fallback
-    
-    # Check if we have enough frames
-    if len(frames) < 1:
-        logger.error(f"Insufficient frames extracted: {len(frames)}")
-        return 'coverdrive'  # Default fallback
-
-    try:
-        logger.debug(f"Processing {len(frames)} frames for prediction")
-        frames = torch.stack(frames).permute(1, 0, 2, 3)
-        fast_pathway = frames
-        slow_pathway = frames[:, ::4, :, :]
-        inputs = [slow_pathway.unsqueeze(0), fast_pathway.unsqueeze(0)]
-        
-        logger.debug(f"Input shapes - Fast: {fast_pathway.shape}, Slow: {slow_pathway.shape}")
-
-        with torch.no_grad():
-            outputs = model([inp for inp in inputs])
-            logger.debug(f"Model outputs: {outputs}")
-            logger.debug(f"Model output shape: {outputs.shape}")
-            logger.debug(f"Raw output values: {outputs.tolist()}")
-            
-            # Get probabilities using softmax
-            probs = torch.softmax(outputs, dim=1)
-            logger.info(f"Prediction probabilities - Coverdrive: {probs[0][0].item():.4f}, Pull Shot: {probs[0][1].item():.4f}")
-            
-            _, pred = torch.max(outputs, 1)
-            pred_value = pred.item()
-            logger.info(f"Predicted class index: {pred_value}")
-            
-            shot_type = ['coverdrive', 'pull_shot'][pred_value]
-            logger.info(f"Final prediction: {shot_type}")
-            return shot_type
-    except Exception as e:
-        logger.error(f"Error in shot prediction: {str(e)}", exc_info=True)
-        logger.error(f"Exception type: {type(e).__name__}")
-        import traceback
-        logger.error(f"Full traceback: {traceback.format_exc()}")
-        return 'coverdrive'  # Default fallback
+# def predict_shot(video_path, model):
+#     logger.info(f"Starting shot prediction for video: {video_path}")
+#     logger.debug(f"Model type: {type(model)}")
+#     logger.debug(f"Model in eval mode: {not model.training}")
+#     
+#     cap = cv2.VideoCapture(video_path)
+#     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+#     logger.info(f"Total frames in video: {total_frames}")
+#     
+#     # Check if video has frames
+#     if total_frames <= 0:
+#         logger.error(f"Video file has no frames or is corrupted: {video_path}")
+#         cap.release()
+#         return 'coverdrive'  # Default fallback
+#     
+#     indices = sorted(torch.randperm(total_frames)[:32].tolist()) if total_frames >= 32 else list(range(total_frames)) + [total_frames - 1] * (32 - total_frames)
+#     logger.debug(f"Selected frame indices: {indices[:5]}... (showing first 5)")
+# 
+#     frames, current_idx, idx_set = [], 0, set(indices)
+#     while True:
+#         ret, frame = cap.read()
+#         if not ret:
+#             break
+#         if current_idx in idx_set:
+#             try:
+#                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+#                 frame = transform(frame)
+#                 frames.append(frame)
+#                 if len(frames) == len(indices):
+#                     break
+#             except Exception as e:
+#                 logger.warning(f"Error processing frame {current_idx}: {e}")
+#         current_idx += 1
+#     cap.release()
+#     
+#     logger.info(f"Successfully extracted {len(frames)} frames")
+# 
+#     # Check if we extracted any frames
+#     if not frames:
+#         logger.error(f"No frames extracted from video: {video_path}")
+#         return 'coverdrive'  # Default fallback
+#     
+#     # Check if we have enough frames
+#     if len(frames) < 1:
+#         logger.error(f"Insufficient frames extracted: {len(frames)}")
+#         return 'coverdrive'  # Default fallback
+# 
+#     try:
+#         logger.debug(f"Processing {len(frames)} frames for prediction")
+#         frames = torch.stack(frames).permute(1, 0, 2, 3)
+#         fast_pathway = frames
+#         slow_pathway = frames[:, ::4, :, :]
+#         inputs = [slow_pathway.unsqueeze(0), fast_pathway.unsqueeze(0)]
+#         
+#         logger.debug(f"Input shapes - Fast: {fast_pathway.shape}, Slow: {slow_pathway.shape}")
+# 
+#         with torch.no_grad():
+#             outputs = model([inp for inp in inputs])
+#             logger.debug(f"Model outputs: {outputs}")
+#             logger.debug(f"Model output shape: {outputs.shape}")
+#             logger.debug(f"Raw output values: {outputs.tolist()}")
+#             
+#             # Get probabilities using softmax
+#             probs = torch.softmax(outputs, dim=1)
+#             logger.info(f"Prediction probabilities - Coverdrive: {probs[0][0].item():.4f}, Pull Shot: {probs[0][1].item():.4f}")
+#             
+#             _, pred = torch.max(outputs, 1)
+#             pred_value = pred.item()
+#             logger.info(f"Predicted class index: {pred_value}")
+#             
+#             shot_type = ['coverdrive', 'pull_shot'][pred_value]
+#             logger.info(f"Final prediction: {shot_type}")
+#             return shot_type
+#     except Exception as e:
+#         logger.error(f"Error in shot prediction: {str(e)}", exc_info=True)
+#         logger.error(f"Exception type: {type(e).__name__}")
+#         import traceback
+#         logger.error(f"Full traceback: {traceback.format_exc()}")
+#         return 'coverdrive'  # Default fallback
+# Commented out - users will select shot type manually
 
 def get_feedback_from_gpt_for_bowling(keypoint_csv_path, bowler_type='fast_bowler', player_level='intermediate'):
     logger.info(f"Getting Gemini feedback for bowling type: {bowler_type}, player level: {player_level}")
@@ -2116,8 +2119,14 @@ def upload_file():
         try:
             # model = get_shot_prediction_model()
             if player_type == 'batsman':
-                model = get_shot_prediction_model()
-                shot_type = predict_shot(filepath, model)
+                # model = get_shot_prediction_model()  # Commented out - users will select shot type manually
+                # shot_type = predict_shot(filepath, model)  # Commented out - users will select shot type manually
+                shot_type = request.form.get('shot_type', '').strip()  # Get shot type from user input
+                
+                # Require shot_type to be provided by user
+                if not shot_type:
+                    return jsonify({'error': 'Shot type is required. Please select a shot type.'}), 400
+                
                 keypoints_path, annotated_video_path = extract_pose_keypoints(filepath, 'batting')
                 batter_side = request.form.get('batter_side', 'right')
                 gpt_feedback = get_feedback_from_gpt(shot_type, keypoints_path)
@@ -2195,25 +2204,28 @@ def api_upload_file():
                 # Batting analysis
                 logger.info("Starting batting analysis...")
                 
-                # Check if shot_type is provided by user (skip auto-detection if provided)
+                # Get shot_type from user input (shot prediction model commented out)
                 shot_type = request.form.get('shot_type', '').strip()
                 
-                if shot_type:
-                    # User provided shot_type, skip auto-detection
-                    logger.info(f"Using user-provided shot type: {shot_type}")
-                else:
-                    # Auto-detect shot type using ML model
-                    logger.info("Shot type not provided, starting auto-detection...")
-                    logger.info("Getting shot prediction model...")
-                    model = get_shot_prediction_model()
-                    logger.info("Model ready for prediction")
-                    logger.info("Predicting shot type...")
-                    try:
-                        shot_type = predict_shot(filepath, model)
-                        logger.info(f"Shot type predicted: {shot_type}")
-                    except Exception as e:
-                        logger.error(f"Error in shot prediction: {str(e)}", exc_info=True)
-                        shot_type = 'coverdrive'  # Default fallback
+                # Require shot_type to be provided by user
+                if not shot_type:
+                    logger.warning("Shot type not provided by user")
+                    return jsonify({'error': 'Shot type is required. Please select a shot type.'}), 400
+                
+                # User provided shot_type
+                logger.info(f"Using user-provided shot type: {shot_type}")
+                # # Auto-detect shot type using ML model (COMMENTED OUT)
+                # logger.info("Shot type not provided, starting auto-detection...")
+                # logger.info("Getting shot prediction model...")
+                # model = get_shot_prediction_model()
+                # logger.info("Model ready for prediction")
+                # logger.info("Predicting shot type...")
+                # try:
+                #     shot_type = predict_shot(filepath, model)
+                #     logger.info(f"Shot type predicted: {shot_type}")
+                # except Exception as e:
+                #     logger.error(f"Error in shot prediction: {str(e)}", exc_info=True)
+                #     shot_type = 'coverdrive'  # Default fallback
                 
                 logger.info("Extracting pose keypoints...")
                 try:
@@ -3046,6 +3058,77 @@ def logout():
         'success': True,
         'message': 'Logout successful'
     })
+
+@app.route('/api/auth/change-password', methods=['POST'])
+@require_auth
+def change_password():
+    """Change user password"""
+    try:
+        logger.info("=== CHANGE PASSWORD REQUEST ===")
+        data = request.get_json()
+        logger.debug(f"Request data: {data}")
+        
+        if not data:
+            logger.warning("No data provided in change password request")
+            return jsonify({'error': 'No data provided'}), 400
+        
+        old_password = data.get('old_password')
+        new_password = data.get('new_password')
+        user_id = request.user['user_id']
+        username = request.user['username']
+        
+        logger.info(f"Change password attempt for user: {username} (ID: {user_id})")
+        
+        if not old_password or not new_password:
+            logger.warning("Missing old_password or new_password in change password request")
+            return jsonify({'error': 'Old password and new password are required'}), 400
+        
+        if len(new_password) < 6:
+            logger.warning("New password too short in change password request")
+            return jsonify({'error': 'New password must be at least 6 characters long'}), 400
+        
+        # Get user from database
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        logger.debug("Querying database for user...")
+        cursor.execute('SELECT * FROM users WHERE id = ?', (user_id,))
+        user = cursor.fetchone()
+        
+        if not user:
+            conn.close()
+            logger.warning(f"User not found in database: {user_id}")
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Verify old password
+        logger.debug("Verifying old password...")
+        password_valid = bcrypt.checkpw(old_password.encode('utf-8'), user['password_hash'].encode('utf-8'))
+        
+        if not password_valid:
+            conn.close()
+            logger.warning(f"Old password verification failed for user: {username}")
+            return jsonify({'error': 'Current password is incorrect'}), 401
+        
+        # Hash new password
+        logger.debug("Hashing new password...")
+        new_password_hash = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
+        
+        # Update password in database
+        logger.debug("Updating password in database...")
+        cursor.execute('UPDATE users SET password_hash = ? WHERE id = ?', (new_password_hash.decode('utf-8'), user_id))
+        conn.commit()
+        conn.close()
+        
+        logger.info(f"Password changed successfully for user: {username}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Password changed successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Change password error: {str(e)}", exc_info=True)
+        return jsonify({'error': 'Failed to change password'}), 500
 
 @app.route('/api/auth/delete-account', methods=['POST'])
 @require_auth

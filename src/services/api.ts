@@ -999,6 +999,65 @@ class ApiService {
     }
   }
 
+  async changePassword(oldPassword: string, newPassword: string): Promise<ApiResponse<any>> {
+    try {
+      console.log('=== CHANGE PASSWORD PROCESS STARTED ===');
+      
+      const token = await this.getStoredToken();
+      console.log('Stored token found:', token ? 'Yes' : 'No');
+      
+      if (!token) {
+        return {
+          success: false,
+          error: 'No authentication token found',
+        };
+      }
+      
+      if (!oldPassword || !newPassword) {
+        return {
+          success: false,
+          error: 'Old password and new password are required',
+        };
+      }
+      
+      if (newPassword.length < 6) {
+        return {
+          success: false,
+          error: 'New password must be at least 6 characters long',
+        };
+      }
+      
+      console.log('Calling backend change password endpoint...');
+      const response = await this.jsonApi.post('/api/auth/change-password', {
+        old_password: oldPassword,
+        new_password: newPassword,
+      }, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      console.log('Backend change password call successful');
+      
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error: any) {
+      console.error('Change Password Error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+      
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message,
+      };
+    }
+  }
+
   async deleteAccount(): Promise<ApiResponse<any>> {
     try {
       console.log('=== DELETE ACCOUNT PROCESS STARTED ===');

@@ -59,6 +59,16 @@ function ThemedApp() {
                 headerShown: false,
               }}
             />
+            <Stack.Screen 
+              name="change-password" 
+              options={{
+                headerShown: true,
+                title: 'Change Password',
+                headerBackTitle: 'Back',
+                headerStyle: { backgroundColor: theme.colors.surface },
+                headerTintColor: theme.colors.onSurface,
+              }}
+            />
           </Stack>
           <Toast />
           <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
