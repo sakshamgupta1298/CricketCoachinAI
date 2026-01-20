@@ -1,8 +1,10 @@
-import React, { createContext, ReactNode, useContext, useReducer } from 'react';
+import React, { createContext, ReactNode, useContext, useEffect, useReducer } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
+import backgroundUploadService from '../services/backgroundUpload';
 import { AnalysisResult, HistoryItem, UploadFormData, UploadState } from '../types';
 
 interface UploadContextType extends UploadState {
-  startUpload: (formData: UploadFormData) => void;
+  startUpload: (formData: UploadFormData) => Promise<AnalysisResult>;
   updateProgress: (progress: number) => void;
   completeUpload: (result: AnalysisResult) => void;
   cancelUpload: () => void;
@@ -84,8 +86,73 @@ interface UploadProviderProps {
 export const UploadProvider: React.FC<UploadProviderProps> = ({ children }) => {
   const [state, dispatch] = useReducer(uploadReducer, initialState);
 
-  const startUpload = (formData: UploadFormData) => {
+  // Check for persisted upload state on mount
+  useEffect(() => {
+    const checkPersistedUpload = async () => {
+      const uploadState = backgroundUploadService.getUploadState();
+      if (uploadState) {
+        if (uploadState.status === 'completed' && uploadState.result) {
+          // Upload already completed, just update UI
+          console.log('✅ [UPLOAD_CONTEXT] Found completed upload in background');
+          dispatch({ type: 'COMPLETE_UPLOAD', payload: uploadState.result });
+        } else if (uploadState.status === 'uploading' || uploadState.status === 'processing') {
+          // Upload still in progress, restore UI state and wait for completion
+          console.log('🔄 [UPLOAD_CONTEXT] Found persisted upload, restoring state...');
+          dispatch({ type: 'START_UPLOAD', payload: uploadState.formData });
+          
+          // Wait for the existing upload to complete
+          try {
+            const result = await backgroundUploadService.waitForUpload();
+            if (result) {
+              dispatch({ type: 'COMPLETE_UPLOAD', payload: result });
+            }
+          } catch (error: any) {
+            console.error('❌ [UPLOAD_CONTEXT] Persisted upload failed:', error);
+            dispatch({ type: 'CANCEL_UPLOAD' });
+          }
+        } else if (uploadState.status === 'failed') {
+          // Upload failed, clear state
+          console.log('❌ [UPLOAD_CONTEXT] Found failed upload:', uploadState.error);
+          dispatch({ type: 'CANCEL_UPLOAD' });
+        }
+      }
+    };
+
+    checkPersistedUpload();
+  }, []);
+
+  // Listen for app state changes to check upload status
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active' && state.isUploading) {
+        // App came to foreground, check if upload completed
+        const uploadState = backgroundUploadService.getUploadState();
+        if (uploadState?.status === 'completed' && uploadState.result) {
+          dispatch({ type: 'COMPLETE_UPLOAD', payload: uploadState.result });
+        } else if (uploadState?.status === 'failed') {
+          dispatch({ type: 'CANCEL_UPLOAD' });
+        }
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [state.isUploading]);
+
+  const startUpload = async (formData: UploadFormData) => {
     dispatch({ type: 'START_UPLOAD', payload: formData });
+    
+    // Start background upload
+    try {
+      const result = await backgroundUploadService.startUpload(formData);
+      dispatch({ type: 'COMPLETE_UPLOAD', payload: result });
+      return result;
+    } catch (error: any) {
+      console.error('❌ [UPLOAD_CONTEXT] Upload failed:', error);
+      dispatch({ type: 'CANCEL_UPLOAD' });
+      throw error;
+    }
   };
 
   const updateProgress = (progress: number) => {
@@ -97,6 +164,7 @@ export const UploadProvider: React.FC<UploadProviderProps> = ({ children }) => {
   };
 
   const cancelUpload = () => {
+    backgroundUploadService.cancelUpload();
     dispatch({ type: 'CANCEL_UPLOAD' });
   };
 

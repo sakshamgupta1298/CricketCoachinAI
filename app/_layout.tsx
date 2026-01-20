@@ -26,8 +26,15 @@ function ThemedApp() {
               headerShown: false,
               contentStyle: { backgroundColor: theme.colors.background },
             }}
-            initialRouteName="landing"
+            initialRouteName="splash"
           >
+            <Stack.Screen 
+              name="splash" 
+              options={{ 
+                headerShown: false,
+                gestureEnabled: false,
+              }} 
+            />
             <Stack.Screen 
               name="landing" 
               options={{ 

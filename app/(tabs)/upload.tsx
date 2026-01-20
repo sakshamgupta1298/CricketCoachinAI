@@ -1,10 +1,11 @@
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { Menu, ProgressBar, RadioButton, Text, TextInput, useTheme } from 'react-native-paper';
+import { Menu, RadioButton, Text, TextInput, useTheme } from 'react-native-paper';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import Toast from 'react-native-toast-message';
+import AnalysisScreen from '../../src/components/AnalysisScreen';
 import { PremiumButton } from '../../src/components/ui/PremiumButton';
 import { PremiumCard } from '../../src/components/ui/PremiumCard';
 import { useUpload } from '../../src/context/UploadContext';
@@ -28,6 +29,20 @@ export default function UploadScreen() {
     size: number;
     type: string;
   } | null>(null);
+  const [analysisStatus, setAnalysisStatus] = useState<'uploading' | 'processing' | 'analyzing'>('uploading');
+
+  // Update analysis status based on progress
+  useEffect(() => {
+    if (isUploading) {
+      if (progress < 33) {
+        setAnalysisStatus('uploading');
+      } else if (progress < 66) {
+        setAnalysisStatus('processing');
+      } else {
+        setAnalysisStatus('analyzing');
+      }
+    }
+  }, [isUploading, progress]);
 
   // Major cricket batting shots
   const majorShots = [
@@ -130,12 +145,10 @@ export default function UploadScreen() {
         formData.bowler_type = bowlerType;
       }
 
-      startUpload(formData);
+      // Start background upload - this will continue even if app goes to background
+      const result = await startUpload(formData);
 
-      const response = await apiService.uploadVideo(formData);
-
-      if (response.success && response.data) {
-        completeUpload(response.data);
+      if (result) {
         Toast.show({
           type: 'success',
           text1: 'Analysis Complete!',
@@ -143,10 +156,10 @@ export default function UploadScreen() {
         });
         router.push({
           pathname: '/results',
-          params: { result: JSON.stringify(response.data) }
+          params: { result: JSON.stringify(result) }
         });
       } else {
-        throw new Error(response.error || 'Upload failed');
+        throw new Error('Upload failed - no result received');
       }
     } catch (error: any) {
       console.error('Upload error:', error);
@@ -163,11 +176,19 @@ export default function UploadScreen() {
   };
 
   return (
-    <ScrollView 
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.content}>
+    <>
+      {/* Animated Analysis Screen */}
+      <AnalysisScreen
+        visible={isUploading}
+        progress={progress}
+        status={analysisStatus}
+      />
+
+      <ScrollView 
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.content}>
         {/* Header */}
         <Animated.View 
           entering={FadeInDown.delay(100).springify()}
@@ -416,25 +437,6 @@ export default function UploadScreen() {
           </PremiumCard>
         </Animated.View>
 
-        {/* Upload Progress */}
-        {isUploading && (
-          <Animated.View entering={FadeInUp.delay(600).springify()}>
-            <PremiumCard variant="elevated" padding="large" style={styles.card}>
-              <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
-                Uploading...
-              </Text>
-              <ProgressBar
-                progress={progress / 100}
-                color={theme.colors.primary}
-                style={styles.progressBar}
-              />
-              <Text style={[styles.progressText, { color: theme.colors.onSurfaceVariant }]}>
-                {progress}% Complete
-              </Text>
-            </PremiumCard>
-          </Animated.View>
-        )}
-
         {/* Upload Button */}
         <Animated.View entering={FadeInUp.delay(600).springify()}>
           <PremiumButton
@@ -472,6 +474,7 @@ export default function UploadScreen() {
         </Animated.View>
       </View>
     </ScrollView>
+    </>
   );
 }
 

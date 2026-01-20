@@ -1,14 +1,14 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View, KeyboardAvoidingView, Platform } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Text, TextInput, useTheme } from 'react-native-paper';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import Toast from 'react-native-toast-message';
 import { PremiumButton } from '../src/components/ui/PremiumButton';
 import { PremiumCard } from '../src/components/ui/PremiumCard';
 import apiService from '../src/services/api';
-import { borderRadius, spacing } from '../src/theme';
+import { spacing } from '../src/theme';
 
 export default function LoginScreen() {
   const theme = useTheme();
@@ -177,12 +177,16 @@ export default function LoginScreen() {
             entering={FadeInDown.delay(100).springify()}
             style={styles.header}
           >
-            <Animated.Text 
+            <Animated.View 
               entering={FadeInUp.delay(200).springify()}
-              style={styles.appIcon}
+              style={styles.appIconContainer}
             >
-              🏏
-            </Animated.Text>
+              <Image 
+                source={require('../assets/images/logo-icon.png')}
+                style={styles.appIcon}
+                resizeMode="contain"
+              />
+            </Animated.View>
             <Animated.Text 
               entering={FadeInDown.delay(300).springify()}
               style={[styles.appTitle, { color: theme.colors.onBackground }]}
@@ -332,9 +336,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.xl,
   },
+  appIconContainer: {
+    marginBottom: -30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   appIcon: {
-    fontSize: 72,
-    marginBottom: spacing.md,
+    width: 180,
+    height: 180,
   },
   appTitle: {
     fontSize: 36,
