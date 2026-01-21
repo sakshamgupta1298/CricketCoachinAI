@@ -2379,11 +2379,11 @@ def api_upload_file():
         file.save(filepath)
         
         # Validate required form fields before enqueueing (so we can fail fast)
-            if player_type == 'batsman':
-                shot_type = request.form.get('shot_type', '').strip()
-                if not shot_type:
-                    logger.warning("Shot type not provided by user")
-                    return jsonify({'error': 'Shot type is required. Please select a shot type.'}), 400
+        if player_type == 'batsman':
+            shot_type = request.form.get('shot_type', '').strip()
+            if not shot_type:
+                logger.warning("Shot type not provided by user")
+                return jsonify({'error': 'Shot type is required. Please select a shot type.'}), 400
                 
         expo_push_token = request.form.get('expo_push_token') or request.form.get('push_token')
         job_id = uuid.uuid4().hex
