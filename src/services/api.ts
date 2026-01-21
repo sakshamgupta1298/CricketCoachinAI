@@ -424,10 +424,10 @@ class ApiService {
         baseURL: this.baseURL,
         url: '/api/upload',
         fullURL: `${this.baseURL}/api/upload`,
-        timeout: 600000,
+        timeout: 180000, // 3 minutes - backend returns job_id immediately
         hasAuth: !!token,
       });
-      console.log('⏱️ [UPLOAD] Timeout set to 10 minutes');
+      console.log('⏱️ [UPLOAD] Timeout: 3 minutes (backend returns job_id immediately after file save)');
 
       // For React Native, we need to ensure FormData is sent correctly
       // CRITICAL: Do NOT set Content-Type header - FormData will set it automatically with boundary
@@ -449,11 +449,14 @@ class ApiService {
       const uploadUrl = `${this.baseURL}/api/upload`;
       
       // Create AbortController for timeout
+      // Reduced timeout: backend returns job_id immediately after saving file (not waiting for analysis)
+      // 3 minutes should be enough for file upload even for large videos
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minutes
+      const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minutes (enough for file upload)
       
       try {
         console.log('🌐 [UPLOAD] Starting fetch request to:', uploadUrl);
+        console.log('⏱️ [UPLOAD] Timeout: 3 minutes (backend returns job_id immediately after file save)');
         const fetchResponse = await fetch(uploadUrl, {
           method: 'POST',
           headers: {
@@ -521,7 +524,9 @@ class ApiService {
         });
         
         if (error.name === 'AbortError') {
-          throw new Error('Upload timed out after 10 minutes');
+          // If upload timed out, the file might still have been uploaded and job created
+          // The app will poll for status, so this is recoverable
+          throw new Error('Upload timed out. If the file was uploaded, check your results later.');
         }
         
         // Handle network errors

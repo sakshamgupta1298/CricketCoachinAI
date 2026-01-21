@@ -271,10 +271,10 @@ class BackgroundUploadService {
 
     const elapsed = Date.now() - this.uploadState.startTime;
     
-    // Check timeout
+    // Check timeout (for entire job: upload + analysis)
     if (elapsed > MAX_UPLOAD_TIME) {
-      console.log('⏱️ [BACKGROUND_UPLOAD] Maximum upload time exceeded');
-      await this.markAsFailed('Upload timeout exceeded');
+      console.log('⏱️ [BACKGROUND_UPLOAD] Maximum job time exceeded (analysis taking too long)');
+      await this.markAsFailed('Analysis is taking longer than expected. Please check back later or contact support.');
       return;
     }
 
