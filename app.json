@@ -34,6 +34,7 @@
       "edgeToEdgeEnabled": true,
       "permissions": [
         "android.permission.CAMERA",
+        "android.permission.POST_NOTIFICATIONS",
         "android.permission.RECORD_AUDIO",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",

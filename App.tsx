@@ -70,9 +70,11 @@ async function registerForPushNotificationsAsync(): Promise<string | null> {
       console.log('⚠️ [NOTIFICATIONS] Missing EAS projectId. Push token may not work in Expo Go.');
     }
 
-    const tokenResponse = await Notifications.getExpoPushTokenAsync(
-      projectId ? { projectId } : undefined as any
-    );
+    const tokenResponse = projectId
+      ? await Notifications.getExpoPushTokenAsync({ projectId })
+      : await Notifications.getExpoPushTokenAsync();
+
+    console.log('🔔 [NOTIFICATIONS] Expo push token:', tokenResponse.data);
     return tokenResponse.data;
   } catch (e: any) {
     console.log('❌ [NOTIFICATIONS] Failed to register:', e?.message || e);

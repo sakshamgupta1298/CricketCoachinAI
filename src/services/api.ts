@@ -389,7 +389,10 @@ class ApiService {
       // Optional: attach Expo push token so backend can notify when analysis is ready
       const expoPushToken = await this.getStoredPushToken();
       if (expoPushToken) {
+        console.log('🔔 [UPLOAD] Attaching Expo push token to upload:', expoPushToken);
         data.append('expo_push_token', expoPushToken);
+      } else {
+        console.log('🔕 [UPLOAD] No Expo push token found in storage (notifications may be disabled)');
       }
       
       if (formData.player_type === 'batsman' && formData.batter_side) {

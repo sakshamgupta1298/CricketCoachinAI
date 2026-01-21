@@ -241,12 +241,20 @@ def send_expo_push(expo_push_token, title, body, data=None):
             "data": data or {},
             "sound": "default",
         }
+        logger.info(f"📣 [PUSH] Sending push to token: {str(expo_push_token)[:30]}...")
         resp = requests.post(
             "https://exp.host/--/api/v2/push/send",
             json=payload,
             timeout=10,
         )
-        logger.info(f"📣 [PUSH] Expo push response: {resp.status_code} {resp.text[:300]}")
+        try:
+            resp_json = resp.json()
+        except Exception:
+            resp_json = None
+
+        logger.info(f"📣 [PUSH] Expo push response: {resp.status_code} {resp.text[:500]}")
+        if resp_json:
+            logger.info(f"📣 [PUSH] Expo push response JSON: {json.dumps(resp_json)[:800]}")
     except Exception as e:
         logger.error(f"❌ [PUSH] Failed to send Expo push: {str(e)}", exc_info=True)
 
