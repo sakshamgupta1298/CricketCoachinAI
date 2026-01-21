@@ -1,19 +1,19 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect } from 'react';
-import { Modal, StyleSheet, View, Dimensions } from 'react-native';
-import { Text, ProgressBar, useTheme } from 'react-native-paper';
+import { Dimensions, Modal, StyleSheet, View } from 'react-native';
+import { Text, useTheme } from 'react-native-paper';
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withTiming,
-  withSequence,
   Easing,
-  interpolate,
   Extrapolate,
   FadeIn,
   FadeOut,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
 } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
 import { borderRadius, spacing } from '../theme';
 
 const { width, height } = Dimensions.get('window');
@@ -117,18 +117,16 @@ const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
     };
   });
 
+  // Circular loader spin (reuse rotation value)
+  const circularSpinStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ rotate: `${rotation.value}deg` }],
+    };
+  });
+
   // Get status message
   const getStatusMessage = () => {
-    switch (status) {
-      case 'uploading':
-        return 'Uploading your video...';
-      case 'processing':
-        return 'Processing video frames...';
-      case 'analyzing':
-        return 'Analyzing your technique...';
-      default:
-        return 'Preparing analysis...';
-    }
+    return 'Analyzing your video...';
   };
 
   const getStatusSubtext = () => {
@@ -144,19 +142,24 @@ const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
     }
   };
 
-  // Calculate display progress (smooth transitions between stages)
-  const displayProgress = React.useMemo(() => {
+  const getTimeEstimateText = () => {
+    return 'Analysis usually takes ~5–6 minutes.';
+  };
+
+  const getReassuranceText = () => {
     if (status === 'uploading') {
-      return Math.min(progress, 33);
-    } else if (status === 'processing') {
-      return Math.min(33 + (progress / 3), 66);
-    } else {
-      return Math.min(66 + (progress / 3), 100);
+      return 'This is normal—large videos can take a moment to send.';
     }
-  }, [progress, status]);
+    if (status === 'processing') {
+      return 'This is normal—we’re breaking the video into frames for accurate tracking.';
+    }
+    return 'This is normal—more time means higher-quality, more detailed feedback.';
+  };
+
+  // We intentionally do not show numeric progress; the circular spinner is purely visual.
 
   // Get gradient colors based on theme
-  const getGradientColors = () => {
+  const getGradientColors = (): [string, string, string] => {
     const isDark = theme.dark;
     if (isDark) {
       return [
@@ -211,6 +214,23 @@ const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
                   : 'rgba(255, 255, 255, 0.95)',
               }
             ]}>
+              {/* Cricket-inspired pitch lines (subtle background) */}
+              <View style={styles.pitchLines} pointerEvents="none">
+                <View
+                  style={[
+                    styles.pitchLine,
+                    { backgroundColor: theme.dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' },
+                  ]}
+                />
+                <View
+                  style={[
+                    styles.pitchLine,
+                    styles.pitchLineMid,
+                    { backgroundColor: theme.dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.035)' },
+                  ]}
+                />
+              </View>
+
               {/* Animated Cricket Ball Icon */}
               <View style={styles.iconContainer}>
                 <Animated.View style={[styles.ballContainer, ballStyle]}>
@@ -259,120 +279,34 @@ const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
                 </Text>
               </Animated.View>
 
-              {/* Progress Bar */}
+              {/* Time estimate + reassurance */}
               <Animated.View
-                entering={FadeIn.delay(400).duration(400)}
-                style={styles.progressContainer}
+                entering={FadeIn.delay(320).duration(400)}
+                style={styles.infoContainer}
               >
-                <ProgressBar
-                  progress={displayProgress / 100}
-                  color={theme.colors.primary}
-                  style={styles.progressBar}
-                />
-                <Text
-                  style={[
-                    styles.progressText,
-                    { color: theme.colors.onSurfaceVariant },
-                  ]}
-                >
-                  {Math.round(displayProgress)}%
+                <View style={[
+                  styles.infoPill,
+                  {
+                    backgroundColor: theme.dark
+                      ? 'rgba(59, 130, 246, 0.12)'
+                      : 'rgba(0, 102, 255, 0.10)',
+                    borderColor: theme.dark
+                      ? 'rgba(59, 130, 246, 0.25)'
+                      : 'rgba(0, 102, 255, 0.18)',
+                  }
+                ]}>
+                  <Text style={[styles.infoEmoji, { color: theme.colors.primary }]}>🕒</Text>
+                  <Text style={[styles.infoText, { color: theme.colors.onSurfaceVariant }]}>
+                    {getTimeEstimateText()}
+                  </Text>
+                </View>
+
+                <Text style={[styles.reassuranceText, { color: theme.colors.onSurfaceVariant }]}>
+                  {getReassuranceText()}
                 </Text>
               </Animated.View>
 
-              {/* Stage Indicators */}
-              <Animated.View
-                entering={FadeIn.delay(600).duration(400)}
-                style={styles.stagesContainer}
-              >
-                <View style={styles.stage}>
-                  <View
-                    style={[
-                      styles.stageDot,
-                      {
-                        backgroundColor:
-                          status === 'uploading'
-                            ? theme.colors.primary
-                            : theme.colors.primaryContainer,
-                      },
-                    ]}
-                  />
-                  <Text
-                    style={[
-                      styles.stageText,
-                      {
-                        color:
-                          status === 'uploading'
-                            ? theme.colors.primary
-                            : theme.colors.onSurfaceVariant,
-                        fontWeight:
-                          status === 'uploading' ? '700' : '400',
-                      },
-                    ]}
-                  >
-                    Upload
-                  </Text>
-                </View>
-
-                <View style={styles.stage}>
-                  <View
-                    style={[
-                      styles.stageDot,
-                      {
-                        backgroundColor:
-                          status === 'processing'
-                            ? theme.colors.primary
-                            : status === 'analyzing'
-                            ? theme.colors.primaryContainer
-                            : theme.colors.surfaceVariant,
-                      },
-                    ]}
-                  />
-                  <Text
-                    style={[
-                      styles.stageText,
-                      {
-                        color:
-                          status === 'processing'
-                            ? theme.colors.primary
-                            : theme.colors.onSurfaceVariant,
-                        fontWeight:
-                          status === 'processing' ? '700' : '400',
-                      },
-                    ]}
-                  >
-                    Process
-                  </Text>
-                </View>
-
-                <View style={styles.stage}>
-                  <View
-                    style={[
-                      styles.stageDot,
-                      {
-                        backgroundColor:
-                          status === 'analyzing'
-                            ? theme.colors.primary
-                            : theme.colors.surfaceVariant,
-                      },
-                    ]}
-                  />
-                  <Text
-                    style={[
-                      styles.stageText,
-                      {
-                        color:
-                          status === 'analyzing'
-                            ? theme.colors.primary
-                            : theme.colors.onSurfaceVariant,
-                        fontWeight:
-                          status === 'analyzing' ? '700' : '400',
-                      },
-                    ]}
-                  >
-                    Analyze
-                  </Text>
-                </View>
-              </Animated.View>
+              {/* Intentionally no bottom loader (keep screen clean) */}
             </View>
           </Animated.View>
         </LinearGradient>
@@ -419,6 +353,32 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 20,
     elevation: 10,
+  },
+  pitchLines: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 1,
+  },
+  pitchLine: {
+    position: 'absolute',
+    left: '12%',
+    right: '12%',
+    height: 2,
+    top: '22%',
+    borderRadius: 2,
+  },
+  pitchLineMid: {
+    top: '52%',
+    height: 1,
+    left: '16%',
+    right: '16%',
+  },
+  pitchLineBottom: {
+    top: '82%',
+    height: 2,
   },
   iconContainer: {
     width: 120,
@@ -478,41 +438,38 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
   },
-  progressContainer: {
+  infoContainer: {
     width: '100%',
+    alignItems: 'center',
     marginBottom: spacing.lg,
   },
-  progressBar: {
-    height: 8,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.sm,
-  },
-  progressText: {
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  stagesContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
+  infoPill: {
     width: '100%',
-    paddingTop: spacing.md,
-  },
-  stage: {
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    flexDirection: 'row',
     alignItems: 'center',
+  },
+  infoEmoji: {
+    fontSize: 16,
+    marginRight: spacing.sm,
+  },
+  infoText: {
     flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
   },
-  stageDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginBottom: spacing.xs,
+  reassuranceText: {
+    marginTop: spacing.sm,
+    fontSize: 12.5,
+    lineHeight: 18,
+    textAlign: 'center',
+    opacity: 0.95,
   },
-  stageText: {
-    fontSize: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
+  // (loader styles removed)
 });
 
 export default AnalysisScreen;
