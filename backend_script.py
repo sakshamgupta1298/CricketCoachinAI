@@ -24,6 +24,9 @@ import sqlite3
 from functools import wraps
 import gdown
 import glob
+import threading
+import uuid
+import requests
 
 # ==================== LOGGING CONFIGURATION ====================
 # Create logging directory if it doesn't exist
@@ -181,6 +184,7 @@ keypoints_names = ["nose", "left_eye", "right_eye", "left_ear", "right_ear", "le
 # Configuration
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'mp4', 'avi', 'mov', 'mkv'}
+JOBS_SUBFOLDER = 'jobs'
 
 def get_user_upload_folder(user_id):
     """
@@ -196,6 +200,183 @@ def get_user_upload_folder(user_id):
     user_folder = os.path.join(UPLOAD_FOLDER, str(user_id))
     os.makedirs(user_folder, exist_ok=True)
     return user_folder
+
+def get_user_jobs_folder(user_id):
+    """Get or create a per-user jobs folder"""
+    user_folder = get_user_upload_folder(user_id)
+    jobs_folder = os.path.join(user_folder, JOBS_SUBFOLDER)
+    os.makedirs(jobs_folder, exist_ok=True)
+    return jobs_folder
+
+def _job_file_path(user_id, job_id):
+    return os.path.join(get_user_jobs_folder(user_id), f"job_{job_id}.json")
+
+def save_job(user_id, job):
+    """Persist job state to disk (per-user)."""
+    job_id = job.get("job_id")
+    if not job_id:
+        raise ValueError("job missing job_id")
+    with open(_job_file_path(user_id, job_id), "w") as f:
+        json.dump(job, f, indent=2, default=str)
+
+def load_job(user_id, job_id):
+    path = _job_file_path(user_id, job_id)
+    if not os.path.exists(path):
+        return None
+    with open(path, "r") as f:
+        return json.load(f)
+
+def send_expo_push(expo_push_token, title, body, data=None):
+    """
+    Send a push notification via Expo Push API.
+    This allows users on Expo Go to be notified when the backend job finishes.
+    """
+    try:
+        if not expo_push_token:
+            return
+        payload = {
+            "to": expo_push_token,
+            "title": title,
+            "body": body,
+            "data": data or {},
+            "sound": "default",
+        }
+        resp = requests.post(
+            "https://exp.host/--/api/v2/push/send",
+            json=payload,
+            timeout=10,
+        )
+        logger.info(f"📣 [PUSH] Expo push response: {resp.status_code} {resp.text[:300]}")
+    except Exception as e:
+        logger.error(f"❌ [PUSH] Failed to send Expo push: {str(e)}", exc_info=True)
+
+def process_analysis_job(job_id, user_id, username, filepath, filename, form, expo_push_token=None):
+    """
+    Background worker that runs the heavy analysis and stores results keyed by job_id.
+    Runs server-side so it continues even if the mobile app is backgrounded/closed.
+    """
+    try:
+        job = load_job(user_id, job_id) or {}
+        job.update({
+            "job_id": job_id,
+            "status": "processing",
+            "updated_at": datetime.utcnow().isoformat() + "Z",
+        })
+        save_job(user_id, job)
+
+        player_type = form.get("player_type", "batsman")
+
+        results = None
+        user_folder = get_user_upload_folder(user_id)
+
+        if player_type == "batsman":
+            shot_type = (form.get("shot_type", "") or "").strip()
+            if not shot_type:
+                raise ValueError("Shot type is required. Please select a shot type.")
+
+            batter_side = form.get("batter_side", "right")
+
+            logger.info(f"🎬 [JOB {job_id}] Batting analysis started for {filename}")
+            keypoints_path, annotated_video_path = extract_pose_keypoints(filepath, "batting")
+            _ = compute_features(keypoints_path, batter_side, "batting")
+            try:
+                gpt_feedback = get_feedback_from_gpt(shot_type, keypoints_path)
+            except Exception as e:
+                logger.error(f"❌ [JOB {job_id}] Error in Gemini feedback: {str(e)}", exc_info=True)
+                gpt_feedback = "Unable to generate feedback at this time."
+
+            results = {
+                "success": True,
+                "job_id": job_id,
+                "user_id": user_id,
+                "username": username,
+                "player_type": "batsman",
+                "shot_type": shot_type,
+                "batter_side": batter_side,
+                "gpt_feedback": gpt_feedback,
+                "filename": filename,
+                "annotated_video_path": annotated_video_path,
+            }
+
+            try:
+                report_path = generate_report(results, "batsman", shot_type, batter_side, None, None, filename, user_id=user_id)
+                results["report_path"] = report_path
+            except Exception as e:
+                logger.error(f"❌ [JOB {job_id}] Error generating report: {str(e)}", exc_info=True)
+                results["report_path"] = None
+
+        else:
+            bowler_side = form.get("bowler_side", "right")
+            bowler_type = form.get("bowler_type", "fast_bowler")
+
+            logger.info(f"🎬 [JOB {job_id}] Bowling analysis started for {filename}")
+            keypoints_path, annotated_video_path = extract_pose_keypoints(filepath, "bowling")
+            _ = compute_features(keypoints_path, bowler_side, "bowling")
+            try:
+                gpt_feedback = get_feedback_from_gpt_for_bowling(keypoints_path, bowler_type)
+            except Exception as e:
+                logger.error(f"❌ [JOB {job_id}] Error in Gemini feedback: {str(e)}", exc_info=True)
+                gpt_feedback = "Unable to generate feedback at this time."
+
+            results = {
+                "success": True,
+                "job_id": job_id,
+                "user_id": user_id,
+                "username": username,
+                "player_type": "bowler",
+                "bowler_side": bowler_side,
+                "bowler_type": bowler_type,
+                "gpt_feedback": gpt_feedback,
+                "filename": filename,
+                "annotated_video_path": annotated_video_path,
+            }
+
+            try:
+                report_path = generate_report(results, "bowler", None, None, bowler_side, bowler_type, filename, user_id=user_id)
+                results["report_path"] = report_path
+            except Exception as e:
+                logger.error(f"❌ [JOB {job_id}] Error generating report: {str(e)}", exc_info=True)
+                results["report_path"] = None
+
+        # Save results by filename for history/backwards compatibility
+        results_file = os.path.join(user_folder, f"results_{filename}.json")
+        with open(results_file, "w") as f:
+            json.dump(results, f, indent=2)
+
+        job = load_job(user_id, job_id) or {}
+        job.update({
+            "job_id": job_id,
+            "status": "completed",
+            "result": results,
+            "result_filename": filename,
+            "updated_at": datetime.utcnow().isoformat() + "Z",
+        })
+        save_job(user_id, job)
+
+        send_expo_push(
+            expo_push_token,
+            title="CrickCoach: Analysis ready",
+            body="Tap to view your results.",
+            data={"job_id": job_id, "filename": filename},
+        )
+
+        logger.info(f"✅ [JOB {job_id}] Completed successfully for {filename}")
+    except Exception as e:
+        logger.error(f"❌ [JOB {job_id}] Failed: {str(e)}", exc_info=True)
+        job = load_job(user_id, job_id) or {}
+        job.update({
+            "job_id": job_id,
+            "status": "failed",
+            "error": str(e),
+            "updated_at": datetime.utcnow().isoformat() + "Z",
+        })
+        save_job(user_id, job)
+        send_expo_push(
+            expo_push_token,
+            title="CrickCoach: Analysis failed",
+            body="There was an error processing your video.",
+            data={"job_id": job_id, "filename": filename, "error": str(e)},
+        )
 
 # Model configuration
 MODEL_PATH = "slowfast_cricket.pth"
@@ -2197,189 +2378,43 @@ def api_upload_file():
         filepath = os.path.join(user_folder, filename)
         file.save(filepath)
         
-        logger.info(f"File saved to {filepath}, starting processing...")
-        
-        try:
+        # Validate required form fields before enqueueing (so we can fail fast)
             if player_type == 'batsman':
-                # Batting analysis
-                logger.info("Starting batting analysis...")
-                
-                # Get shot_type from user input (shot prediction model commented out)
                 shot_type = request.form.get('shot_type', '').strip()
-                
-                # Require shot_type to be provided by user
                 if not shot_type:
                     logger.warning("Shot type not provided by user")
                     return jsonify({'error': 'Shot type is required. Please select a shot type.'}), 400
                 
-                # User provided shot_type
-                logger.info(f"Using user-provided shot type: {shot_type}")
-                # # Auto-detect shot type using ML model (COMMENTED OUT)
-                # logger.info("Shot type not provided, starting auto-detection...")
-                # logger.info("Getting shot prediction model...")
-                # model = get_shot_prediction_model()
-                # logger.info("Model ready for prediction")
-                # logger.info("Predicting shot type...")
-                # try:
-                #     shot_type = predict_shot(filepath, model)
-                #     logger.info(f"Shot type predicted: {shot_type}")
-                # except Exception as e:
-                #     logger.error(f"Error in shot prediction: {str(e)}", exc_info=True)
-                #     shot_type = 'coverdrive'  # Default fallback
-                
-                logger.info("Extracting pose keypoints...")
-                try:
-                    keypoints_path, annotated_video_path = extract_pose_keypoints(filepath, 'batting')
-                    logger.info("Keypoints extracted successfully")
-                    if annotated_video_path:
-                        logger.info(f"Annotated video created: {annotated_video_path}")
-                except Exception as e:
-                    logger.error(f"Error in keypoint extraction: {str(e)}", exc_info=True)
-                    return jsonify({'error': f'Error extracting pose keypoints: {str(e)}'}), 500
-                
-                batter_side = request.form.get('batter_side', 'right')
-                logger.info("Computing features...")
-                try:
-                    summary_path = compute_features(keypoints_path, batter_side, 'batting')
-                    logger.info("Features computed successfully")
-                except Exception as e:
-                    logger.error(f"Error in feature computation: {str(e)}", exc_info=True)
-                    return jsonify({'error': f'Error computing features: {str(e)}'}), 500
-                
-                logger.info("Getting Gemini feedback...")
-                try:
-                    gpt_feedback = get_feedback_from_gpt(shot_type, keypoints_path)
-                    logger.info("Gemini feedback received successfully")
-                except Exception as e:
-                    logger.error(f"Error in Gemini feedback: {str(e)}", exc_info=True)
-                    gpt_feedback = "Unable to generate feedback at this time."
-                
-                # Ensure annotated_video_path is included even if it's None (for debugging)
-                results = {
-                    'success': True,
-                    'user_id': user_id,
-                    'username': username,
-                    'player_type': 'batsman',
-                    'shot_type': shot_type,
-                    'batter_side': batter_side,
-                    'gpt_feedback': gpt_feedback,
-                    'filename': filename,
-                    'annotated_video_path': annotated_video_path  # Keep as is, even if None
-                }
-                
-                logger.info(f"📹 [RESPONSE] Annotated video path variable: {annotated_video_path}")
-                logger.info(f"📹 [RESPONSE] Annotated video path in results: {results.get('annotated_video_path')}")
-                logger.info(f"📹 [RESPONSE] Annotated video path type: {type(results.get('annotated_video_path'))}")
-                logger.info(f"📹 [RESPONSE] Full results keys: {list(results.keys())}")
-                
-                # Generate and save report
-                logger.info("Generating report...")
-                try:
-                    report_path = generate_report(results, 'batsman', shot_type, batter_side, None, None, filename, user_id=user_id)
-                    results['report_path'] = report_path
-                    logger.info(f"Report saved to: {report_path}")
-                except Exception as e:
-                    logger.error(f"Error generating report: {str(e)}", exc_info=True)
-                    results['report_path'] = None
-                
-                # Save results as JSON for later retrieval in user's folder
-                results_file = os.path.join(user_folder, f"results_{filename}.json")
-                with open(results_file, 'w') as f:
-                    json.dump(results, f, indent=2)
-                logger.info(f"Results saved to: {results_file}")
-                
-            else:
-                # Bowling analysis
-                logger.info("Starting bowling analysis...")
-                logger.info("Extracting pose keypoints for bowling...")
-                try:
-                    keypoints_path, annotated_video_path = extract_pose_keypoints(filepath, 'bowling')
-                    logger.info("Keypoints extracted successfully")
-                    if annotated_video_path:
-                        logger.info(f"Annotated video created: {annotated_video_path}")
-                except Exception as e:
-                    logger.error(f"Error in keypoint extraction: {str(e)}", exc_info=True)
-                    return jsonify({'error': f'Error extracting pose keypoints: {str(e)}'}), 500
-                
-                bowler_side = request.form.get('bowler_side', 'right')
-                bowler_type = request.form.get('bowler_type', 'fast_bowler') # Default to fast bowler
-                logger.info("Computing bowling features...")
-                try:
-                    summary_path = compute_features(keypoints_path, bowler_side, 'bowling')
-                    logger.info("Features computed successfully")
-                except Exception as e:
-                    logger.error(f"Error in feature computation: {str(e)}", exc_info=True)
-                    return jsonify({'error': f'Error computing features: {str(e)}'}), 500
-                
-                logger.info("Getting Gemini feedback for bowling...")
-                try:
-                    gpt_feedback = get_feedback_from_gpt_for_bowling(keypoints_path, bowler_type)
-                    logger.info("Gemini feedback received successfully")
-                except Exception as e:
-                    logger.error(f"Error in Gemini feedback: {str(e)}", exc_info=True)
-                    gpt_feedback = "Unable to generate feedback at this time."
-                
-                # Ensure annotated_video_path is included even if it's None (for debugging)
-                results = {
-                    'success': True,
-                    'user_id': user_id,
-                    'username': username,
-                    'player_type': 'bowler',
-                    'bowler_side': bowler_side,
-                    'bowler_type': bowler_type,
-                    'gpt_feedback': gpt_feedback,
-                    'filename': filename,
-                    'annotated_video_path': annotated_video_path  # Keep as is, even if None
-                }
-                
-                logger.info(f"📹 [RESPONSE] Annotated video path variable: {annotated_video_path}")
-                logger.info(f"📹 [RESPONSE] Annotated video path in results: {results.get('annotated_video_path')}")
-                logger.info(f"📹 [RESPONSE] Annotated video path type: {type(results.get('annotated_video_path'))}")
-                logger.info(f"📹 [RESPONSE] Full results keys: {list(results.keys())}")
-                
-                # Generate and save report
-                logger.info("Generating bowling report...")
-                try:
-                    report_path = generate_report(results, 'bowler', None, None, bowler_side, bowler_type, filename, user_id=user_id)
-                    results['report_path'] = report_path
-                    logger.info(f"Report saved to: {report_path}")
-                except Exception as e:
-                    logger.error(f"Error generating report: {str(e)}", exc_info=True)
-                    results['report_path'] = None
-                
-                # Save results as JSON for later retrieval in user's folder
-                results_file = os.path.join(user_folder, f"results_{filename}.json")
-                with open(results_file, 'w') as f:
-                    json.dump(results, f, indent=2)
-                logger.info(f"Results saved to: {results_file}")
+        expo_push_token = request.form.get('expo_push_token') or request.form.get('push_token')
+        job_id = uuid.uuid4().hex
+        now = datetime.utcnow().isoformat() + "Z"
 
-            logger.info("Processing completed successfully")
-            
-            # Print what backend is sending to frontend
-            logger.info("=" * 80)
-            logger.info("RESPONSE BEING SENT TO FRONTEND:")
-            logger.info("=" * 80)
-            logger.info(json.dumps(results, indent=2, default=str))
-            logger.info("=" * 80)
-            
-            # Also print flaws details specifically
-            if results.get("gpt_feedback"):
-                flaws = results["gpt_feedback"].get("flaws", []) or results["gpt_feedback"].get("technical_flaws", [])
-                logger.info(f"Number of flaws: {len(flaws)}")
-                for i, flaw in enumerate(flaws):
-                    logger.info(f"Flaw {i+1}:")
-                    logger.info(f"  - feature: {flaw.get('feature', 'N/A')}")
-                    logger.info(f"  - observed: {flaw.get('observed', 'N/A')}")
-                    logger.info(f"  - ideal_range: {flaw.get('ideal_range', 'N/A')}")
-                    logger.info(f"  - deviation: {flaw.get('deviation', 'N/A')}")
-                    logger.info(f"  - issue: {flaw.get('issue', 'N/A')[:100]}...")
-            logger.info("=" * 80)
-            
-            return jsonify(results)
-            
-        except Exception as e:
-            logger.error(f"Error during processing: {str(e)}", exc_info=True)
-            return jsonify({'error': f'Error processing video: {str(e)}'}), 500
+        job = {
+            "job_id": job_id,
+            "status": "queued",
+            "created_at": now,
+            "updated_at": now,
+            "user_id": user_id,
+            "username": username,
+            "filename": filename,
+            "player_type": player_type,
+        }
+        save_job(user_id, job)
+
+        worker = threading.Thread(
+            target=process_analysis_job,
+            args=(job_id, user_id, username, filepath, filename, dict(request.form), expo_push_token),
+            daemon=True,
+        )
+        worker.start()
+
+        logger.info(f"🧵 [JOB {job_id}] Enqueued analysis for {username} file {filename}")
+        return jsonify({
+            "success": True,
+            "job_id": job_id,
+            "filename": filename,
+            "status": "queued",
+        })
     
     logger.warning("Invalid file type")
     return jsonify({'error': 'Invalid file type. Please upload a video file.'}), 400
@@ -2407,38 +2442,56 @@ def test_upload():
         'size': os.path.getsize(filepath)
     })
 
-@app.route('/api/results/<filename>', methods=['GET'])
+@app.route('/api/results/<job_id>', methods=['GET'])
 @require_auth
-def get_analysis_results(filename):
-    """Get analysis results for a specific file (user-specific)"""
+def get_job_results(job_id):
+    """Get analysis job status/results by job_id (user-specific)"""
     try:
-        # Get user info from authentication
         user_id = request.user['user_id']
         username = request.user['username']
-        print(f"Getting results for {filename} by user: {username} (ID: {user_id})")
-        
-        # Get user's upload folder
+        logger.info(f"Getting job {job_id} by user: {username} (ID: {user_id})")
+
+        job = load_job(user_id, job_id)
+        if not job:
+            return jsonify({'success': False, 'error': 'Job not found'}), 404
+
+        if job.get('user_id') != user_id:
+            return jsonify({'success': False, 'error': 'Access denied'}), 403
+
+        status = job.get('status', 'queued')
+        if status == 'completed' and job.get('result'):
+            return jsonify({'success': True, 'status': 'completed', 'result': job.get('result')})
+        if status == 'failed':
+            return jsonify({'success': False, 'status': 'failed', 'error': job.get('error') or 'Analysis failed'})
+
+        return jsonify({'success': True, 'status': status, 'filename': job.get('filename')})
+    except Exception as e:
+        logger.error(f"Error retrieving job results: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'error': f'Error retrieving results: {str(e)}'}), 500
+
+@app.route('/api/results/by-filename/<filename>', methods=['GET'])
+@require_auth
+def get_analysis_results_by_filename(filename):
+    """Get analysis results for a specific filename (user-specific, backward compatibility)"""
+    try:
+        user_id = request.user['user_id']
+        username = request.user['username']
+        logger.info(f"Getting results for {filename} by user: {username} (ID: {user_id})")
+
         user_folder = get_user_upload_folder(user_id)
-        
-        # Look for the results in the user's folder
         results_file = os.path.join(user_folder, f"results_{filename}.json")
         if os.path.exists(results_file):
             with open(results_file, 'r') as f:
                 results = json.load(f)
             
-            # Check if the results belong to the authenticated user
             result_user_id = results.get('user_id')
             if result_user_id != user_id:
-                print(f"Access denied: User {username} tried to access results for user ID {result_user_id}")
                 return jsonify({'error': 'Access denied'}), 403
             
-            print(f"Results found and access granted for user {username}")
             return jsonify(results)
-        else:
-            print(f"Results not found for {filename}")
             return jsonify({'error': 'Results not found'}), 404
     except Exception as e:
-        print(f"Error retrieving results: {str(e)}")
+        logger.error(f"Error retrieving results: {str(e)}", exc_info=True)
         return jsonify({'error': f'Error retrieving results: {str(e)}'}), 500
 
 @app.route('/api/reports', methods=['GET'])

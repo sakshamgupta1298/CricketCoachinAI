@@ -3,7 +3,7 @@ import axios, { AxiosInstance } from 'axios';
 import * as FileSystem from 'expo-file-system';
 import { Platform } from 'react-native';
 import { currentConfig } from '../../config';
-import { AnalysisResult, ApiResponse, UploadFormData } from '../types';
+import { AnalysisResult, ApiResponse, JobStatusResponse, UploadFormData, UploadJobResponse } from '../types';
 
 class ApiService {
   private api: AxiosInstance;
@@ -309,7 +309,7 @@ class ApiService {
   }
 
   // Upload video for analysis with retry logic
-  async uploadVideo(formData: UploadFormData, retryCount: number = 0): Promise<ApiResponse<AnalysisResult>> {
+  async uploadVideo(formData: UploadFormData, retryCount: number = 0): Promise<ApiResponse<UploadJobResponse>> {
     const maxRetries = 2;
     
     try {
@@ -385,6 +385,12 @@ class ApiService {
       // Append fields to FormData
       data.append('video', videoFile);
       data.append('player_type', formData.player_type);
+
+      // Optional: attach Expo push token so backend can notify when analysis is ready
+      const expoPushToken = await this.getStoredPushToken();
+      if (expoPushToken) {
+        data.append('expo_push_token', expoPushToken);
+      }
       
       if (formData.player_type === 'batsman' && formData.batter_side) {
         data.append('batter_side', formData.batter_side);
@@ -487,7 +493,7 @@ class ApiService {
           throw new Error(errorMessage);
         }
         
-        // Parse successful response
+        // Parse successful response (job enqueue response)
         let responseData;
         try {
           const responseText = await fetchResponse.text();
@@ -499,7 +505,7 @@ class ApiService {
           throw new Error('Invalid response format from server');
         }
         
-        console.log('✅ [UPLOAD] Upload successful via fetch API');
+        console.log('✅ [UPLOAD] Upload successful via fetch API (job enqueued)');
         return {
           success: true,
           data: responseData,
@@ -701,16 +707,33 @@ class ApiService {
     }
   }
 
-  // Get specific analysis result
+  // Get analysis result by filename (backward compatibility)
   async getAnalysisResult(filename: string): Promise<ApiResponse<AnalysisResult>> {
     try {
-      const response = await this.api.get(`/api/results/${filename}`);
+      const response = await this.api.get(`/api/results/by-filename/${filename}`);
       return {
         success: true,
         data: response.data,
       };
     } catch (error: any) {
       console.error('Get Result Error:', error);
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message,
+      };
+    }
+  }
+
+  // Get job status/result by job_id (async analysis)
+  async getJobResult(jobId: string): Promise<ApiResponse<JobStatusResponse>> {
+    try {
+      const response = await this.api.get(`/api/results/${jobId}`);
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error: any) {
+      console.error('Get Job Result Error:', error);
       return {
         success: false,
         error: error.response?.data?.error || error.message,
@@ -1175,6 +1198,24 @@ class ApiService {
     } catch (error) {
       console.error('Error clearing auth data:', error);
       throw error;
+    }
+  }
+
+  // Push token storage (Expo Go notifications)
+  async storePushToken(token: string): Promise<void> {
+    try {
+      await AsyncStorage.setItem('expoPushToken', token);
+    } catch (error) {
+      console.error('Error storing push token:', error);
+    }
+  }
+
+  async getStoredPushToken(): Promise<string | null> {
+    try {
+      return await AsyncStorage.getItem('expoPushToken');
+    } catch (error) {
+      console.error('Error getting push token:', error);
+      return null;
     }
   }
 

@@ -57,6 +57,22 @@ export interface AnalysisResult {
   username?: string;
   report_path?: string;
   annotated_video_path?: string;
+  job_id?: string;
+}
+
+export interface UploadJobResponse {
+  success: boolean;
+  job_id: string;
+  filename: string;
+  status: 'queued' | 'processing' | 'completed' | 'failed';
+}
+
+export interface JobStatusResponse {
+  success: boolean;
+  status: 'queued' | 'processing' | 'completed' | 'failed';
+  filename?: string;
+  result?: AnalysisResult;
+  error?: string;
 }
 
 export interface BiomechanicalFeature {

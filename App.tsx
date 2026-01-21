@@ -2,6 +2,9 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
+import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 import { Provider as PaperProvider } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
@@ -27,6 +30,55 @@ import apiService from './src/services/api';
 import { theme } from './src/theme';
 
 const Stack = createBottomTabNavigator();
+
+// Show notifications when app is foregrounded
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: false,
+    shouldSetBadge: false,
+  }),
+});
+
+async function registerForPushNotificationsAsync(): Promise<string | null> {
+  try {
+    // Android notification channel
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: Notifications.AndroidImportance.MAX,
+      });
+    }
+
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+    if (finalStatus !== 'granted') {
+      console.log('🔕 [NOTIFICATIONS] Permission not granted');
+      return null;
+    }
+
+    // In SDK 53+, projectId is needed for getExpoPushTokenAsync
+    const projectId =
+      (Constants as any).expoConfig?.extra?.eas?.projectId ||
+      (Constants as any).easConfig?.projectId;
+
+    if (!projectId) {
+      console.log('⚠️ [NOTIFICATIONS] Missing EAS projectId. Push token may not work in Expo Go.');
+    }
+
+    const tokenResponse = await Notifications.getExpoPushTokenAsync(
+      projectId ? { projectId } : undefined as any
+    );
+    return tokenResponse.data;
+  } catch (e: any) {
+    console.log('❌ [NOTIFICATIONS] Failed to register:', e?.message || e);
+    return null;
+  }
+}
 
 function TabNavigator() {
   return (
@@ -69,14 +121,53 @@ function TabNavigator() {
 }
 
 export default function App() {
+  const navigationRef = React.useRef<any>(null);
+
   useEffect(() => {
     console.log('🚀 [APP] CrickCoach App starting...');
     console.log('🔧 [APP] Development mode:', __DEV__);
     
     // Initialize API service
     apiService.initialize();
+
+    // Register for push notifications and store token for upload requests
+    registerForPushNotificationsAsync().then(async (token) => {
+      if (token) {
+        console.log('✅ [NOTIFICATIONS] Expo push token acquired');
+        await apiService.storePushToken(token);
+      }
+    });
+
+    // When user taps notification, fetch job result and navigate to Results
+    const responseSub = Notifications.addNotificationResponseReceivedListener(async (response) => {
+      try {
+        const data: any = response.notification.request.content.data || {};
+        const jobId = data.job_id || data.jobId;
+        if (!jobId) return;
+
+        console.log('📩 [NOTIFICATIONS] Notification tapped, jobId:', jobId);
+        const jobResp = await apiService.getJobResult(String(jobId));
+        const jobData: any = jobResp.success ? jobResp.data : null;
+
+        if (jobData?.status === 'completed' && jobData.result) {
+          navigationRef.current?.navigate('Results', { result: jobData.result });
+        } else {
+          Toast.show({
+            type: 'info',
+            text1: 'Analysis still processing',
+            text2: 'Please wait a moment and try again.',
+          });
+        }
+      } catch (e: any) {
+        console.log('❌ [NOTIFICATIONS] Failed handling notification tap:', e?.message || e);
+      }
+    });
     
     console.log('✅ [APP] App initialization complete');
+
+    return () => {
+      responseSub.remove();
+    };
   }, []);
 
   return (
@@ -84,7 +175,7 @@ export default function App() {
       <PaperProvider theme={theme}>
         <AuthProvider>
           <UploadProvider>
-            <NavigationContainer>
+            <NavigationContainer ref={navigationRef}>
               <Stack.Navigator
                 screenOptions={{
                   headerShown: false,

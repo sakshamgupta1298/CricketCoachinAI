@@ -1,7 +1,7 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Provider as PaperProvider, useTheme as usePaperTheme } from 'react-native-paper';
 import { useColorScheme } from 'react-native';
+import { Provider as PaperProvider } from 'react-native-paper';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
@@ -11,7 +11,7 @@ import { AuthProvider } from '../src/context/AuthContext';
 import { UploadProvider } from '../src/context/UploadContext';
 
 // Import theme
-import { lightTheme, darkTheme } from '../src/theme';
+import { darkTheme, lightTheme } from '../src/theme';
 
 function ThemedApp() {
   const colorScheme = useColorScheme();

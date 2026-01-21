@@ -36,7 +36,7 @@ type UploadScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Main'
 const UploadScreen: React.FC = () => {
   const theme = useTheme();
   const navigation = useNavigation<UploadScreenNavigationProp>();
-  const { isUploading, progress, startUpload, updateProgress, completeUpload } = useUpload();
+  const { isUploading, progress, startUpload, updateProgress } = useUpload();
 
   const [playerType, setPlayerType] = useState<PlayerType>('batsman');
   const [playerSide, setPlayerSide] = useState<PlayerSide>('right');
@@ -151,21 +151,15 @@ const UploadScreen: React.FC = () => {
         formData.bowler_type = bowlerType;
       }
 
-      startUpload(formData);
+      // startUpload handles upload -> backend job enqueue -> polling until results are ready
+      const result = await startUpload(formData);
 
-      const response = await apiService.uploadVideo(formData);
-
-      if (response.success && response.data) {
-        completeUpload(response.data);
-        Toast.show({
-          type: 'success',
-          text1: 'Analysis Complete!',
-          text2: 'Your cricket technique has been analyzed successfully.',
-        });
-        navigation.navigate('Results' as any, { result: response.data });
-      } else {
-        throw new Error(response.error || 'Upload failed');
-      }
+      Toast.show({
+        type: 'success',
+        text1: 'Analysis Complete!',
+        text2: 'Your cricket technique has been analyzed successfully.',
+      });
+      navigation.navigate('Results' as any, { result });
     } catch (error: any) {
       console.error('Upload error:', error);
       Alert.alert('Upload Failed', error.message || 'Failed to upload video. Please try again.');

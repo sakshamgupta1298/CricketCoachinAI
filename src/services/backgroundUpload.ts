@@ -4,6 +4,7 @@ import apiService from './api';
 import { AnalysisResult, UploadFormData } from '../types';
 
 export interface BackgroundUploadState {
+  jobId?: string;
   uploadId: string;
   formData: UploadFormData;
   startTime: number;
@@ -23,6 +24,7 @@ class BackgroundUploadService {
   private uploadPromise: Promise<AnalysisResult> | null = null;
   private resolveUpload: ((result: AnalysisResult) => void) | null = null;
   private rejectUpload: ((error: Error) => void) | null = null;
+  private lastAppState: AppStateStatus = AppState.currentState;
 
   constructor() {
     this.initializeAppStateListener();
@@ -46,18 +48,22 @@ class BackgroundUploadService {
     if (!this.uploadState) return;
 
     if (nextAppState === 'background' || nextAppState === 'inactive') {
-      // App going to background - switch to polling mode immediately
-      // This ensures upload continues even if fetch gets cancelled
-      if (this.uploadState.status === 'uploading') {
-        console.log('📱 [BACKGROUND_UPLOAD] App going to background, switching to polling mode...');
-        this.uploadState.status = 'processing';
-        this.persistState();
-        this.startPolling();
+      // IMPORTANT:
+      // In React Native/Expo, when the app is backgrounded the JS runtime is commonly suspended.
+      // That means timers (setInterval) and most JS-driven networking will NOT reliably run.
+      // So we should *not* start polling here; instead we persist state and resume polling on foreground.
+      this.lastAppState = nextAppState;
+      console.log('📱 [BACKGROUND_UPLOAD] App backgrounded; persisting upload state and pausing active polling.');
+      this.persistState();
+      if (this.pollInterval) {
+        clearInterval(this.pollInterval);
+        this.pollInterval = null;
       }
     } else if (nextAppState === 'active') {
       // App came to foreground, resume checking if upload is in progress
       if (this.uploadState.status === 'uploading' || this.uploadState.status === 'processing') {
         console.log('🔄 [BACKGROUND_UPLOAD] App resumed, checking upload status...');
+        this.lastAppState = nextAppState;
         this.startPolling();
       }
     }
@@ -143,8 +149,8 @@ class BackgroundUploadService {
       this.rejectUpload = reject;
     });
 
-    // Start the upload process
-    this.performUpload();
+    // Start the upload + enqueue process
+    this.performUploadAndEnqueue();
 
     return this.uploadPromise;
   }
@@ -187,80 +193,39 @@ class BackgroundUploadService {
   /**
    * Perform the actual upload
    */
-  private async performUpload() {
+  private async performUploadAndEnqueue() {
     if (!this.uploadState) return;
 
     try {
-      console.log('📤 [BACKGROUND_UPLOAD] Starting upload...');
-      console.log('📱 [BACKGROUND_UPLOAD] Upload will continue even if app goes to background');
+      console.log('📤 [BACKGROUND_UPLOAD] Starting upload (will enqueue async backend job)...');
+      console.log('📱 [BACKGROUND_UPLOAD] Note: uploads are not guaranteed to complete if the app is backgrounded.');
       
       // Update status
       this.uploadState.status = 'uploading';
       await this.persistState();
 
       try {
-        // Attempt direct upload
-        // Note: If app goes to background, AppState handler will switch to polling mode
+        // Upload + enqueue job
         const response = await apiService.uploadVideo(this.uploadState.formData);
-        
-        // Stop polling if it was started (app might have gone to background)
-        if (this.pollInterval) {
-          clearInterval(this.pollInterval);
-          this.pollInterval = null;
-        }
-        
-        // Check if we're still in uploading state (not already completed via polling)
-        if (this.uploadState && this.uploadState.status === 'uploading') {
-          if (response.success && response.data) {
-            // Upload successful via direct response
-            this.uploadState.status = 'completed';
-            this.uploadState.result = response.data;
-            await this.persistState();
 
-            console.log('✅ [BACKGROUND_UPLOAD] Upload completed successfully via direct response');
-            
-            // Resolve the promise
-            if (this.resolveUpload) {
-              this.resolveUpload(response.data);
-            }
+        if (!this.uploadState) return;
 
-            // Clean up after a short delay
-            setTimeout(() => {
-              this.cleanup();
-            }, 2000);
-          } else {
-            throw new Error(response.error || 'Upload failed');
-          }
-        } else if (this.uploadState && this.uploadState.status === 'completed') {
-          // Polling already completed it, nothing to do
-          console.log('✅ [BACKGROUND_UPLOAD] Upload already completed via polling');
+        if (response.success && response.data?.job_id) {
+          this.uploadState.jobId = response.data.job_id;
+          this.uploadState.status = 'processing';
+          await this.persistState();
+
+          console.log('✅ [BACKGROUND_UPLOAD] Upload finished, job enqueued:', response.data.job_id);
+
+          // Start polling for the job result (only while app is active)
+          this.startPolling();
+        } else {
+          throw new Error(response.error || 'Upload failed');
         }
-        // If status is 'processing', polling is handling it
       } catch (error: any) {
-        // If upload promise fails, check if we should switch to polling
-        if (this.uploadState && this.uploadState.status === 'uploading') {
-          console.error('❌ [BACKGROUND_UPLOAD] Upload error:', error);
-          console.error('📋 [BACKGROUND_UPLOAD] Error details:', error.message);
-          
-          // Check if it's a timeout or network error - switch to polling
-          if (error.message?.includes('timeout') || 
-              error.message?.includes('timed out') ||
-              error.message?.includes('ECONNABORTED') ||
-              error.message?.includes('Network request failed') ||
-              error.message?.includes('Failed to fetch') ||
-              error.message?.includes('AbortError')) {
-            console.log('🔄 [BACKGROUND_UPLOAD] Network issue detected, switching to polling...');
-            this.uploadState.status = 'processing';
-            await this.persistState();
-            this.startPolling();
-          } else {
-            // Real error, mark as failed
-            await this.markAsFailed(error.message || 'Upload failed');
-          }
-        } else if (this.uploadState && this.uploadState.status === 'processing') {
-          // Already switched to polling (probably via AppState handler), it will handle completion
-          console.log('📱 [BACKGROUND_UPLOAD] Upload promise failed but polling will continue...');
-        }
+        console.error('❌ [BACKGROUND_UPLOAD] Upload/enqueue error:', error);
+        console.error('📋 [BACKGROUND_UPLOAD] Error details:', error.message);
+        await this.markAsFailed(error.message || 'Upload failed');
       }
     } catch (error: any) {
       console.error('❌ [BACKGROUND_UPLOAD] Unexpected error:', error);
@@ -281,6 +246,12 @@ class BackgroundUploadService {
     if (this.uploadState && this.uploadState.status === 'uploading') {
       this.uploadState.status = 'processing';
       this.persistState();
+    }
+
+    // If app isn't active, don't start a timer. It won't run reliably anyway.
+    if (this.lastAppState !== 'active') {
+      console.log('⏸️ [BACKGROUND_UPLOAD] Not starting polling because app is not active:', this.lastAppState);
+      return;
     }
 
     // Start polling
@@ -308,39 +279,46 @@ class BackgroundUploadService {
     }
 
     try {
-      // Try to get result by filename if available
-      // Note: This is a fallback mechanism in case the direct upload response was missed
-      // The backend processes synchronously, so this is mainly for edge cases
-      const filename = this.uploadState.formData.video_name;
-      
-      if (filename) {
-        console.log('🔍 [BACKGROUND_UPLOAD] Polling for result:', filename);
-        const resultResponse = await apiService.getAnalysisResult(filename);
-        
-        if (resultResponse.success && resultResponse.data) {
-          // Result found!
-          console.log('✅ [BACKGROUND_UPLOAD] Upload completed, result found via polling');
+      const jobId = this.uploadState.jobId;
+      if (!jobId) {
+        console.log('⏳ [BACKGROUND_UPLOAD] No jobId yet; waiting...');
+        return;
+      }
+
+      console.log('🔍 [BACKGROUND_UPLOAD] Polling for job result:', jobId);
+      const jobResponse = await apiService.getJobResult(jobId);
+
+      if (jobResponse.success && jobResponse.data) {
+        const status = jobResponse.data.status;
+        if (status === 'completed' && jobResponse.data.result) {
+          console.log('✅ [BACKGROUND_UPLOAD] Job completed, result received');
           this.uploadState.status = 'completed';
-          this.uploadState.result = resultResponse.data;
+          this.uploadState.result = jobResponse.data.result;
           await this.persistState();
 
-          // Resolve the promise if not already resolved
           if (this.resolveUpload) {
-            this.resolveUpload(resultResponse.data);
+            this.resolveUpload(jobResponse.data.result);
           }
 
-          // Clean up after a short delay
           setTimeout(() => {
             this.cleanup();
           }, 2000);
-        } else {
-          console.log('⏳ [BACKGROUND_UPLOAD] Result not ready yet, will continue polling...');
+          return;
         }
+
+        if (status === 'failed') {
+          await this.markAsFailed(jobResponse.data.error || 'Analysis failed');
+          return;
+        }
+
+        console.log('⏳ [BACKGROUND_UPLOAD] Job not ready yet, status:', status);
+      } else {
+        console.log('🔄 [BACKGROUND_UPLOAD] Job status check failed, will retry:', jobResponse.error);
       }
     } catch (error: any) {
       // Error checking status - continue polling unless it's a 404 (not found)
       if (error.message?.includes('404') || error.message?.includes('not found')) {
-        console.log('⏳ [BACKGROUND_UPLOAD] Result not found yet (404), will continue polling...');
+        console.log('⏳ [BACKGROUND_UPLOAD] Job not found yet (404), will continue polling...');
       } else {
         console.log('🔄 [BACKGROUND_UPLOAD] Status check failed, will retry:', error.message);
       }

@@ -305,7 +305,7 @@ export default function ResultsScreen() {
                   <Text style={[styles.fallbackText, { color: theme.colors.onSurfaceVariant }]}>
                     {result.annotated_video_path 
                       ? `Video path received: ${result.annotated_video_path} (but condition failed)` 
-                      : 'Video processing in progress...'}
+                      : 'Video/analysis processing may still be in progress. If you left the app, background work can pause on mobile—please keep the app open or come back in a moment.'}
                   </Text>
                 </View>
               );
