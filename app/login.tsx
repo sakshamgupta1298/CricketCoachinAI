@@ -9,11 +9,16 @@ import { PremiumButton } from '../src/components/ui/PremiumButton';
 import { PremiumCard } from '../src/components/ui/PremiumCard';
 import apiService from '../src/services/api';
 import { spacing } from '../src/theme';
+import { getResponsiveFontSize, getResponsiveSize } from '../src/utils/responsive';
 
 export default function LoginScreen() {
   const theme = useTheme();
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
+  
+  // Responsive dimensions
+  const iconSize = getResponsiveSize(180);
+  const iconMarginBottom = getResponsiveSize(-30);
   
   // Form state
   const [username, setUsername] = useState('');
@@ -183,19 +188,19 @@ export default function LoginScreen() {
             >
               <Image 
                 source={require('../assets/images/logo-icon.png')}
-                style={styles.appIcon}
+                style={[styles.appIcon, { width: iconSize, height: iconSize, marginBottom: iconMarginBottom }]}
                 resizeMode="contain"
               />
             </Animated.View>
             <Animated.Text 
               entering={FadeInDown.delay(300).springify()}
-              style={[styles.appTitle, { color: theme.colors.onBackground }]}
+              style={[styles.appTitle, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(36) }]}
             >
               CrickCoach AI
             </Animated.Text>
             <Animated.Text 
               entering={FadeInDown.delay(400).springify()}
-              style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}
+              style={[styles.subtitle, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(17) }]}
             >
               {isLogin ? 'Welcome back!' : 'Create your account'}
             </Animated.Text>
@@ -204,7 +209,7 @@ export default function LoginScreen() {
           {/* Auth Card */}
           <Animated.View entering={FadeInUp.delay(500).springify()}>
             <PremiumCard variant="elevated" padding="large" style={styles.authCard}>
-              <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
+              <Text style={[styles.cardTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(28) }]}>
                 {isLogin ? 'Login' : 'Register'}
               </Text>
 
@@ -290,7 +295,7 @@ export default function LoginScreen() {
                 style={styles.toggleContainer}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.toggleText, { color: theme.colors.primary }]}>
+                <Text style={[styles.toggleText, { color: theme.colors.primary, fontSize: getResponsiveFontSize(16) }]}>
                   {isLogin ? "Don't have an account? " : 'Already have an account? '}
                   <Text style={styles.toggleTextBold}>
                     {isLogin ? 'Register' : 'Login'}
@@ -307,7 +312,7 @@ export default function LoginScreen() {
               style={styles.backContainer}
               activeOpacity={0.7}
             >
-              <Text style={[styles.backText, { color: theme.colors.onSurfaceVariant }]}>
+              <Text style={[styles.backText, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(16) }]}>
                 ← Back to Home
               </Text>
             </TouchableOpacity>
@@ -328,75 +333,74 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: spacing.lg,
-    paddingTop: spacing.xxl,
-    paddingBottom: spacing.xl,
+    padding: getResponsiveSize(spacing.lg),
+    paddingTop: getResponsiveSize(spacing.xxl),
+    paddingBottom: getResponsiveSize(spacing.xl),
   },
   header: {
     alignItems: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: getResponsiveSize(spacing.xl),
   },
   appIconContainer: {
-    marginBottom: -30,
     alignItems: 'center',
     justifyContent: 'center',
+    // marginBottom set dynamically
   },
   appIcon: {
-    width: 180,
-    height: 180,
+    // width, height, marginBottom set dynamically
   },
   appTitle: {
-    fontSize: 36,
     fontWeight: '700',
-    marginBottom: spacing.sm,
+    marginBottom: getResponsiveSize(spacing.sm),
     letterSpacing: -0.5,
+    // fontSize set dynamically
   },
   subtitle: {
-    fontSize: 17,
     textAlign: 'center',
     fontWeight: '500',
+    // fontSize set dynamically
   },
   authCard: {
-    marginBottom: spacing.lg,
+    marginBottom: getResponsiveSize(spacing.lg),
   },
   cardTitle: {
-    fontSize: 28,
     fontWeight: '700',
     textAlign: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: getResponsiveSize(spacing.xl),
     letterSpacing: -0.3,
+    // fontSize set dynamically
   },
   input: {
-    marginBottom: spacing.md,
+    marginBottom: getResponsiveSize(spacing.md),
     backgroundColor: 'transparent',
   },
   inputContent: {
-    fontSize: 16,
+    fontSize: getResponsiveFontSize(16),
   },
   buttonContainer: {
-    marginTop: spacing.md,
-    marginBottom: spacing.md,
+    marginTop: getResponsiveSize(spacing.md),
+    marginBottom: getResponsiveSize(spacing.md),
   },
   toggleContainer: {
-    marginTop: spacing.lg,
+    marginTop: getResponsiveSize(spacing.lg),
     alignItems: 'center',
-    paddingVertical: spacing.sm,
+    paddingVertical: getResponsiveSize(spacing.sm),
   },
   toggleText: {
-    fontSize: 16,
     fontWeight: '500',
     textAlign: 'center',
+    // fontSize set dynamically
   },
   toggleTextBold: {
     fontWeight: '700',
   },
   backContainer: {
-    marginTop: spacing.xl,
+    marginTop: getResponsiveSize(spacing.xl),
     alignItems: 'center',
-    paddingVertical: spacing.sm,
+    paddingVertical: getResponsiveSize(spacing.sm),
   },
   backText: {
-    fontSize: 16,
     fontWeight: '500',
+    // fontSize set dynamically
   },
 }); 

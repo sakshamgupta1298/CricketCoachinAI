@@ -7,7 +7,8 @@ import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { PremiumButton } from '../../src/components/ui/PremiumButton';
 import { PremiumCard } from '../../src/components/ui/PremiumCard';
 import apiService from '../../src/services/api';
-import { borderRadius, colors, spacing } from '../../src/theme';
+import { colors, spacing } from '../../src/theme';
+import { getResponsiveFontSize, getResponsiveSize } from '../../src/utils/responsive';
 
 export default function HomeScreen() {
   const theme = useTheme();
@@ -143,10 +144,10 @@ export default function HomeScreen() {
           entering={FadeInDown.delay(100).springify()}
           style={styles.headerContent}
         >
-          <Text style={styles.greeting}>
+          <Text style={[styles.greeting, { fontSize: getResponsiveFontSize(32) }]}>
             Welcome back{user ? `, ${user.username}` : ''}!
           </Text>
-          <Text style={styles.subtitle}>
+          <Text style={[styles.subtitle, { fontSize: getResponsiveFontSize(17) }]}>
             Ready to improve your cricket game?
           </Text>
         </Animated.View>
@@ -156,7 +157,7 @@ export default function HomeScreen() {
       <View style={styles.section}>
         <Animated.Text 
           entering={FadeInUp.delay(200).springify()}
-          style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
+          style={[styles.sectionTitle, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(24) }]}
         >
           Quick Actions
         </Animated.Text>
@@ -174,18 +175,23 @@ export default function HomeScreen() {
                 <PremiumCard 
                   variant="elevated" 
                   padding="medium"
-                  style={[
+                  style={StyleSheet.flatten([
                     styles.actionCardInner,
                     { borderLeftWidth: 4, borderLeftColor: action.color }
-                  ]}
+                  ])}
                 >
-                  <View style={[styles.actionIconContainer, { backgroundColor: action.color + '20' }]}>
-                    <Text style={styles.actionIcon}>{action.icon}</Text>
+                  <View style={[styles.actionIconContainer, { 
+                    backgroundColor: action.color + '20',
+                    width: getResponsiveSize(64),
+                    height: getResponsiveSize(64),
+                    borderRadius: getResponsiveSize(32),
+                  }]}>
+                    <Text style={[styles.actionIcon, { fontSize: getResponsiveSize(28) }]}>{action.icon}</Text>
                   </View>
-                  <Text style={[styles.actionTitle, { color: theme.colors.onSurface }]}>
+                  <Text style={[styles.actionTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(17) }]}>
                     {action.title}
                   </Text>
-                  <Text style={[styles.actionSubtitle, { color: theme.colors.onSurfaceVariant }]}>
+                  <Text style={[styles.actionSubtitle, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(13) }]}>
                     {action.subtitle}
                   </Text>
                 </PremiumCard>
@@ -199,7 +205,7 @@ export default function HomeScreen() {
       <View style={styles.section}>
         <Animated.Text 
           entering={FadeInUp.delay(200).springify()}
-          style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
+          style={[styles.sectionTitle, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(24) }]}
         >
           Your Progress
         </Animated.Text>
@@ -213,19 +219,24 @@ export default function HomeScreen() {
               <PremiumCard 
                 variant="elevated" 
                 padding="large" 
-                style={[
+                style={StyleSheet.flatten([
                   styles.statCard,
                   { borderTopWidth: 3, borderTopColor: stat.color }
-                ]}
+                ])}
               >
                 <View style={styles.statContent}>
-                  <View style={[styles.statIconContainer, { backgroundColor: stat.color + '15' }]}>
-                    <Text style={styles.statIcon}>{stat.icon}</Text>
+                  <View style={[styles.statIconContainer, { 
+                    backgroundColor: stat.color + '15',
+                    width: getResponsiveSize(48),
+                    height: getResponsiveSize(48),
+                    borderRadius: getResponsiveSize(24),
+                  }]}>
+                    <Text style={[styles.statIcon, { fontSize: getResponsiveSize(24) }]}>{stat.icon}</Text>
                   </View>
-                  <Text style={[styles.statValue, { color: theme.colors.onSurface }]}>
+                  <Text style={[styles.statValue, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(22) }]}>
                     {stat.value}
                   </Text>
-                  <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>
+                  <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(12) }]}>
                     {stat.label}
                   </Text>
                 </View>
@@ -239,10 +250,10 @@ export default function HomeScreen() {
       <View style={styles.section}>
         <Animated.View entering={FadeInUp.delay(400).springify()}>
           <PremiumCard variant="elevated" padding="large" style={styles.ctaCard}>
-            <Text style={[styles.ctaTitle, { color: theme.colors.onSurface }]}>
+            <Text style={[styles.ctaTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(24) }]}>
               Start Your Analysis
             </Text>
-            <Text style={[styles.ctaDescription, { color: theme.colors.onSurfaceVariant }]}>
+            <Text style={[styles.ctaDescription, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(16) }]}>
               Upload a cricket video and get instant AI-powered feedback on your technique
             </Text>
             <View style={styles.ctaButtonContainer}>
@@ -266,80 +277,78 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingTop: spacing.xxl + 20,
-    paddingBottom: spacing.xl,
-    paddingHorizontal: spacing.lg,
+    paddingTop: getResponsiveSize(spacing.xxl + 20),
+    paddingBottom: getResponsiveSize(spacing.xl),
+    paddingHorizontal: getResponsiveSize(spacing.lg),
   },
   headerContent: {
-    paddingBottom: spacing.md,
+    paddingBottom: getResponsiveSize(spacing.md),
   },
   greeting: {
-    fontSize: 32,
     fontWeight: '700',
-    marginBottom: spacing.xs,
+    marginBottom: getResponsiveSize(spacing.xs),
     color: 'white',
     letterSpacing: -0.5,
+    // fontSize set dynamically
   },
   subtitle: {
-    fontSize: 17,
     color: 'rgba(255, 255, 255, 0.9)',
     fontWeight: '500',
+    // fontSize set dynamically
   },
   section: {
-    padding: spacing.lg,
-    paddingTop: spacing.xl,
+    padding: getResponsiveSize(spacing.lg),
+    paddingTop: getResponsiveSize(spacing.xl),
   },
   sectionTitle: {
-    fontSize: 24,
     fontWeight: '700',
-    marginBottom: spacing.lg,
+    marginBottom: getResponsiveSize(spacing.lg),
     letterSpacing: -0.3,
+    // fontSize set dynamically
   },
   quickActions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: spacing.md,
+    gap: getResponsiveSize(spacing.md),
   },
   actionCard: {
     flex: 1,
   },
   actionCardInner: {
     alignItems: 'center',
-    minHeight: 160,
+    minHeight: getResponsiveSize(160),
   },
   actionIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: getResponsiveSize(spacing.md),
+    // width, height, borderRadius set dynamically
   },
   actionIcon: {
-    fontSize: 28,
+    // fontSize set dynamically
   },
   actionTitle: {
-    fontSize: 17,
     fontWeight: '600',
     textAlign: 'center',
-    marginBottom: spacing.xs,
+    marginBottom: getResponsiveSize(spacing.xs),
     letterSpacing: 0.2,
+    // fontSize set dynamically
   },
   actionSubtitle: {
-    fontSize: 13,
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: getResponsiveSize(18),
+    // fontSize set dynamically
   },
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: spacing.md,
+    gap: getResponsiveSize(spacing.md),
   },
   statCardWrapper: {
     flex: 1,
   },
   statCard: {
-    height: 130,
+    height: getResponsiveSize(130),
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -349,44 +358,42 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   statIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: getResponsiveSize(spacing.sm),
+    // width, height, borderRadius set dynamically
   },
   statIcon: {
-    fontSize: 24,
+    // fontSize set dynamically
   },
   statValue: {
-    fontSize: 22,
     fontWeight: '700',
-    marginBottom: spacing.xs,
+    marginBottom: getResponsiveSize(spacing.xs),
     letterSpacing: -0.3,
     textAlign: 'center',
+    // fontSize set dynamically
   },
   statLabel: {
-    fontSize: 12,
-    lineHeight: 16,
+    lineHeight: getResponsiveSize(16),
     textAlign: 'center',
     fontWeight: '500',
+    // fontSize set dynamically
   },
   ctaCard: {
     alignItems: 'center',
   },
   ctaTitle: {
-    fontSize: 24,
     fontWeight: '700',
     textAlign: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: getResponsiveSize(spacing.sm),
     letterSpacing: -0.3,
+    // fontSize set dynamically
   },
   ctaDescription: {
-    fontSize: 16,
     textAlign: 'center',
-    marginBottom: spacing.xl,
-    lineHeight: 24,
+    marginBottom: getResponsiveSize(spacing.xl),
+    lineHeight: getResponsiveSize(24),
+    // fontSize set dynamically
   },
   ctaButtonContainer: {
     width: '100%',

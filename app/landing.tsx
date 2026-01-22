@@ -2,17 +2,27 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React from 'react';
-import { Dimensions, ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { Text, useTheme } from 'react-native-paper';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { PremiumButton } from '../src/components/ui/PremiumButton';
 import { PremiumCard } from '../src/components/ui/PremiumCard';
 import { shadows, spacing } from '../src/theme';
-
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+import {
+  getHeightPercentage,
+  getResponsiveFontSize,
+  getResponsiveSize,
+  getWidthPercentage,
+  screenWidth
+} from '../src/utils/responsive';
 
 export default function LandingScreen() {
   const theme = useTheme();
+  
+  // Responsive dimensions
+  const iconSize = getResponsiveSize(180);
+  const iconMarginTop = getResponsiveSize(30);
+  const titleMarginTop = getResponsiveSize(-40);
 
   const features = [
     {
@@ -63,25 +73,25 @@ export default function LandingScreen() {
           >
             <Image
               source={require('../assets/images/logo-icon.png')}
-              style={styles.appIcon}
+              style={[styles.appIcon, { width: iconSize, height: iconSize, marginTop: iconMarginTop }]}
               contentFit="contain"
             />
           </Animated.View>
           <Animated.Text 
             entering={FadeInDown.delay(300).springify()}
-            style={styles.appTitle}
+            style={[styles.appTitle, { fontSize: getResponsiveFontSize(42), marginTop: titleMarginTop }]}
           >
             CrickCoach AI
           </Animated.Text>
           <Animated.Text 
             entering={FadeInDown.delay(400).springify()}
-            style={styles.tagline}
+            style={[styles.tagline, { fontSize: getResponsiveFontSize(18) }]}
           >
             Your Personal AI-Powered Cricket Coach
           </Animated.Text>
           <Animated.Text 
             entering={FadeInDown.delay(500).springify()}
-            style={styles.description}
+            style={[styles.description, { fontSize: getResponsiveFontSize(17), maxWidth: getWidthPercentage(85) }]}
           >
             Upload your cricket videos and get AI-powered analysis of your batting and bowling techniques with detailed biomechanical insights.
           </Animated.Text>
@@ -92,7 +102,7 @@ export default function LandingScreen() {
       <View style={styles.section}>
         <Animated.Text 
           entering={FadeInUp.delay(100).springify()}
-          style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
+          style={[styles.sectionTitle, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(28) }]}
         >
           What You Can Do
         </Animated.Text>
@@ -107,11 +117,11 @@ export default function LandingScreen() {
               style={styles.featureCard}
             >
               <View style={styles.featureContent}>
-                <Text style={styles.featureIcon}>{feature.icon}</Text>
-                <Text style={[styles.featureTitle, { color: theme.colors.onSurface }]}>
+                <Text style={[styles.featureIcon, { fontSize: getResponsiveSize(48) }]}>{feature.icon}</Text>
+                <Text style={[styles.featureTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(17) }]}>
                   {feature.title}
                 </Text>
-                <Text style={[styles.featureDescription, { color: theme.colors.onSurfaceVariant }]}>
+                <Text style={[styles.featureDescription, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(13) }]}>
                   {feature.description}
                 </Text>
               </View>
@@ -124,7 +134,7 @@ export default function LandingScreen() {
       <View style={styles.section}>
         <Animated.Text 
           entering={FadeInUp.delay(100).springify()}
-          style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
+          style={[styles.sectionTitle, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(28) }]}
         >
           How It Works
         </Animated.Text>
@@ -142,14 +152,19 @@ export default function LandingScreen() {
                 entering={FadeInDown.delay(300 + index * 100).springify()}
                 style={[styles.step, index < 2 && styles.stepBorder]}
               >
-                <View style={[styles.stepNumber, { backgroundColor: theme.colors.primary }]}>
-                  <Text style={styles.stepNumberText}>{stepNum}</Text>
+                <View style={[styles.stepNumber, { 
+                  backgroundColor: theme.colors.primary,
+                  width: getResponsiveSize(48),
+                  height: getResponsiveSize(48),
+                  borderRadius: getResponsiveSize(24),
+                }]}>
+                  <Text style={[styles.stepNumberText, { fontSize: getResponsiveFontSize(20) }]}>{stepNum}</Text>
                 </View>
                 <View style={styles.stepContent}>
-                  <Text style={[styles.stepTitle, { color: theme.colors.onSurface }]}>
+                  <Text style={[styles.stepTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(19) }]}>
                     {step.title}
                   </Text>
-                  <Text style={[styles.stepDescription, { color: theme.colors.onSurfaceVariant }]}>
+                  <Text style={[styles.stepDescription, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(15) }]}>
                     {step.description}
                   </Text>
                 </View>
@@ -164,13 +179,13 @@ export default function LandingScreen() {
         <PremiumCard variant="elevated" padding="large" animated delay={200}>
           <Animated.Text 
             entering={FadeInUp.delay(300).springify()}
-            style={[styles.ctaTitle, { color: theme.colors.onSurface }]}
+            style={[styles.ctaTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(28) }]}
           >
             Ready to Improve Your Game?
           </Animated.Text>
           <Animated.Text 
             entering={FadeInUp.delay(400).springify()}
-            style={[styles.ctaDescription, { color: theme.colors.onSurfaceVariant }]}
+            style={[styles.ctaDescription, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(17) }]}
           >
             Start analyzing your cricket technique with AI-powered insights
           </Animated.Text>
@@ -197,10 +212,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   heroSection: {
-    minHeight: screenHeight * 0.55,
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.xxl + 20,
-    paddingHorizontal: spacing.lg,
+    minHeight: getHeightPercentage(55),
+    paddingTop: getResponsiveSize(spacing.xl),
+    paddingBottom: getResponsiveSize(spacing.xxl + 20),
+    paddingHorizontal: getResponsiveSize(spacing.lg),
     justifyContent: 'flex-start',
   },
   heroContent: {
@@ -212,129 +227,121 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   appIcon: {
-    width: 180,
-    height: 180,
-    marginTop: 30,
+    // width, height, marginTop set dynamically
   },
   appTitle: {
-    fontSize: 42,
     fontWeight: '600',
     color: 'white',
-    marginTop: -40,
-    marginBottom: spacing.xs,
+    marginBottom: getResponsiveSize(spacing.xs),
     textAlign: 'center',
     letterSpacing: -0.5,
-    // fontStyle: 'italic',
+    // fontSize and marginTop set dynamically
   },
   tagline: {
-    fontSize: 18,
     color: 'rgba(255, 255, 255, 0.95)',
-    marginBottom: spacing.xxl,
+    marginBottom: getResponsiveSize(spacing.xxl),
     textAlign: 'center',
     fontWeight: '300',
     letterSpacing: 0.3,
     fontStyle: 'italic',
+    // fontSize set dynamically
   },
   description: {
-    fontSize: 17,
     color: 'rgba(255, 255, 255, 0.85)',
     textAlign: 'center',
-    lineHeight: 26,
-    maxWidth: screenWidth * 0.85,
-    paddingHorizontal: spacing.md,
-    // fontStyle: 'italic',
+    lineHeight: getResponsiveSize(26),
+    paddingHorizontal: getResponsiveSize(spacing.md),
+    // fontSize and maxWidth set dynamically
   },
   section: {
-    padding: spacing.lg,
-    paddingTop: spacing.xl,
+    padding: getResponsiveSize(spacing.lg),
+    paddingTop: getResponsiveSize(spacing.xl),
   },
   sectionTitle: {
-    fontSize: 28,
     fontWeight: '700',
-    marginBottom: spacing.lg,
+    marginBottom: getResponsiveSize(spacing.lg),
     textAlign: 'center',
     letterSpacing: -0.3,
+    // fontSize set dynamically
   },
   featuresGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    gap: spacing.md,
+    gap: getResponsiveSize(spacing.md),
   },
   featureCard: {
-    width: (screenWidth - spacing.lg * 2 - spacing.md) / 2,
-    minHeight: 160,
+    width: (screenWidth - getResponsiveSize(spacing.lg) * 2 - getResponsiveSize(spacing.md)) / 2,
+    minHeight: getResponsiveSize(160),
   },
   featureContent: {
     alignItems: 'center',
     justifyContent: 'center',
   },
   featureIcon: {
-    fontSize: 48,
-    marginBottom: spacing.md,
+    marginBottom: getResponsiveSize(spacing.md),
+    // fontSize set dynamically
   },
   featureTitle: {
-    fontSize: 17,
     fontWeight: '600',
     textAlign: 'center',
-    marginBottom: spacing.xs,
+    marginBottom: getResponsiveSize(spacing.xs),
     letterSpacing: 0.2,
+    // fontSize set dynamically
   },
   featureDescription: {
-    fontSize: 13,
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: getResponsiveSize(18),
+    // fontSize set dynamically
   },
   step: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    paddingVertical: spacing.md,
+    paddingVertical: getResponsiveSize(spacing.md),
   },
   stepBorder: {
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0, 0, 0, 0.08)',
-    marginBottom: spacing.md,
+    marginBottom: getResponsiveSize(spacing.md),
   },
   stepNumber: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: spacing.md,
+    marginRight: getResponsiveSize(spacing.md),
     ...shadows.sm,
+    // width, height, borderRadius set dynamically
   },
   stepNumberText: {
     color: 'white',
-    fontSize: 20,
     fontWeight: '700',
+    // fontSize set dynamically
   },
   stepContent: {
     flex: 1,
-    paddingTop: spacing.xs,
+    paddingTop: getResponsiveSize(spacing.xs),
   },
   stepTitle: {
-    fontSize: 19,
     fontWeight: '600',
-    marginBottom: spacing.xs,
+    marginBottom: getResponsiveSize(spacing.xs),
     letterSpacing: 0.2,
+    // fontSize set dynamically
   },
   stepDescription: {
-    fontSize: 15,
-    lineHeight: 22,
+    lineHeight: getResponsiveSize(22),
+    // fontSize set dynamically
   },
   ctaTitle: {
-    fontSize: 28,
     fontWeight: '700',
     textAlign: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: getResponsiveSize(spacing.sm),
     letterSpacing: -0.3,
+    // fontSize set dynamically
   },
   ctaDescription: {
-    fontSize: 17,
     textAlign: 'center',
-    marginBottom: spacing.xl,
-    lineHeight: 24,
+    marginBottom: getResponsiveSize(spacing.xl),
+    lineHeight: getResponsiveSize(24),
+    // fontSize set dynamically
   },
   ctaButtonContainer: {
     width: '100%',

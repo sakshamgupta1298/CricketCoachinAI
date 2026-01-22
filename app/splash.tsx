@@ -3,7 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import React, { useEffect } from 'react';
-import { Dimensions, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Text, useTheme } from 'react-native-paper';
 import Animated, {
     Easing,
@@ -16,14 +16,18 @@ import Animated, {
     withSequence,
     withTiming
 } from 'react-native-reanimated';
-
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+    getResponsiveFontSize,
+    getResponsiveSize,
+    screenWidth
+} from '../src/utils/responsive';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
 
 // Loading Dots Component
-const LoadingDots = ({ color }: { color: string }) => {
+const LoadingDots = ({ color, dotSize = 8, gap = 8 }: { color: string; dotSize?: number; gap?: number }) => {
   const dot1Opacity = useSharedValue(0.3);
   const dot2Opacity = useSharedValue(0.3);
   const dot3Opacity = useSharedValue(0.3);
@@ -70,40 +74,68 @@ const LoadingDots = ({ color }: { color: string }) => {
   }));
 
   return (
-    <View style={styles.loadingDots}>
-      <Animated.View style={[styles.dot, { backgroundColor: color }, dot1Style]} />
-      <Animated.View style={[styles.dot, { backgroundColor: color }, dot2Style]} />
-      <Animated.View style={[styles.dot, { backgroundColor: color }, dot3Style]} />
+    <View style={[styles.loadingDots, { gap }]}>
+      <Animated.View style={[
+        styles.dot, 
+        { 
+          backgroundColor: color,
+          width: dotSize,
+          height: dotSize,
+          borderRadius: dotSize / 2,
+        }, 
+        dot1Style
+      ]} />
+      <Animated.View style={[
+        styles.dot, 
+        { 
+          backgroundColor: color,
+          width: dotSize,
+          height: dotSize,
+          borderRadius: dotSize / 2,
+        }, 
+        dot2Style
+      ]} />
+      <Animated.View style={[
+        styles.dot, 
+        { 
+          backgroundColor: color,
+          width: dotSize,
+          height: dotSize,
+          borderRadius: dotSize / 2,
+        }, 
+        dot3Style
+      ]} />
     </View>
   );
 };
 
 export default function SplashScreenComponent() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const [imageError, setImageError] = React.useState(false);
   
   // Animation values
   const scale = useSharedValue(0.8);
   const opacity = useSharedValue(1); // Start visible
+  
+  // Responsive dimensions
+  const logoSize = getResponsiveSize(150);
+  const appNameFontSize = getResponsiveFontSize(32);
+  const taglineFontSize = getResponsiveFontSize(16);
+  const logoMarginBottom = getResponsiveSize(40);
+  const textMarginBottom = getResponsiveSize(60);
+  const loadingMarginTop = getResponsiveSize(20);
+  const dotSize = Math.max(getResponsiveSize(8), 6); // Minimum 6px
+  const dotGap = getResponsiveSize(8);
 
   useEffect(() => {
     // Hide native splash screen immediately to show our custom one
     SplashScreen.hideAsync();
-    // Animate splash icon entrance with bounce effect, then continuous pulsing
+    // Animate splash icon entrance with bounce effect, then keep it static
     scale.value = withSequence(
       withTiming(0.5, { duration: 0 }), // Start small
-      withTiming(1.2, { duration: 1200, easing: Easing.out(Easing.exp) }), // Bounce up (slower)
-      withTiming(1, { duration: 600, easing: Easing.inOut(Easing.exp) }), // Settle (slower)
-      // Then start continuous pulsing animation
-      withRepeat(
-        withSequence(
-          withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.sin) }),
-          withTiming(1.05, { duration: 2000, easing: Easing.inOut(Easing.sin) }),
-          withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.sin) })
-        ),
-        -1,
-        false
-      )
+      withTiming(1.2, { duration: 1200, easing: Easing.out(Easing.exp) }), // Bounce up
+      withTiming(1, { duration: 600, easing: Easing.inOut(Easing.exp) }) // Settle to static
     );
     // Keep opacity at 1 (visible)
     opacity.value = 1;
@@ -135,7 +167,7 @@ export default function SplashScreenComponent() {
   });
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <LinearGradient
         colors={[theme.colors.primary, theme.colors.secondary, theme.colors.tertiary]}
         start={{ x: 0, y: 0 }}
@@ -145,7 +177,11 @@ export default function SplashScreenComponent() {
         <View style={styles.content}>
           {/* Splash Icon */}
           <Animated.View 
-            style={[styles.logoContainer, logoAnimatedStyle]}
+            style={[
+              styles.logoContainer, 
+              { marginBottom: logoMarginBottom },
+              logoAnimatedStyle
+            ]}
             entering={FadeIn.duration(800)}
             exiting={FadeOut.duration(500)}
           >
@@ -154,7 +190,7 @@ export default function SplashScreenComponent() {
                 ? require('../assets/images/logo-icon.png')
                 : require('../assets/images/splash-icon.png')
               }
-              style={styles.logo}
+              style={[styles.logo, { width: logoSize, height: logoSize }]}
               contentFit="contain"
               onError={(error) => {
                 console.error('Image load error:', error);
@@ -168,24 +204,48 @@ export default function SplashScreenComponent() {
 
           {/* App Name */}
           <Animated.View 
-            style={[styles.textContainer, textAnimatedStyle]}
+            style={[
+              styles.textContainer, 
+              { marginBottom: textMarginBottom },
+              textAnimatedStyle
+            ]}
             entering={FadeIn.delay(800).duration(1000)}
             exiting={FadeOut.duration(500)}
           >
-            <Text style={[styles.appName, { color: '#FFFFFF' }]}>
+            <Text style={[
+              styles.appName, 
+              { 
+                color: '#FFFFFF',
+                fontSize: appNameFontSize,
+              }
+            ]}>
               CricketCoach AI
             </Text>
-            <Text style={[styles.tagline, { color: '#FFFFFF' }]}>
+            <Text style={[
+              styles.tagline, 
+              { 
+                color: '#FFFFFF',
+                fontSize: taglineFontSize,
+              }
+            ]}>
               Your AI-Powered Cricket Coach
             </Text>
           </Animated.View>
 
           {/* Loading Indicator */}
           <Animated.View 
-            style={[styles.loadingContainer, textAnimatedStyle]}
+            style={[
+              styles.loadingContainer, 
+              { marginTop: loadingMarginTop },
+              textAnimatedStyle
+            ]}
             entering={FadeIn.delay(1200).duration(1000)}
           >
-            <LoadingDots color="#FFFFFF" />
+            <LoadingDots 
+              color="#FFFFFF" 
+              dotSize={dotSize}
+              gap={dotGap}
+            />
           </Animated.View>
         </View>
       </LinearGradient>
@@ -205,31 +265,33 @@ const styles = StyleSheet.create({
   content: {
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: screenWidth * 0.1, // 10% padding on sides
   },
   logoContainer: {
-    marginBottom: 40,
+    // marginBottom is set dynamically
   },
   logo: {
-    width: 150,
-    height: 150,
+    // width and height are set dynamically
   },
   textContainer: {
     alignItems: 'center',
-    marginBottom: 60,
+    // marginBottom is set dynamically
   },
   appName: {
-    fontSize: 32,
     fontWeight: 'bold',
     marginBottom: 8,
     letterSpacing: 1,
+    textAlign: 'center',
+    // fontSize is set dynamically
   },
   tagline: {
-    fontSize: 16,
     fontWeight: '400',
     opacity: 0.9,
+    textAlign: 'center',
+    // fontSize is set dynamically
   },
   loadingContainer: {
-    marginTop: 20,
+    // marginTop is set dynamically
   },
   loadingDots: {
     flexDirection: 'row',
@@ -238,9 +300,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    // width, height, and borderRadius are set dynamically
   },
 });
 

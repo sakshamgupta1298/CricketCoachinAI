@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Button, Card, Chip, Divider, IconButton, Surface, Text, useTheme } from 'react-native-paper';
 import Toast from 'react-native-toast-message';
@@ -9,7 +9,11 @@ import { TrainingPlan } from '../src/types';
 
 export default function TrainingPlanScreen() {
   const theme = useTheme();
-  const { filename, days = '7' } = useLocalSearchParams<{ filename: string; days: string }>();
+  const params = useLocalSearchParams<{ filename: string | string[]; days: string | string[] }>();
+  
+  // Normalize params - handle arrays from expo-router
+  const filename = Array.isArray(params.filename) ? params.filename[0] : params.filename;
+  const days = Array.isArray(params.days) ? params.days[0] : (params.days || '7');
   
   const [trainingPlan, setTrainingPlan] = useState<TrainingPlan | null>(null);
   const [loading, setLoading] = useState(false);
@@ -17,23 +21,50 @@ export default function TrainingPlanScreen() {
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [hasCheckedExisting, setHasCheckedExisting] = useState(false);
 
-  useEffect(() => {
-    if (filename && !hasCheckedExisting) {
-      // Only check for existing plan if user explicitly requests it
-      // For now, show generate plan screen directly
-      setHasCheckedExisting(true);
-    }
-  }, [filename, hasCheckedExisting]);
+  const validateTrainingPlan = (data: any): data is TrainingPlan => {
+    return (
+      data &&
+      typeof data === 'object' &&
+      Array.isArray(data.plan) &&
+      data.plan.length > 0 &&
+      data.plan.every((day: any) => 
+        day &&
+        typeof day.day === 'number' &&
+        typeof day.focus === 'string' &&
+        Array.isArray(day.warmup) &&
+        Array.isArray(day.drills) &&
+        typeof day.progression === 'string'
+      )
+    );
+  };
 
-  const loadTrainingPlan = async () => {
-    if (!filename) return;
+  const loadTrainingPlan = useCallback(async () => {
+    if (!filename || typeof filename !== 'string') {
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Invalid filename parameter',
+      });
+      return;
+    }
     
     setLoading(true);
     try {
       const response = await apiService.getTrainingPlan(filename);
-      if (response.success) {
-        setTrainingPlan(response.data);
-        setSelectedDay(1); // Select first day by default
+      if (response.success && response.data) {
+        // Validate the training plan structure before setting it
+        if (validateTrainingPlan(response.data)) {
+          setTrainingPlan(response.data);
+          setSelectedDay(1); // Select first day by default
+        } else {
+          console.error('Invalid training plan structure:', response.data);
+          Toast.show({
+            type: 'error',
+            text1: 'Error',
+            text2: 'Invalid training plan data received',
+          });
+          setTrainingPlan(null);
+        }
       } else {
         // Plan doesn't exist, show generate option (this is normal)
         setTrainingPlan(null);
@@ -52,22 +83,58 @@ export default function TrainingPlanScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filename]);
+
+  useEffect(() => {
+    // Automatically check for existing plan when component mounts
+    if (filename && typeof filename === 'string' && !hasCheckedExisting) {
+      setHasCheckedExisting(true);
+      loadTrainingPlan();
+    }
+  }, [filename, hasCheckedExisting, loadTrainingPlan]);
 
   const generateTrainingPlan = async () => {
-    if (!filename) return;
+    if (!filename || typeof filename !== 'string') {
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Invalid filename parameter',
+      });
+      return;
+    }
     
     setGenerating(true);
     try {
-      const response = await apiService.generateTrainingPlan(filename, parseInt(days));
-      if (response.success) {
-        setTrainingPlan(response.data);
-        setSelectedDay(1);
+      const daysNum = parseInt(days, 10);
+      if (isNaN(daysNum) || daysNum < 1) {
         Toast.show({
-          type: 'success',
-          text1: 'Success',
-          text2: 'Training plan generated successfully!',
+          type: 'error',
+          text1: 'Error',
+          text2: 'Invalid number of days',
         });
+        setGenerating(false);
+        return;
+      }
+
+      const response = await apiService.generateTrainingPlan(filename, daysNum);
+      if (response.success && response.data) {
+        // Validate the training plan structure before setting it
+        if (validateTrainingPlan(response.data)) {
+          setTrainingPlan(response.data);
+          setSelectedDay(1);
+          Toast.show({
+            type: 'success',
+            text1: 'Success',
+            text2: 'Training plan generated successfully!',
+          });
+        } else {
+          console.error('Invalid training plan structure:', response.data);
+          Toast.show({
+            type: 'error',
+            text1: 'Error',
+            text2: 'Invalid training plan data received',
+          });
+        }
       } else {
         Toast.show({
           type: 'error',
@@ -88,11 +155,13 @@ export default function TrainingPlanScreen() {
   };
 
   const renderDayCard = (day: any, index: number) => {
+    if (!day || typeof day.day !== 'number') return null;
+    
     const isSelected = selectedDay === day.day;
     
     return (
       <TouchableOpacity
-        key={day.day}
+        key={day.day || index}
         style={[
           styles.dayCard,
           { backgroundColor: theme.colors.surface },
@@ -107,7 +176,7 @@ export default function TrainingPlanScreen() {
           </View>
           <View style={styles.dayInfo}>
             <Text style={[styles.dayFocus, { color: theme.colors.onSurface }]}>
-              {day.focus}
+              {day.focus || 'Training Day'}
             </Text>
             <Text style={[styles.dayDuration, { color: theme.colors.onSurfaceVariant }]}>
               ~45-60 min session
@@ -119,7 +188,7 @@ export default function TrainingPlanScreen() {
   };
 
   const renderSelectedDay = () => {
-    if (!trainingPlan || !selectedDay) return null;
+    if (!trainingPlan || !selectedDay || !Array.isArray(trainingPlan.plan)) return null;
     
     const day = trainingPlan.plan.find(d => d.day === selectedDay);
     if (!day) return null;
@@ -145,7 +214,7 @@ export default function TrainingPlanScreen() {
               Warmup (10-15 min)
             </Text>
           </View>
-          {day.warmup.map((exercise, index) => (
+          {Array.isArray(day.warmup) && day.warmup.map((exercise, index) => (
             <View key={index} style={styles.exerciseItem}>
               <Text style={styles.bulletPoint}>•</Text>
               <Text style={[styles.exerciseText, { color: theme.colors.onSurfaceVariant }]}>
@@ -165,18 +234,18 @@ export default function TrainingPlanScreen() {
               Main Drills (25-35 min)
             </Text>
           </View>
-          {day.drills.map((drill, index) => (
+          {Array.isArray(day.drills) && day.drills.map((drill, index) => (
             <Card key={index} style={styles.drillCard} mode="outlined">
               <Card.Content>
                 <View style={styles.drillHeader}>
                   <Text style={[styles.drillName, { color: theme.colors.onSurface }]}>
-                    {drill.name}
+                    {drill?.name || 'Drill'}
                   </Text>
                   <Chip mode="outlined" compact>
-                    {drill.reps}
+                    {drill?.reps || 'N/A'}
                   </Chip>
                 </View>
-                {drill.notes && (
+                {drill?.notes && (
                   <Text style={[styles.drillNotes, { color: theme.colors.onSurfaceVariant }]}>
                     💡 {drill.notes}
                   </Text>
@@ -313,7 +382,7 @@ export default function TrainingPlanScreen() {
                 Training Days
               </Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.daysScroll}>
-                {trainingPlan.plan.map((day, index) => renderDayCard(day, index))}
+                {Array.isArray(trainingPlan.plan) && trainingPlan.plan.map((day, index) => renderDayCard(day, index))}
               </ScrollView>
             </View>
 
