@@ -7,6 +7,7 @@ import { currentConfig } from '../config';
 import apiService from '../src/services/api';
 import { borderRadius, colors, shadows, spacing } from '../src/theme';
 import { AnalysisResult } from '../src/types';
+import { getResponsiveSize, getResponsiveFontSize, screenWidth } from '../src/utils/responsive';
 
 export default function ResultsScreen() {
   const theme = useTheme();
@@ -268,7 +269,7 @@ export default function ResultsScreen() {
                 : String(result.annotated_video_path).includes('\\')
                 ? String(result.annotated_video_path).split('\\').pop()
                 : String(result.annotated_video_path);
-              const videoUrl = `${currentConfig.API_BASE_URL}/api/video/${encodeURIComponent(videoFilename)}`;
+              const videoUrl = `${currentConfig.API_BASE_URL}/api/video/${encodeURIComponent(videoFilename || '')}`;
               
               console.log('🎥 [VIDEO] Loading video from URL:', videoUrl);
               console.log('🎥 [VIDEO] Video filename:', videoFilename);
@@ -380,86 +381,86 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: spacing.lg,
+    padding: getResponsiveSize(spacing.lg),
   },
   header: {
-    padding: spacing.lg,
+    padding: getResponsiveSize(spacing.lg),
     borderRadius: borderRadius.lg,
-    marginBottom: spacing.lg,
-    ...shadows.medium,
+    marginBottom: getResponsiveSize(spacing.lg),
+    ...shadows.md,
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: getResponsiveSize(spacing.md),
   },
   playerTypeIcon: {
-    fontSize: 48,
-    marginRight: spacing.md,
+    fontSize: getResponsiveSize(48),
+    marginRight: getResponsiveSize(spacing.md),
   },
   headerText: {
     flex: 1,
   },
   title: {
-    fontSize: 24,
+    fontSize: getResponsiveFontSize(24),
     fontWeight: 'bold',
-    marginBottom: spacing.sm,
+    marginBottom: getResponsiveSize(spacing.sm),
   },
   shotChip: {
     alignSelf: 'flex-start',
   },
   playerInfo: {
-    gap: spacing.xs,
+    gap: getResponsiveSize(spacing.xs),
   },
   playerInfoText: {
-    fontSize: 14,
+    fontSize: getResponsiveFontSize(14),
   },
   card: {
-    marginBottom: spacing.lg,
-    ...shadows.small,
+    marginBottom: getResponsiveSize(spacing.lg),
+    ...shadows.sm,
   },
   cardTitle: {
-    fontSize: 18,
+    fontSize: getResponsiveFontSize(18),
     fontWeight: '600',
-    marginBottom: spacing.md,
+    marginBottom: getResponsiveSize(spacing.md),
   },
   cardDescription: {
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: getResponsiveFontSize(16),
+    lineHeight: getResponsiveSize(24),
   },
   analysisText: {
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: getResponsiveFontSize(16),
+    lineHeight: getResponsiveSize(24),
   },
   errorText: {
-    fontSize: 18,
+    fontSize: getResponsiveFontSize(18),
     textAlign: 'center',
-    marginTop: 50,
+    marginTop: getResponsiveSize(50),
   },
   actionButtons: {
     flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: spacing.lg,
+    gap: getResponsiveSize(spacing.md),
+    marginTop: getResponsiveSize(spacing.lg),
   },
   actionButton: {
     flex: 1,
-    paddingVertical: spacing.md,
+    paddingVertical: getResponsiveSize(spacing.md),
     borderRadius: borderRadius.lg,
     alignItems: 'center',
     borderWidth: 1,
   },
   actionButtonText: {
-    fontSize: 16,
+    fontSize: getResponsiveFontSize(16),
     fontWeight: '600',
     color: 'white',
   },
   section: {
-    marginTop: spacing.lg,
+    marginTop: getResponsiveSize(spacing.lg),
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: getResponsiveFontSize(20),
     fontWeight: 'bold',
-    marginBottom: spacing.md,
+    marginBottom: getResponsiveSize(spacing.md),
   },
   flawHeader: {
     marginBottom: spacing.md,
@@ -559,8 +560,8 @@ const styles = StyleSheet.create({
   },
   videoContainer: {
     width: '100%',
-    height: Dimensions.get('window').width * 0.75, // 4:3 aspect ratio
-    marginTop: spacing.md,
+    height: screenWidth * 0.75, // 4:3 aspect ratio
+    marginTop: getResponsiveSize(spacing.md),
     borderRadius: borderRadius.md,
     overflow: 'hidden',
     backgroundColor: colors.gray[900],

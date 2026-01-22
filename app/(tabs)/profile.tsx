@@ -6,6 +6,7 @@ import Toast from 'react-native-toast-message';
 import { useAuth } from '../../src/context/AuthContext';
 import apiService from '../../src/services/api';
 import { borderRadius, shadows, spacing } from '../../src/theme';
+import { getResponsiveSize, getResponsiveFontSize } from '../../src/utils/responsive';
 
 export default function ProfileScreen() {
   const theme = useTheme();
@@ -95,25 +96,33 @@ export default function ProfileScreen() {
   };
 
   const InfoRow = ({ icon, label, value, iconColor }: { icon: string; label: string; value: string; iconColor: string }) => (
-    <View style={styles.infoRow}>
-      <View style={[styles.iconContainer, { backgroundColor: iconColor + '20' }]}>
-        <Text style={[styles.iconText, { color: iconColor }]}>{icon}</Text>
+      <View style={styles.infoRow}>
+      <View style={[styles.iconContainer, { 
+        backgroundColor: iconColor + '20',
+        width: getResponsiveSize(40),
+        height: getResponsiveSize(40),
+      }]}>
+        <Text style={[styles.iconText, { color: iconColor, fontSize: getResponsiveSize(20) }]}>{icon}</Text>
       </View>
       <View style={styles.infoContent}>
-        <Text style={[styles.infoLabel, { color: theme.colors.onSurfaceVariant }]}>{label}</Text>
-        <Text style={[styles.infoValue, { color: theme.colors.onSurface }]}>{value}</Text>
+        <Text style={[styles.infoLabel, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(12) }]}>{label}</Text>
+        <Text style={[styles.infoValue, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(16) }]}>{value}</Text>
       </View>
     </View>
   );
 
   const FeatureCard = ({ icon, title, description, iconColor }: { icon: string; title: string; description: string; iconColor: string }) => (
     <View style={[styles.featureCard, { backgroundColor: theme.colors.surface }]}>
-      <View style={[styles.featureIconContainer, { backgroundColor: iconColor + '20' }]}>
-        <Text style={[styles.featureIcon, { color: iconColor }]}>{icon}</Text>
+      <View style={[styles.featureIconContainer, { 
+        backgroundColor: iconColor + '20',
+        width: getResponsiveSize(48),
+        height: getResponsiveSize(48),
+      }]}>
+        <Text style={[styles.featureIcon, { color: iconColor, fontSize: getResponsiveSize(24) }]}>{icon}</Text>
       </View>
       <View style={styles.featureContent}>
-        <Text style={[styles.featureTitle, { color: theme.colors.onSurface }]}>{title}</Text>
-        <Text style={[styles.featureDescription, { color: theme.colors.onSurfaceVariant }]}>{description}</Text>
+        <Text style={[styles.featureTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(16) }]}>{title}</Text>
+        <Text style={[styles.featureDescription, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>{description}</Text>
       </View>
     </View>
   );
@@ -125,10 +134,10 @@ export default function ProfileScreen() {
       activeOpacity={0.7}
     >
       <View style={styles.actionItemLeft}>
-        <Text style={styles.actionIcon}>{icon}</Text>
-        <Text style={[styles.actionLabel, { color: theme.colors.onSurface }]}>{label}</Text>
+        <Text style={[styles.actionIcon, { fontSize: getResponsiveSize(20) }]}>{icon}</Text>
+        <Text style={[styles.actionLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(16) }]}>{label}</Text>
       </View>
-      <Text style={[styles.actionArrow, { color: theme.colors.onSurfaceVariant }]}>›</Text>
+      <Text style={[styles.actionArrow, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(24) }]}>›</Text>
     </TouchableOpacity>
   );
 
@@ -140,22 +149,22 @@ export default function ProfileScreen() {
       {/* Profile Header */}
       <View style={styles.profileHeader}>
         <Avatar.Text 
-          size={80} 
+          size={getResponsiveSize(80)} 
           label={displayName && displayName !== 'User' ? displayName.charAt(0).toUpperCase() : 'U'}
           style={[styles.avatar, { backgroundColor: theme.colors.primary }]}
-          labelStyle={styles.avatarLabel}
+          labelStyle={[styles.avatarLabel, { fontSize: getResponsiveFontSize(32) }]}
         />
-        <Text style={[styles.userName, { color: theme.colors.onBackground }]}>
+        <Text style={[styles.userName, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(24) }]}>
           {displayName}
           </Text>
-        <Text style={[styles.userRole, { color: theme.colors.onSurfaceVariant }]}>
+        <Text style={[styles.userRole, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(16) }]}>
           Client
           </Text>
         </View>
 
       {/* Account Information */}
       <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(20) }]}>
           Account Information
         </Text>
         <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
@@ -182,7 +191,7 @@ export default function ProfileScreen() {
 
       {/* App Features */}
       <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(20) }]}>
           App Features
             </Text>
         <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
@@ -209,7 +218,7 @@ export default function ProfileScreen() {
 
       {/* Account Actions */}
       <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(20) }]}>
           Account Actions
             </Text>
         <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
@@ -247,14 +256,14 @@ export default function ProfileScreen() {
               onPress={handleLogout}
         activeOpacity={0.8}
             >
-        <Text style={styles.logoutIcon}>↪</Text>
-        <Text style={[styles.logoutText, { color: theme.colors.onError }]}>
+        <Text style={[styles.logoutIcon, { fontSize: getResponsiveSize(20) }]}>↪</Text>
+        <Text style={[styles.logoutText, { color: theme.colors.onError, fontSize: getResponsiveFontSize(16) }]}>
               Logout
             </Text>
       </TouchableOpacity>
 
       {/* App Version */}
-      <Text style={[styles.appVersion, { color: theme.colors.onSurfaceVariant }]}>
+      <Text style={[styles.appVersion, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
         CricketCoach AI v1.0.0
             </Text>
     </ScrollView>
@@ -266,105 +275,103 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    padding: spacing.lg,
-    paddingBottom: spacing.xxl,
+    padding: getResponsiveSize(spacing.lg),
+    paddingBottom: getResponsiveSize(spacing.xxl),
   },
   profileHeader: {
     alignItems: 'center',
-    marginBottom: spacing.xl,
-    marginTop: spacing.md,
+    marginBottom: getResponsiveSize(spacing.xl),
+    marginTop: getResponsiveSize(spacing.md),
   },
   avatar: {
-    marginBottom: spacing.md,
+    marginBottom: getResponsiveSize(spacing.md),
   },
   avatarLabel: {
-    fontSize: 32,
     fontWeight: '600',
+    // fontSize set dynamically
   },
   userName: {
-    fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: spacing.xs,
+    marginBottom: getResponsiveSize(spacing.xs),
+    // fontSize set dynamically
   },
   userRole: {
-    fontSize: 16,
+    // fontSize set dynamically
   },
   section: {
-    marginBottom: spacing.xl,
+    marginBottom: getResponsiveSize(spacing.xl),
   },
   sectionTitle: {
-    fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: spacing.md,
+    marginBottom: getResponsiveSize(spacing.md),
+    // fontSize set dynamically
   },
   card: {
     borderRadius: borderRadius.md,
-    padding: spacing.md,
+    padding: getResponsiveSize(spacing.md),
     ...shadows.sm,
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: getResponsiveSize(spacing.md),
   },
   iconContainer: {
-    width: 40,
-    height: 40,
     borderRadius: borderRadius.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.md,
+    marginRight: getResponsiveSize(spacing.md),
+    // width, height set dynamically
   },
   iconText: {
-    fontSize: 20,
+    // fontSize set dynamically
   },
   infoContent: {
     flex: 1,
   },
   infoLabel: {
-    fontSize: 12,
-    marginBottom: spacing.xs,
+    marginBottom: getResponsiveSize(spacing.xs),
+    // fontSize set dynamically
   },
   infoValue: {
-    fontSize: 16,
     fontWeight: '500',
+    // fontSize set dynamically
   },
   featureCard: {
     flexDirection: 'row',
-    padding: spacing.md,
+    padding: getResponsiveSize(spacing.md),
     borderRadius: borderRadius.sm,
-    marginBottom: spacing.md,
+    marginBottom: getResponsiveSize(spacing.md),
   },
   featureIconContainer: {
-    width: 48,
-    height: 48,
     borderRadius: borderRadius.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.md,
+    marginRight: getResponsiveSize(spacing.md),
+    // width, height set dynamically
   },
   featureIcon: {
-    fontSize: 24,
+    // fontSize set dynamically
   },
   featureContent: {
     flex: 1,
   },
   featureTitle: {
-    fontSize: 16,
     fontWeight: '600',
-    marginBottom: spacing.xs,
+    marginBottom: getResponsiveSize(spacing.xs),
+    // fontSize set dynamically
   },
   featureDescription: {
-    fontSize: 14,
-    lineHeight: 20,
+    lineHeight: getResponsiveSize(20),
+    // fontSize set dynamically
   },
   actionItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: spacing.md,
+    padding: getResponsiveSize(spacing.md),
     borderRadius: borderRadius.sm,
-    marginBottom: spacing.sm,
+    marginBottom: getResponsiveSize(spacing.sm),
   },
   actionItemLeft: {
     flexDirection: 'row',
@@ -372,38 +379,38 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   actionIcon: {
-    fontSize: 20,
-    marginRight: spacing.md,
+    marginRight: getResponsiveSize(spacing.md),
+    // fontSize set dynamically
   },
   actionLabel: {
-    fontSize: 16,
     flex: 1,
+    // fontSize set dynamically
   },
   actionArrow: {
-    fontSize: 24,
     fontWeight: '300',
+    // fontSize set dynamically
   },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.md,
+    padding: getResponsiveSize(spacing.md),
     borderRadius: borderRadius.md,
-    marginTop: spacing.lg,
-    marginBottom: spacing.md,
+    marginTop: getResponsiveSize(spacing.lg),
+    marginBottom: getResponsiveSize(spacing.md),
   },
   logoutIcon: {
-    fontSize: 20,
     color: '#FFFFFF',
-    marginRight: spacing.sm,
+    marginRight: getResponsiveSize(spacing.sm),
+    // fontSize set dynamically
   },
   logoutText: {
-    fontSize: 16,
     fontWeight: '600',
+    // fontSize set dynamically
   },
   appVersion: {
     textAlign: 'center',
-    fontSize: 14,
-    marginTop: spacing.md,
+    marginTop: getResponsiveSize(spacing.md),
+    // fontSize set dynamically
   },
 }); 

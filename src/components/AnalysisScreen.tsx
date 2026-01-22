@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect } from 'react';
-import { Dimensions, Modal, StyleSheet, View } from 'react-native';
+import { Modal, StyleSheet, View } from 'react-native';
 import { Text, useTheme } from 'react-native-paper';
 import Animated, {
   Easing,
@@ -15,8 +15,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { borderRadius, spacing } from '../theme';
-
-const { width, height } = Dimensions.get('window');
+import { getResponsiveSize, getResponsiveFontSize, screenWidth } from '../utils/responsive';
 
 interface AnalysisScreenProps {
   visible: boolean;
@@ -108,7 +107,7 @@ const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
     const translateX = interpolate(
       shimmer.value,
       [0, 1],
-      [-width, width],
+      [-screenWidth, screenWidth],
       Extrapolate.CLAMP
     );
 
@@ -326,8 +325,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   container: {
-    width: width * 0.85,
-    maxWidth: 400,
+    width: screenWidth * 0.85,
+    maxWidth: getResponsiveSize(400),
     borderRadius: borderRadius.xl,
     overflow: 'hidden',
     backgroundColor: 'transparent',
@@ -338,12 +337,12 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    width: width * 0.3,
+    width: screenWidth * 0.3,
     opacity: 0.3,
   },
   content: {
     borderRadius: borderRadius.xl,
-    padding: spacing.xl * 1.5,
+    padding: getResponsiveSize(spacing.xl * 1.5),
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: {
@@ -366,106 +365,106 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: '12%',
     right: '12%',
-    height: 2,
+    height: getResponsiveSize(2),
     top: '22%',
-    borderRadius: 2,
+    borderRadius: getResponsiveSize(2),
   },
   pitchLineMid: {
     top: '52%',
-    height: 1,
+    height: getResponsiveSize(1),
     left: '16%',
     right: '16%',
   },
   pitchLineBottom: {
     top: '82%',
-    height: 2,
+    height: getResponsiveSize(2),
   },
   iconContainer: {
-    width: 120,
-    height: 120,
+    width: getResponsiveSize(120),
+    height: getResponsiveSize(120),
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: getResponsiveSize(spacing.xl),
     position: 'relative',
   },
   ballContainer: {
     position: 'absolute',
-    width: 80,
-    height: 80,
+    width: getResponsiveSize(80),
+    height: getResponsiveSize(80),
     justifyContent: 'center',
     alignItems: 'center',
   },
   cricketBall: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 3,
+    width: getResponsiveSize(80),
+    height: getResponsiveSize(80),
+    borderRadius: getResponsiveSize(40),
+    borderWidth: getResponsiveSize(3),
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
   },
   ballSeam: {
     position: 'absolute',
-    width: 70,
-    height: 2,
+    width: getResponsiveSize(70),
+    height: getResponsiveSize(2),
     backgroundColor: '#fff',
-    borderRadius: 1,
+    borderRadius: getResponsiveSize(1),
   },
   ballSeamVertical: {
-    width: 2,
-    height: 70,
+    width: getResponsiveSize(2),
+    height: getResponsiveSize(70),
   },
   analysisIcon: {
     position: 'absolute',
     zIndex: 1,
   },
   iconEmoji: {
-    fontSize: 48,
+    fontSize: getResponsiveSize(48),
   },
   textContainer: {
     alignItems: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: getResponsiveSize(spacing.xl),
   },
   title: {
-    fontSize: 24,
+    fontSize: getResponsiveFontSize(24),
     fontWeight: '700',
-    marginBottom: spacing.sm,
+    marginBottom: getResponsiveSize(spacing.sm),
     textAlign: 'center',
     letterSpacing: 0.5,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: getResponsiveFontSize(16),
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: getResponsiveSize(22),
   },
   infoContainer: {
     width: '100%',
     alignItems: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: getResponsiveSize(spacing.lg),
   },
   infoPill: {
     width: '100%',
     borderRadius: borderRadius.lg,
     borderWidth: 1,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
+    paddingVertical: getResponsiveSize(spacing.sm),
+    paddingHorizontal: getResponsiveSize(spacing.md),
     flexDirection: 'row',
     alignItems: 'center',
   },
   infoEmoji: {
-    fontSize: 16,
-    marginRight: spacing.sm,
+    fontSize: getResponsiveSize(16),
+    marginRight: getResponsiveSize(spacing.sm),
   },
   infoText: {
     flex: 1,
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: getResponsiveFontSize(13),
+    lineHeight: getResponsiveSize(18),
     fontWeight: '600',
   },
   reassuranceText: {
-    marginTop: spacing.sm,
-    fontSize: 12.5,
-    lineHeight: 18,
+    marginTop: getResponsiveSize(spacing.sm),
+    fontSize: getResponsiveFontSize(12.5),
+    lineHeight: getResponsiveSize(18),
     textAlign: 'center',
     opacity: 0.95,
   },

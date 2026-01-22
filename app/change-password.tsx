@@ -5,6 +5,7 @@ import { Button, Text, TextInput, useTheme } from 'react-native-paper';
 import Toast from 'react-native-toast-message';
 import apiService from '../src/services/api';
 import { borderRadius, spacing } from '../src/theme';
+import { getResponsiveSize, getResponsiveFontSize } from '../src/utils/responsive';
 
 export default function ChangePasswordScreen() {
   const theme = useTheme();
@@ -106,10 +107,10 @@ export default function ChangePasswordScreen() {
         <View style={styles.content}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={[styles.title, { color: theme.colors.onBackground }]}>
+            <Text style={[styles.title, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(28) }]}>
               Change Password
             </Text>
-            <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>
+            <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(16) }]}>
               Enter your current password and choose a new one
             </Text>
           </View>
@@ -167,7 +168,7 @@ export default function ChangePasswordScreen() {
               autoCorrect={false}
             />
 
-            <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>
+            <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(12) }]}>
               Password must be at least 6 characters long
             </Text>
 
@@ -205,38 +206,38 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: spacing.lg,
+    padding: getResponsiveSize(spacing.lg),
   },
   header: {
-    marginBottom: spacing.xl,
-    marginTop: spacing.md,
+    marginBottom: getResponsiveSize(spacing.xl),
+    marginTop: getResponsiveSize(spacing.md),
   },
   title: {
-    fontSize: 28,
     fontWeight: 'bold',
-    marginBottom: spacing.xs,
+    marginBottom: getResponsiveSize(spacing.xs),
+    // fontSize set dynamically
   },
   subtitle: {
-    fontSize: 16,
-    lineHeight: 22,
+    lineHeight: getResponsiveSize(22),
+    // fontSize set dynamically
   },
   form: {
     flex: 1,
   },
   input: {
-    marginBottom: spacing.md,
+    marginBottom: getResponsiveSize(spacing.md),
   },
   hint: {
-    fontSize: 12,
-    marginBottom: spacing.lg,
-    marginTop: -spacing.sm,
+    marginBottom: getResponsiveSize(spacing.lg),
+    marginTop: -getResponsiveSize(spacing.sm),
+    // fontSize set dynamically
   },
   button: {
-    marginTop: spacing.md,
-    marginBottom: spacing.sm,
+    marginTop: getResponsiveSize(spacing.md),
+    marginBottom: getResponsiveSize(spacing.sm),
   },
   cancelButton: {
-    marginTop: spacing.sm,
+    marginTop: getResponsiveSize(spacing.sm),
   },
 });
 

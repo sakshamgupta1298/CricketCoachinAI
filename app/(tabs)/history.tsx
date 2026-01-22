@@ -6,6 +6,7 @@ import Toast from 'react-native-toast-message';
 import apiService from '../../src/services/api';
 import { borderRadius, colors, shadows, spacing } from '../../src/theme';
 import { HistoryItem } from '../../src/types';
+import { getResponsiveSize, getResponsiveFontSize } from '../../src/utils/responsive';
 
 export default function HistoryScreen() {
   const theme = useTheme();
@@ -119,15 +120,15 @@ export default function HistoryScreen() {
       <Card.Content>
         <View style={styles.itemHeader}>
           <View style={styles.itemIcon}>
-            <Text style={styles.playerTypeIcon}>
+            <Text style={[styles.playerTypeIcon, { fontSize: getResponsiveSize(32) }]}>
               {getPlayerTypeIcon(item.player_type)}
             </Text>
           </View>
           <View style={styles.itemInfo}>
-            <Text style={[styles.filename, { color: theme.colors.onSurface }]}>
+            <Text style={[styles.filename, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(16) }]}>
               {item.filename}
             </Text>
-            <Text style={[styles.date, { color: theme.colors.onSurfaceVariant }]}>
+            <Text style={[styles.date, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
               {formatDate(item.created)}
             </Text>
           </View>
@@ -166,7 +167,7 @@ export default function HistoryScreen() {
         </View>
 
         <View style={styles.itemFooter}>
-          <Text style={[styles.fileSize, { color: theme.colors.onSurfaceVariant }]}>
+          <Text style={[styles.fileSize, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(12) }]}>
             {formatFileSize(item.size)}
           </Text>
           {item.has_gpt_feedback && (
@@ -181,7 +182,7 @@ export default function HistoryScreen() {
             style={[styles.viewButton, { backgroundColor: theme.colors.primary }]}
             onPress={() => handleViewResult(item)}
           >
-            <Text style={styles.viewButtonText}>View Analysis</Text>
+            <Text style={[styles.viewButtonText, { fontSize: getResponsiveFontSize(14) }]}>View Analysis</Text>
           </TouchableOpacity>
           
           <TouchableOpacity
@@ -191,7 +192,7 @@ export default function HistoryScreen() {
               params: { filename: item.filename, days: '7' }
             })}
           >
-            <Text style={styles.viewButtonText}>Training Plan</Text>
+            <Text style={[styles.viewButtonText, { fontSize: getResponsiveFontSize(14) }]}>Training Plan</Text>
           </TouchableOpacity>
         </View>
       </Card.Content>
@@ -200,18 +201,18 @@ export default function HistoryScreen() {
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <Text style={styles.emptyIcon}>📋</Text>
-      <Text style={[styles.emptyTitle, { color: theme.colors.onBackground }]}>
+      <Text style={[styles.emptyIcon, { fontSize: getResponsiveSize(64) }]}>📋</Text>
+      <Text style={[styles.emptyTitle, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(24) }]}>
         No Analysis History
       </Text>
-      <Text style={[styles.emptySubtitle, { color: theme.colors.onSurfaceVariant }]}>
+      <Text style={[styles.emptySubtitle, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(16) }]}>
         Upload your first cricket video to see analysis history here
       </Text>
       <TouchableOpacity
         style={[styles.uploadButton, { backgroundColor: theme.colors.primary }]}
         onPress={() => router.push('/upload')}
       >
-        <Text style={styles.uploadButtonText}>Upload Video</Text>
+        <Text style={[styles.uploadButtonText, { fontSize: getResponsiveFontSize(16) }]}>Upload Video</Text>
       </TouchableOpacity>
     </View>
   );
@@ -221,7 +222,7 @@ export default function HistoryScreen() {
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={[styles.loadingText, { color: theme.colors.onSurfaceVariant }]}>
+          <Text style={[styles.loadingText, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(16) }]}>
             Loading history...
           </Text>
         </View>
@@ -233,10 +234,10 @@ export default function HistoryScreen() {
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Header */}
       <Surface style={[styles.header, { backgroundColor: theme.colors.surface }]}>
-        <Text style={[styles.title, { color: theme.colors.onSurface }]}>
+        <Text style={[styles.title, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(28) }]}>
           Analysis History
         </Text>
-        <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>
+        <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(16) }]}>
           {filteredHistory.length} analysis{filteredHistory.length !== 1 ? 'es' : ''} found
         </Text>
       </Surface>
@@ -309,33 +310,33 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    padding: spacing.lg,
-    paddingTop: spacing.xl + 20,
+    padding: getResponsiveSize(spacing.lg),
+    paddingTop: getResponsiveSize(spacing.xl + 20),
     ...shadows.small,
   },
   title: {
-    fontSize: 28,
     fontWeight: 'bold',
-    marginBottom: spacing.xs,
+    marginBottom: getResponsiveSize(spacing.xs),
+    // fontSize set dynamically
   },
   subtitle: {
-    fontSize: 16,
+    // fontSize set dynamically
   },
   searchContainer: {
-    padding: spacing.lg,
-    paddingTop: spacing.md,
+    padding: getResponsiveSize(spacing.lg),
+    paddingTop: getResponsiveSize(spacing.md),
   },
   searchBar: {
-    marginBottom: spacing.md,
+    marginBottom: getResponsiveSize(spacing.md),
   },
   filterContainer: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: getResponsiveSize(spacing.sm),
   },
   filterButton: {
     flex: 1,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
+    paddingVertical: getResponsiveSize(spacing.sm),
+    paddingHorizontal: getResponsiveSize(spacing.md),
     borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: '#BDBDBD', // theme.colors.outline equivalent
@@ -346,7 +347,7 @@ const styles = StyleSheet.create({
     borderColor: '#1976D2',
   },
   filterText: {
-    fontSize: 14,
+    fontSize: getResponsiveFontSize(14),
     fontWeight: '500',
     color: '#757575', // theme.colors.onSurfaceVariant equivalent
   },
@@ -354,34 +355,34 @@ const styles = StyleSheet.create({
     color: 'white',
   },
   listContainer: {
-    padding: spacing.lg,
-    paddingTop: spacing.sm,
+    padding: getResponsiveSize(spacing.lg),
+    paddingTop: getResponsiveSize(spacing.sm),
   },
   historyCard: {
-    marginBottom: spacing.lg,
+    marginBottom: getResponsiveSize(spacing.lg),
     ...shadows.small,
   },
   itemHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: getResponsiveSize(spacing.md),
   },
   itemIcon: {
-    marginRight: spacing.md,
+    marginRight: getResponsiveSize(spacing.md),
   },
   playerTypeIcon: {
-    fontSize: 32,
+    // fontSize set dynamically
   },
   itemInfo: {
     flex: 1,
   },
   filename: {
-    fontSize: 16,
     fontWeight: '600',
-    marginBottom: spacing.xs,
+    marginBottom: getResponsiveSize(spacing.xs),
+    // fontSize set dynamically
   },
   date: {
-    fontSize: 14,
+    // fontSize set dynamically
   },
   itemStatus: {
     alignItems: 'flex-end',
@@ -392,43 +393,43 @@ const styles = StyleSheet.create({
   itemDetails: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginBottom: spacing.md,
+    gap: getResponsiveSize(spacing.xs),
+    marginBottom: getResponsiveSize(spacing.md),
   },
   detailChip: {
-    marginBottom: spacing.xs,
+    marginBottom: getResponsiveSize(spacing.xs),
   },
   itemFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: getResponsiveSize(spacing.md),
   },
   fileSize: {
-    fontSize: 12,
+    // fontSize set dynamically
   },
   gptChip: {
     backgroundColor: colors.success + '20',
     borderColor: colors.success,
   },
   viewButton: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
+    paddingVertical: getResponsiveSize(spacing.sm),
+    paddingHorizontal: getResponsiveSize(spacing.md),
     borderRadius: borderRadius.md,
     alignItems: 'center',
     flex: 1,
-    marginHorizontal: spacing.xs,
+    marginHorizontal: getResponsiveSize(spacing.xs),
   },
   viewButtonText: {
     color: 'white',
-    fontSize: 14,
     fontWeight: '600',
+    // fontSize set dynamically
   },
   actionButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: spacing.md,
-    gap: spacing.sm,
+    marginTop: getResponsiveSize(spacing.md),
+    gap: getResponsiveSize(spacing.sm),
   },
   loadingContainer: {
     flex: 1,
@@ -436,42 +437,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    marginTop: spacing.md,
-    fontSize: 16,
+    marginTop: getResponsiveSize(spacing.md),
+    // fontSize set dynamically
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: spacing.xl,
+    padding: getResponsiveSize(spacing.xl),
   },
   emptyState: {
     alignItems: 'center',
   },
   emptyIcon: {
-    fontSize: 64,
-    marginBottom: spacing.lg,
+    marginBottom: getResponsiveSize(spacing.lg),
+    // fontSize set dynamically
   },
   emptyTitle: {
-    fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: spacing.sm,
+    marginBottom: getResponsiveSize(spacing.sm),
     textAlign: 'center',
+    // fontSize set dynamically
   },
   emptySubtitle: {
-    fontSize: 16,
     textAlign: 'center',
-    marginBottom: spacing.xl,
-    lineHeight: 24,
+    marginBottom: getResponsiveSize(spacing.xl),
+    lineHeight: getResponsiveSize(24),
+    // fontSize set dynamically
   },
   uploadButton: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
+    paddingVertical: getResponsiveSize(spacing.md),
+    paddingHorizontal: getResponsiveSize(spacing.xl),
     borderRadius: borderRadius.lg,
   },
   uploadButtonText: {
     color: 'white',
-    fontSize: 16,
     fontWeight: '600',
+    // fontSize set dynamically
   },
 }); 

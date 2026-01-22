@@ -12,6 +12,7 @@ import { useUpload } from '../../src/context/UploadContext';
 import apiService from '../../src/services/api';
 import { borderRadius, colors, spacing } from '../../src/theme';
 import { BowlerType, PlayerSide, PlayerType, UploadFormData } from '../../src/types';
+import { getResponsiveSize, getResponsiveFontSize } from '../../src/utils/responsive';
 
 export default function UploadScreen() {
   const theme = useTheme();
@@ -194,10 +195,10 @@ export default function UploadScreen() {
           entering={FadeInDown.delay(100).springify()}
           style={styles.header}
         >
-          <Text style={[styles.title, { color: theme.colors.onBackground }]}>
+          <Text style={[styles.title, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(28) }]}>
             Upload Video
           </Text>
-          <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>
+          <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(16) }]}>
             Select a cricket video for AI analysis
           </Text>
         </Animated.View>
@@ -205,7 +206,7 @@ export default function UploadScreen() {
         {/* Player Type Selection */}
         <Animated.View entering={FadeInUp.delay(200).springify()}>
           <PremiumCard variant="elevated" padding="large" style={styles.card}>
-            <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
+            <Text style={[styles.cardTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(20) }]}>
               Player Type
             </Text>
             <RadioButton.Group onValueChange={value => setPlayerType(value as PlayerType)} value={playerType}>
@@ -219,7 +220,7 @@ export default function UploadScreen() {
                   activeOpacity={0.7}
                 >
                   <RadioButton value="batsman" />
-                  <Text style={[styles.radioLabel, { color: theme.colors.onSurface }]}>Batsman</Text>
+                  <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(16) }]}>Batsman</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[
@@ -230,7 +231,7 @@ export default function UploadScreen() {
                   activeOpacity={0.7}
                 >
                   <RadioButton value="bowler" />
-                  <Text style={[styles.radioLabel, { color: theme.colors.onSurface }]}>Bowler</Text>
+                  <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(16) }]}>Bowler</Text>
                 </TouchableOpacity>
               </View>
             </RadioButton.Group>
@@ -240,7 +241,7 @@ export default function UploadScreen() {
         {/* Player Side Selection */}
         <Animated.View entering={FadeInUp.delay(300).springify()}>
           <PremiumCard variant="elevated" padding="large" style={styles.card}>
-            <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
+            <Text style={[styles.cardTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(20) }]}>
               {playerType === 'batsman' ? 'Batting Side' : 'Bowling Side'}
             </Text>
             <RadioButton.Group onValueChange={value => setPlayerSide(value as PlayerSide)} value={playerSide}>
@@ -254,7 +255,7 @@ export default function UploadScreen() {
                   activeOpacity={0.7}
                 >
                   <RadioButton value="right" />
-                  <Text style={[styles.radioLabel, { color: theme.colors.onSurface }]}>Right</Text>
+                  <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(16) }]}>Right</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[
@@ -265,7 +266,7 @@ export default function UploadScreen() {
                   activeOpacity={0.7}
                 >
                   <RadioButton value="left" />
-                  <Text style={[styles.radioLabel, { color: theme.colors.onSurface }]}>Left</Text>
+                  <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(16) }]}>Left</Text>
                 </TouchableOpacity>
               </View>
             </RadioButton.Group>
@@ -276,10 +277,10 @@ export default function UploadScreen() {
         {playerType === 'batsman' && (
           <Animated.View entering={FadeInUp.delay(400).springify()}>
             <PremiumCard variant="elevated" padding="large" style={styles.card}>
-              <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
+              <Text style={[styles.cardTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(20) }]}>
                 Shot Type (Optional)
               </Text>
-              <Text style={[styles.cardSubtitle, { color: theme.colors.onSurfaceVariant }]}>
+              <Text style={[styles.cardSubtitle, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
                 Select a shot type or leave empty for automatic detection
               </Text>
               
@@ -295,10 +296,10 @@ export default function UploadScreen() {
                     onPress={() => setShotTypeMenuVisible(true)}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.dropdownText, { color: theme.colors.onSurface }]}>
+                    <Text style={[styles.dropdownText, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(16) }]}>
                       {shotType ? getShotDisplayName(shotType) : 'Select Shot Type (Optional)'}
                     </Text>
-                    <Text style={[styles.dropdownIcon, { color: theme.colors.onSurfaceVariant }]}>
+                    <Text style={[styles.dropdownIcon, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(12) }]}>
                       ▼
                     </Text>
                   </TouchableOpacity>
@@ -345,7 +346,7 @@ export default function UploadScreen() {
                   style={styles.clearButtonContainer}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.clearButtonText, { color: theme.colors.error }]}>
+                  <Text style={[styles.clearButtonText, { color: theme.colors.error, fontSize: getResponsiveFontSize(14) }]}>
                     Clear Selection (Use Auto Detection)
                   </Text>
                 </TouchableOpacity>
@@ -358,9 +359,9 @@ export default function UploadScreen() {
         {playerType === 'bowler' && (
           <Animated.View entering={FadeInUp.delay(400).springify()}>
             <PremiumCard variant="elevated" padding="large" style={styles.card}>
-              <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
-                Bowler Type
-              </Text>
+            <Text style={[styles.cardTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(20) }]}>
+              Bowler Type
+            </Text>
               <RadioButton.Group onValueChange={value => setBowlerType(value as BowlerType)} value={bowlerType}>
                 <View style={styles.radioGroup}>
                   <TouchableOpacity
@@ -372,7 +373,7 @@ export default function UploadScreen() {
                     activeOpacity={0.7}
                   >
                     <RadioButton value="fast_bowler" />
-                    <Text style={[styles.radioLabel, { color: theme.colors.onSurface }]}>Fast Bowler</Text>
+                    <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(16) }]}>Fast Bowler</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[
@@ -383,7 +384,7 @@ export default function UploadScreen() {
                     activeOpacity={0.7}
                   >
                     <RadioButton value="spin_bowler" />
-                    <Text style={[styles.radioLabel, { color: theme.colors.onSurface }]}>Spin Bowler</Text>
+                    <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(16) }]}>Spin Bowler</Text>
                   </TouchableOpacity>
                 </View>
               </RadioButton.Group>
@@ -394,7 +395,7 @@ export default function UploadScreen() {
         {/* Video Selection */}
         <Animated.View entering={FadeInUp.delay(500).springify()}>
           <PremiumCard variant="elevated" padding="large" style={styles.card}>
-            <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
+            <Text style={[styles.cardTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(20) }]}>
               Select Video
             </Text>
             
@@ -404,23 +405,23 @@ export default function UploadScreen() {
                 onPress={pickVideo}
                 activeOpacity={0.8}
               >
-                <Text style={styles.uploadIcon}>📤</Text>
-                <Text style={[styles.uploadText, { color: theme.colors.primary }]}>
+                <Text style={[styles.uploadIcon, { fontSize: getResponsiveSize(56) }]}>📤</Text>
+                <Text style={[styles.uploadText, { color: theme.colors.primary, fontSize: getResponsiveFontSize(20) }]}>
                   Choose Video
                 </Text>
-                <Text style={[styles.uploadSubtext, { color: theme.colors.onSurfaceVariant }]}>
+                <Text style={[styles.uploadSubtext, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(15) }]}>
                   MP4, AVI, MOV, MKV (Max 100MB)
                 </Text>
               </TouchableOpacity>
             ) : (
               <PremiumCard variant="outlined" padding="medium" style={styles.videoInfo}>
                 <View style={styles.videoContent}>
-                  <Text style={styles.videoIcon}>🎥</Text>
+                  <Text style={[styles.videoIcon, { fontSize: getResponsiveSize(32) }]}>🎥</Text>
                   <View style={styles.videoDetails}>
-                    <Text style={[styles.videoName, { color: theme.colors.onSurface }]}>
+                    <Text style={[styles.videoName, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(16) }]}>
                       {selectedVideo.name}
                     </Text>
-                    <Text style={[styles.videoSize, { color: theme.colors.onSurfaceVariant }]}>
+                    <Text style={[styles.videoSize, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
                       {formatFileSize(selectedVideo.size)}
                     </Text>
                   </View>
@@ -429,7 +430,7 @@ export default function UploadScreen() {
                     onPress={() => setSelectedVideo(null)}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.removeIcon}>✕</Text>
+                    <Text style={[styles.removeIcon, { fontSize: getResponsiveFontSize(20) }]}>✕</Text>
                   </TouchableOpacity>
                 </View>
               </PremiumCard>
@@ -453,20 +454,20 @@ export default function UploadScreen() {
         {/* Tips */}
         <Animated.View entering={FadeInUp.delay(700).springify()}>
           <PremiumCard variant="outlined" padding="large" style={styles.card}>
-            <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
+            <Text style={[styles.cardTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(20) }]}>
               💡 Tips for Best Results
             </Text>
             <View style={styles.tipsList}>
-              <Text style={[styles.tip, { color: theme.colors.onSurfaceVariant }]}>
+              <Text style={[styles.tip, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
                 • Ensure good lighting and clear visibility
               </Text>
-              <Text style={[styles.tip, { color: theme.colors.onSurfaceVariant }]}>
+              <Text style={[styles.tip, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
                 • Record from a side angle for better analysis
               </Text>
-              <Text style={[styles.tip, { color: theme.colors.onSurfaceVariant }]}>
+              <Text style={[styles.tip, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
                 • Keep the video steady and focused on the player
               </Text>
-              <Text style={[styles.tip, { color: theme.colors.onSurfaceVariant }]}>
+              <Text style={[styles.tip, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
                 • Include the complete action in the frame
               </Text>
             </View>
@@ -483,39 +484,39 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: spacing.lg,
+    padding: getResponsiveSize(spacing.lg),
   },
   header: {
     alignItems: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: getResponsiveSize(spacing.xl),
   },
   title: {
-    fontSize: 28,
     fontWeight: 'bold',
-    marginBottom: spacing.xs,
+    marginBottom: getResponsiveSize(spacing.xs),
+    // fontSize set dynamically
   },
   subtitle: {
-    fontSize: 16,
     textAlign: 'center',
+    // fontSize set dynamically
   },
   card: {
-    marginBottom: spacing.lg,
+    marginBottom: getResponsiveSize(spacing.lg),
   },
   cardTitle: {
-    fontSize: 20,
     fontWeight: '700',
-    marginBottom: spacing.md,
+    marginBottom: getResponsiveSize(spacing.md),
     letterSpacing: 0.2,
+    // fontSize set dynamically
   },
   radioGroup: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    gap: spacing.sm,
+    gap: getResponsiveSize(spacing.sm),
   },
   radioOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.sm,
+    padding: getResponsiveSize(spacing.sm),
     borderRadius: borderRadius.md,
     flex: 1,
   },
@@ -524,110 +525,110 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   radioLabel: {
-    fontSize: 16,
-    marginLeft: spacing.xs,
+    marginLeft: getResponsiveSize(spacing.xs),
+    // fontSize set dynamically
   },
   uploadButton: {
     borderWidth: 2,
     borderStyle: 'dashed',
     borderRadius: borderRadius.xl,
-    padding: spacing.xl + 8,
+    padding: getResponsiveSize(spacing.xl + 8),
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 180,
+    minHeight: getResponsiveSize(180),
   },
   uploadIcon: {
-    fontSize: 56,
-    marginBottom: spacing.md,
+    marginBottom: getResponsiveSize(spacing.md),
+    // fontSize set dynamically
   },
   uploadText: {
-    fontSize: 20,
     fontWeight: '700',
-    marginBottom: spacing.xs,
+    marginBottom: getResponsiveSize(spacing.xs),
     letterSpacing: 0.3,
+    // fontSize set dynamically
   },
   uploadSubtext: {
-    fontSize: 15,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: getResponsiveSize(20),
+    // fontSize set dynamically
   },
   videoInfo: {
-    marginTop: spacing.md,
+    marginTop: getResponsiveSize(spacing.md),
   },
   videoContent: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   videoIcon: {
-    fontSize: 32,
-    marginRight: spacing.md,
+    marginRight: getResponsiveSize(spacing.md),
+    // fontSize set dynamically
   },
   videoDetails: {
     flex: 1,
   },
   videoName: {
-    fontSize: 16,
     fontWeight: '500',
-    marginBottom: spacing.xs,
+    marginBottom: getResponsiveSize(spacing.xs),
+    // fontSize set dynamically
   },
   videoSize: {
-    fontSize: 14,
+    // fontSize set dynamically
   },
   removeButton: {
-    padding: spacing.xs,
+    padding: getResponsiveSize(spacing.xs),
   },
   removeIcon: {
-    fontSize: 20,
     color: colors.error,
+    // fontSize set dynamically
   },
   progressBar: {
-    marginBottom: spacing.sm,
+    marginBottom: getResponsiveSize(spacing.sm),
   },
   progressText: {
-    fontSize: 14,
+    fontSize: getResponsiveFontSize(14),
     textAlign: 'center',
   },
   tipsList: {
-    gap: spacing.sm,
+    gap: getResponsiveSize(spacing.sm),
   },
   tip: {
-    fontSize: 14,
-    lineHeight: 20,
+    lineHeight: getResponsiveSize(20),
+    // fontSize set dynamically
   },
   cardSubtitle: {
-    fontSize: 14,
-    marginBottom: spacing.md,
+    marginBottom: getResponsiveSize(spacing.md),
     fontStyle: 'italic',
+    // fontSize set dynamically
   },
   dropdownButton: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: spacing.md,
+    padding: getResponsiveSize(spacing.md),
     borderRadius: borderRadius.md,
     borderWidth: 1,
-    marginBottom: spacing.sm,
+    marginBottom: getResponsiveSize(spacing.sm),
   },
   dropdownText: {
-    fontSize: 16,
     flex: 1,
+    // fontSize set dynamically
   },
   dropdownIcon: {
-    fontSize: 12,
-    marginLeft: spacing.sm,
+    marginLeft: getResponsiveSize(spacing.sm),
+    // fontSize set dynamically
   },
   customShotContainer: {
-    marginTop: spacing.md,
+    marginTop: getResponsiveSize(spacing.md),
   },
   customShotInput: {
-    marginBottom: spacing.sm,
+    marginBottom: getResponsiveSize(spacing.sm),
   },
   clearButtonContainer: {
-    marginTop: spacing.md,
-    paddingVertical: spacing.xs,
+    marginTop: getResponsiveSize(spacing.md),
+    paddingVertical: getResponsiveSize(spacing.xs),
   },
   clearButtonText: {
-    fontSize: 14,
     fontWeight: '600',
+    // fontSize set dynamically
   },
 }); 

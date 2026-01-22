@@ -6,6 +6,7 @@ import Toast from 'react-native-toast-message';
 import apiService from '../src/services/api';
 import { borderRadius, colors, shadows, spacing } from '../src/theme';
 import { TrainingPlan } from '../src/types';
+import { getResponsiveSize, getResponsiveFontSize } from '../src/utils/responsive';
 
 export default function TrainingPlanScreen() {
   const theme = useTheme();
@@ -403,7 +404,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.lg,
     paddingBottom: spacing.md,
     paddingHorizontal: spacing.md,
-    ...shadows.small,
+    ...shadows.sm,
   },
   headerContent: {
     flexDirection: 'row',
@@ -435,7 +436,7 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     borderRadius: borderRadius.lg,
     alignItems: 'center',
-    ...shadows.medium,
+    ...shadows.md,
   },
   generateIcon: {
     fontSize: 64,
@@ -465,7 +466,7 @@ const styles = StyleSheet.create({
     margin: spacing.lg,
     padding: spacing.lg,
     borderRadius: borderRadius.lg,
-    ...shadows.small,
+    ...shadows.sm,
   },
   overallNotesHeader: {
     flexDirection: 'row',
@@ -501,7 +502,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     marginRight: spacing.sm,
     minWidth: 120,
-    ...shadows.small,
+    ...shadows.sm,
   },
   dayHeader: {
     alignItems: 'center',
@@ -535,7 +536,7 @@ const styles = StyleSheet.create({
   selectedDayCard: {
     margin: spacing.lg,
     borderRadius: borderRadius.lg,
-    ...shadows.medium,
+    ...shadows.md,
   },
   selectedDayHeader: {
     flexDirection: 'row',
