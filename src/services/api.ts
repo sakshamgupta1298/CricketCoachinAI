@@ -1136,6 +1136,130 @@ class ApiService {
     }
   }
 
+  // Forgot Password Methods
+  async forgotPassword(email: string): Promise<ApiResponse<any>> {
+    try {
+      console.log('=== FORGOT PASSWORD PROCESS STARTED ===');
+      console.log('Email:', email);
+      
+      if (!email) {
+        return {
+          success: false,
+          error: 'Email is required',
+        };
+      }
+      
+      console.log('Calling backend forgot password endpoint...');
+      const response = await this.jsonApi.post('/api/auth/forgot-password', {
+        email,
+      });
+      
+      console.log('Backend forgot password call successful');
+      
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error: any) {
+      console.error('Forgot Password Error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+      
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message || 'Failed to send OTP. Please try again.',
+      };
+    }
+  }
+
+  async verifyOTP(email: string, otp: string): Promise<ApiResponse<any>> {
+    try {
+      console.log('=== VERIFY OTP PROCESS STARTED ===');
+      console.log('Email:', email);
+      
+      if (!email || !otp) {
+        return {
+          success: false,
+          error: 'Email and OTP are required',
+        };
+      }
+      
+      console.log('Calling backend verify OTP endpoint...');
+      const response = await this.jsonApi.post('/api/auth/verify-otp', {
+        email,
+        otp,
+      });
+      
+      console.log('Backend verify OTP call successful');
+      
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error: any) {
+      console.error('Verify OTP Error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+      
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message || 'Invalid OTP. Please try again.',
+      };
+    }
+  }
+
+  async resetPassword(email: string, newPassword: string): Promise<ApiResponse<any>> {
+    try {
+      console.log('=== RESET PASSWORD PROCESS STARTED ===');
+      console.log('Email:', email);
+      
+      if (!email || !newPassword) {
+        return {
+          success: false,
+          error: 'Email and new password are required',
+        };
+      }
+      
+      if (newPassword.length < 6) {
+        return {
+          success: false,
+          error: 'New password must be at least 6 characters long',
+        };
+      }
+      
+      console.log('Calling backend reset password endpoint...');
+      const response = await this.jsonApi.post('/api/auth/reset-password', {
+        email,
+        new_password: newPassword,
+      });
+      
+      console.log('Backend reset password call successful');
+      
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error: any) {
+      console.error('Reset Password Error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+      
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message || 'Failed to reset password. Please try again.',
+      };
+    }
+  }
+
   // Token Storage Methods
   async storeAuthData(token: string, user: any): Promise<void> {
     try {

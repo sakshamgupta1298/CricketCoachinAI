@@ -289,6 +289,19 @@ export default function LoginScreen() {
                 />
               </View>
 
+              {/* Forgot Password Link (Login only) */}
+              {isLogin && (
+                <TouchableOpacity 
+                  onPress={() => router.push('/forgot-password' as any)} 
+                  style={styles.forgotPasswordContainer}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.forgotPasswordText, { color: theme.colors.primary, fontSize: getResponsiveFontSize(14) }]}>
+                    Forgot Password?
+                  </Text>
+                </TouchableOpacity>
+              )}
+
               {/* Toggle Mode */}
               <TouchableOpacity 
                 onPress={toggleMode} 
@@ -380,6 +393,16 @@ const styles = StyleSheet.create({
   buttonContainer: {
     marginTop: getResponsiveSize(spacing.md),
     marginBottom: getResponsiveSize(spacing.md),
+  },
+  forgotPasswordContainer: {
+    marginTop: getResponsiveSize(spacing.md),
+    alignItems: 'center',
+    paddingVertical: getResponsiveSize(spacing.sm),
+  },
+  forgotPasswordText: {
+    fontWeight: '600',
+    textAlign: 'center',
+    // fontSize set dynamically
   },
   toggleContainer: {
     marginTop: getResponsiveSize(spacing.lg),
