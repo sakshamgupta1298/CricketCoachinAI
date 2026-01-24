@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Button, Card, Chip, Divider, IconButton, Surface, Text, useTheme } from 'react-native-paper';
 import Toast from 'react-native-toast-message';
 import apiService from '../src/services/api';
@@ -51,33 +51,97 @@ export default function TrainingPlanScreen() {
     setLoading(true);
     try {
       const response = await apiService.getTrainingPlan(filename);
+      
+      // Check if response.data contains an error (backend might return 200 with error object)
+      if (response.data && typeof response.data === 'object' && response.data.error) {
+        // Backend returned an error object, treat as plan not found
+        console.log('Training plan not found (error in response.data), showing alert');
+        Alert.alert(
+          'No Training Plan Found',
+          'You didn\'t generate the plan so no plan exists. Please generate a plan first.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                console.log('Alert OK button pressed');
+              }
+            }
+          ]
+        );
+        setTrainingPlan(null);
+        setLoading(false);
+        return;
+      }
+      
       if (response.success && response.data) {
         // Validate the training plan structure before setting it
         if (validateTrainingPlan(response.data)) {
           setTrainingPlan(response.data);
           setSelectedDay(1); // Select first day by default
         } else {
-          console.error('Invalid training plan structure:', response.data);
-          Toast.show({
-            type: 'error',
-            text1: 'Error',
-            text2: 'Invalid training plan data received',
-          });
+          // Invalid plan structure - treat it as no plan exists
+          console.log('Invalid training plan structure, showing alert');
+          Alert.alert(
+            'No Training Plan Found',
+            'You didn\'t generate the plan so no plan exists. Please generate a plan first.',
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  console.log('Alert OK button pressed');
+                }
+              }
+            ]
+          );
           setTrainingPlan(null);
         }
       } else {
-        // Plan doesn't exist, show generate option (this is normal)
+        // Plan doesn't exist, show alert
+        console.log('Training plan not found, showing alert');
+        Alert.alert(
+          'No Training Plan Found',
+          'You didn\'t generate the plan so no plan exists. Please generate a plan first.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                console.log('Alert OK button pressed');
+              }
+            }
+          ]
+        );
         setTrainingPlan(null);
       }
     } catch (error: any) {
       console.error('Error loading training plan:', error);
-      // Only show error for actual errors, not for missing plans
-      if (error.response?.status !== 404) {
-        Toast.show({
-          type: 'error',
-          text1: 'Error',
-          text2: 'Failed to load training plan',
-        });
+      // If it's a 404, show the alert (plan doesn't exist)
+      if (error.response?.status === 404) {
+        Alert.alert(
+          'No Training Plan Found',
+          'You didn\'t generate the plan so no plan exists. Please generate a plan first.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                console.log('Alert OK button pressed');
+              }
+            }
+          ]
+        );
+      } else {
+        // Other errors - show error alert
+        Alert.alert(
+          'Error',
+          'Failed to load training plan. Please try again.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                console.log('Alert OK button pressed');
+              }
+            }
+          ]
+        );
       }
       setTrainingPlan(null);
     } finally {
