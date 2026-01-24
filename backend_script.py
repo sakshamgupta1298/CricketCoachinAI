@@ -3403,8 +3403,8 @@ def store_otp(email, otp):
     }
     logger.info(f"OTP stored for {email}, expires at {expires_at}")
 
-def verify_otp(email, otp):
-    """Verify OTP for email"""
+def check_otp(email, otp):
+    """Check and verify OTP for email"""
     email_lower = email.lower()
     
     if email_lower not in otp_storage:
@@ -3538,7 +3538,7 @@ def verify_otp():
         cleanup_expired_otps()
         
         # Verify OTP
-        if verify_otp(email, otp):
+        if check_otp(email, otp):
             logger.info(f"OTP verified successfully for email: {email}")
             return jsonify({
                 'success': True,
@@ -3840,7 +3840,7 @@ def verify_username_otp():
         cleanup_expired_otps()
         
         # Verify OTP
-        if not verify_otp(email, otp):
+        if not check_otp(email, otp):
             logger.warning(f"OTP verification failed for email: {email}")
             return jsonify({'error': 'Invalid or expired OTP'}), 400
         
