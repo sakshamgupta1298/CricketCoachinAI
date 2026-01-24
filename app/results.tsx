@@ -1,13 +1,13 @@
 import { AVPlaybackStatus, ResizeMode, Video } from 'expo-av';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Card, Chip, Surface, Text, useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { currentConfig } from '../config';
 import apiService from '../src/services/api';
 import { borderRadius, colors, shadows, spacing } from '../src/theme';
-import { AnalysisResult, TrainingPlan } from '../src/types';
+import { AnalysisResult } from '../src/types';
 import { getResponsiveFontSize, getResponsiveSize, screenWidth } from '../src/utils/responsive';
 
 export default function ResultsScreen() {
@@ -52,23 +52,6 @@ export default function ResultsScreen() {
       </View>
     );
   }
-
-  const validateTrainingPlan = (data: any): data is TrainingPlan => {
-    return (
-      data &&
-      typeof data === 'object' &&
-      Array.isArray(data.plan) &&
-      data.plan.length > 0 &&
-      data.plan.every((day: any) => 
-        day &&
-        typeof day.day === 'number' &&
-        typeof day.focus === 'string' &&
-        Array.isArray(day.warmup) &&
-        Array.isArray(day.drills) &&
-        typeof day.progression === 'string'
-      )
-    );
-  };
 
   const getPlayerTypeIcon = (type: string) => {
     return type === 'batsman' ? '🏏' : '🎯';
@@ -390,108 +373,15 @@ export default function ResultsScreen() {
           
           <TouchableOpacity
             style={[styles.actionButton, { backgroundColor: colors.cricket.green }]}
-            onPress={async () => {
+            onPress={() => {
               console.log('🟢 [BUTTON] Training Plan button pressed');
               console.log('🟢 [BUTTON] Filename:', result.filename);
-              
-              try {
-                // Check if training plan exists before navigating
-                const response = await apiService.getTrainingPlan(result.filename);
-                
-                // Check if response.data contains an error (backend might return 200 with error object)
-                if (response.data && typeof response.data === 'object' && response.data.error) {
-                  // Backend returned an error object, treat as plan not found
-                  console.log('🟢 [BUTTON] Training plan not found (error in response.data), showing alert');
-                  Alert.alert(
-                    'No Training Plan Found',
-                    'You didn\'t generate the plan so no plan exists. Please generate a plan first.',
-                    [
-                      {
-                        text: 'OK',
-                        onPress: () => {
-                          console.log('🟢 [ALERT] OK button pressed, alert closed');
-                        }
-                      }
-                    ]
-                  );
-                  return;
-                }
-                
-                if (response.success && response.data) {
-                  // Validate the training plan structure
-                  if (validateTrainingPlan(response.data)) {
-                    // Plan exists and is valid, navigate to training plan screen
-                    console.log('🟢 [BUTTON] Training plan exists and is valid, navigating to /training-plan');
-                    router.push({
-                      pathname: '/training-plan',
-                      params: { filename: result.filename, days: '7' }
-                    });
-                    console.log('🟢 [BUTTON] Navigation command executed successfully');
-                  } else {
-                    // Plan exists but structure is invalid, show alert
-                    console.log('🟢 [BUTTON] Training plan structure is invalid, showing alert');
-                    Alert.alert(
-                      'No Training Plan Found',
-                      'You didn\'t generate the plan so no plan exists. Please generate a plan first.',
-                      [
-                        {
-                          text: 'OK',
-                          onPress: () => {
-                            console.log('🟢 [ALERT] OK button pressed, alert closed');
-                          }
-                        }
-                      ]
-                    );
-                  }
-                } else {
-                  // Plan doesn't exist, show alert
-                  console.log('🟢 [BUTTON] Training plan not found, showing alert');
-                  Alert.alert(
-                    'No Training Plan Found',
-                    'You didn\'t generate the plan so no plan exists. Please generate a plan first.',
-                    [
-                      {
-                        text: 'OK',
-                        onPress: () => {
-                          console.log('🟢 [ALERT] OK button pressed, alert closed');
-                        }
-                      }
-                    ]
-                  );
-                }
-              } catch (error: any) {
-                console.error('❌ [BUTTON] Error checking training plan:', error);
-                
-                // If it's a 404, show the alert (plan doesn't exist)
-                if (error.response?.status === 404 || (error && !error.response)) {
-                  Alert.alert(
-                    'No Training Plan Found',
-                    'You didn\'t generate the plan so no plan exists. Please generate a plan first.',
-                    [
-                      {
-                        text: 'OK',
-                        onPress: () => {
-                          console.log('🟢 [ALERT] OK button pressed, alert closed');
-                        }
-                      }
-                    ]
-                  );
-                } else {
-                  // Other errors - show error alert
-                  Alert.alert(
-                    'Error',
-                    'Failed to check training plan. Please try again.',
-                    [
-                      {
-                        text: 'OK',
-                        onPress: () => {
-                          console.log('🟢 [ALERT] OK button pressed, alert closed');
-                        }
-                      }
-                    ]
-                  );
-                }
-              }
+              console.log('🟢 [BUTTON] Navigating to /training-plan');
+              router.push({
+                pathname: '/training-plan',
+                params: { filename: result.filename, days: '7' }
+              });
+              console.log('🟢 [BUTTON] Navigation command executed successfully');
             }}
           >
             <Text style={styles.actionButtonText}>Training Plan</Text>

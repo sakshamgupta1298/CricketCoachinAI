@@ -19,7 +19,6 @@ export default function TrainingPlanScreen() {
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
-  const [hasCheckedExisting, setHasCheckedExisting] = useState(false);
 
   const validateTrainingPlan = (data: any): data is TrainingPlan => {
     return (
@@ -38,7 +37,7 @@ export default function TrainingPlanScreen() {
     );
   };
 
-  const loadTrainingPlan = useCallback(async () => {
+  const loadTrainingPlan = useCallback(async (showAlertOnNotFound: boolean = false) => {
     if (!filename || typeof filename !== 'string') {
       Toast.show({
         type: 'error',
@@ -55,19 +54,21 @@ export default function TrainingPlanScreen() {
       // Check if response.data contains an error (backend might return 200 with error object)
       if (response.data && typeof response.data === 'object' && response.data.error) {
         // Backend returned an error object, treat as plan not found
-        console.log('Training plan not found (error in response.data), showing alert');
-        Alert.alert(
-          'No Training Plan Found',
-          'You didn\'t generate the plan so no plan exists. Please generate a plan first.',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                console.log('Alert OK button pressed');
+        console.log('Training plan not found (error in response.data)');
+        if (showAlertOnNotFound) {
+          Alert.alert(
+            'No Training Plan Found',
+            'You didn\'t generate the plan so no plan exists. Please generate a plan first.',
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  console.log('Alert OK button pressed, alert closed');
+                }
               }
-            }
-          ]
-        );
+            ]
+          );
+        }
         setTrainingPlan(null);
         setLoading(false);
         return;
@@ -80,7 +81,27 @@ export default function TrainingPlanScreen() {
           setSelectedDay(1); // Select first day by default
         } else {
           // Invalid plan structure - treat it as no plan exists
-          console.log('Invalid training plan structure, showing alert');
+          console.log('Invalid training plan structure');
+          if (showAlertOnNotFound) {
+            Alert.alert(
+              'No Training Plan Found',
+              'You didn\'t generate the plan so no plan exists. Please generate a plan first.',
+              [
+                {
+                  text: 'OK',
+                  onPress: () => {
+                    console.log('Alert OK button pressed, alert closed');
+                  }
+                }
+              ]
+            );
+          }
+          setTrainingPlan(null);
+        }
+      } else {
+        // Plan doesn't exist, show alert only if requested
+        console.log('Training plan not found');
+        if (showAlertOnNotFound) {
           Alert.alert(
             'No Training Plan Found',
             'You didn\'t generate the plan so no plan exists. Please generate a plan first.',
@@ -88,74 +109,54 @@ export default function TrainingPlanScreen() {
               {
                 text: 'OK',
                 onPress: () => {
-                  console.log('Alert OK button pressed');
+                  console.log('Alert OK button pressed, alert closed');
                 }
               }
             ]
           );
-          setTrainingPlan(null);
         }
-      } else {
-        // Plan doesn't exist, show alert
-        console.log('Training plan not found, showing alert');
-        Alert.alert(
-          'No Training Plan Found',
-          'You didn\'t generate the plan so no plan exists. Please generate a plan first.',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                console.log('Alert OK button pressed');
-              }
-            }
-          ]
-        );
         setTrainingPlan(null);
       }
     } catch (error: any) {
       console.error('Error loading training plan:', error);
-      // If it's a 404, show the alert (plan doesn't exist)
+      // If it's a 404, show the alert (plan doesn't exist) only if requested
       if (error.response?.status === 404) {
-        Alert.alert(
-          'No Training Plan Found',
-          'You didn\'t generate the plan so no plan exists. Please generate a plan first.',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                console.log('Alert OK button pressed');
+        if (showAlertOnNotFound) {
+          Alert.alert(
+            'No Training Plan Found',
+            'You didn\'t generate the plan so no plan exists. Please generate a plan first.',
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  console.log('Alert OK button pressed, alert closed');
+                }
               }
-            }
-          ]
-        );
+            ]
+          );
+        }
       } else {
-        // Other errors - show error alert
-        Alert.alert(
-          'Error',
-          'Failed to load training plan. Please try again.',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                console.log('Alert OK button pressed');
+        // Other errors - show error alert only if requested
+        if (showAlertOnNotFound) {
+          Alert.alert(
+            'Error',
+            'Failed to load training plan. Please try again.',
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  console.log('Alert OK button pressed, alert closed');
+                }
               }
-            }
-          ]
-        );
+            ]
+          );
+        }
       }
       setTrainingPlan(null);
     } finally {
       setLoading(false);
     }
   }, [filename]);
-
-  useEffect(() => {
-    // Automatically check for existing plan when component mounts
-    if (filename && typeof filename === 'string' && !hasCheckedExisting) {
-      setHasCheckedExisting(true);
-      loadTrainingPlan();
-    }
-  }, [filename, hasCheckedExisting, loadTrainingPlan]);
 
   const generateTrainingPlan = async () => {
     if (!filename || typeof filename !== 'string') {
@@ -411,7 +412,7 @@ export default function TrainingPlanScreen() {
                 
                 <Button
                   mode="outlined"
-                  onPress={loadTrainingPlan}
+                  onPress={() => loadTrainingPlan(true)}
                   loading={loading}
                   disabled={loading}
                   style={styles.checkButton}
