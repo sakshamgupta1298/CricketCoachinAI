@@ -1,17 +1,19 @@
 import { AVPlaybackStatus, ResizeMode, Video } from 'expo-av';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Dimensions, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Card, Chip, Surface, Text, useTheme } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { currentConfig } from '../config';
 import apiService from '../src/services/api';
 import { borderRadius, colors, shadows, spacing } from '../src/theme';
 import { AnalysisResult } from '../src/types';
-import { getResponsiveSize, getResponsiveFontSize, screenWidth } from '../src/utils/responsive';
+import { getResponsiveFontSize, getResponsiveSize, screenWidth } from '../src/utils/responsive';
 
 export default function ResultsScreen() {
   const theme = useTheme();
   const params = useLocalSearchParams();
+  const insets = useSafeAreaInsets();
   const [authToken, setAuthToken] = useState<string | null>(null);
   const videoRef = useRef<Video>(null);
   
@@ -194,7 +196,7 @@ export default function ResultsScreen() {
                   <Text style={[styles.riskText, { color: theme.colors.onSurface, fontWeight: '600' }]}>
                     {risk.body_part} - {risk.risk_level}
                   </Text>
-                  <Text style={[styles.riskText, { color: theme.colors.onSurfaceVariant, fontSize: 14, marginTop: 4 }]}>
+                  <Text style={[styles.riskText, { color: theme.colors.onSurfaceVariant, fontSize: 12, marginTop: 4 }]}>
                     {risk.reason}
                   </Text>
                 </View>
@@ -216,7 +218,13 @@ export default function ResultsScreen() {
   };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <ScrollView 
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      contentContainerStyle={[
+        styles.scrollContent,
+        { paddingBottom: Math.max(100, insets.bottom + 80) } // Ensure enough space for tab bar + safe area
+      ]}
+    >
       <View style={styles.content}>
         {/* Header */}
         <Surface style={[styles.header, { backgroundColor: theme.colors.surface }]}>
@@ -347,24 +355,57 @@ export default function ResultsScreen() {
         <View style={styles.actionButtons}>
           <TouchableOpacity
             style={[styles.actionButton, { backgroundColor: theme.colors.primary }]}
-            onPress={() => router.push('/upload')}
+            onPress={() => {
+              console.log('🔵 [BUTTON] New Analysis button pressed');
+              console.log('🔵 [BUTTON] Router object:', router);
+              console.log('🔵 [BUTTON] Attempting to navigate to /upload');
+              try {
+                router.push('/upload');
+                console.log('🔵 [BUTTON] Navigation command executed successfully');
+              } catch (error) {
+                console.error('❌ [BUTTON] Error navigating to /upload:', error);
+                console.error('❌ [BUTTON] Error details:', JSON.stringify(error, null, 2));
+              }
+            }}
           >
             <Text style={styles.actionButtonText}>New Analysis</Text>
           </TouchableOpacity>
           
           <TouchableOpacity
             style={[styles.actionButton, { backgroundColor: colors.cricket.green }]}
-            onPress={() => router.push({
-              pathname: '/training-plan',
-              params: { filename: result.filename, days: '7' }
-            })}
+            onPress={() => {
+              console.log('🟢 [BUTTON] Training Plan button pressed');
+              console.log('🟢 [BUTTON] Filename:', result.filename);
+              console.log('🟢 [BUTTON] Attempting to navigate to /training-plan');
+              try {
+                router.push({
+                  pathname: '/training-plan',
+                  params: { filename: result.filename, days: '7' }
+                });
+                console.log('🟢 [BUTTON] Navigation command executed successfully');
+              } catch (error) {
+                console.error('❌ [BUTTON] Error navigating to /training-plan:', error);
+                console.error('❌ [BUTTON] Error details:', JSON.stringify(error, null, 2));
+              }
+            }}
           >
             <Text style={styles.actionButtonText}>Training Plan</Text>
           </TouchableOpacity>
           
           <TouchableOpacity
             style={[styles.actionButton, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outline }]}
-            onPress={() => router.push('/history')}
+            onPress={() => {
+              console.log('⚪ [BUTTON] History button pressed');
+              console.log('⚪ [BUTTON] Router object:', router);
+              console.log('⚪ [BUTTON] Attempting to navigate to /history');
+              try {
+                router.push('/history');
+                console.log('⚪ [BUTTON] Navigation command executed successfully');
+              } catch (error) {
+                console.error('❌ [BUTTON] Error navigating to /history:', error);
+                console.error('❌ [BUTTON] Error details:', JSON.stringify(error, null, 2));
+              }
+            }}
           >
             <Text style={[styles.actionButtonText, { color: theme.colors.onSurface }]}>
               History
@@ -380,8 +421,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  scrollContent: {
+    paddingBottom: 100, // Extra padding to prevent tab bar overlay (will be adjusted with insets)
+  },
   content: {
-    padding: getResponsiveSize(spacing.lg),
+    padding: spacing.lg,
   },
   header: {
     padding: getResponsiveSize(spacing.lg),
@@ -395,14 +439,14 @@ const styles = StyleSheet.create({
     marginBottom: getResponsiveSize(spacing.md),
   },
   playerTypeIcon: {
-    fontSize: getResponsiveSize(48),
+    fontSize: getResponsiveSize(40),
     marginRight: getResponsiveSize(spacing.md),
   },
   headerText: {
     flex: 1,
   },
   title: {
-    fontSize: getResponsiveFontSize(24),
+    fontSize: getResponsiveFontSize(20),
     fontWeight: 'bold',
     marginBottom: getResponsiveSize(spacing.sm),
   },
@@ -413,44 +457,51 @@ const styles = StyleSheet.create({
     gap: getResponsiveSize(spacing.xs),
   },
   playerInfoText: {
-    fontSize: getResponsiveFontSize(14),
+    fontSize: getResponsiveFontSize(12),
   },
   card: {
     marginBottom: getResponsiveSize(spacing.lg),
     ...shadows.sm,
   },
   cardTitle: {
-    fontSize: getResponsiveFontSize(18),
+    fontSize: getResponsiveFontSize(15),
     fontWeight: '600',
     marginBottom: getResponsiveSize(spacing.md),
   },
   cardDescription: {
-    fontSize: getResponsiveFontSize(16),
-    lineHeight: getResponsiveSize(24),
+    fontSize: getResponsiveFontSize(14),
+    lineHeight: getResponsiveSize(20),
   },
   analysisText: {
-    fontSize: getResponsiveFontSize(16),
-    lineHeight: getResponsiveSize(24),
+    fontSize: getResponsiveFontSize(14),
+    lineHeight: getResponsiveSize(20),
   },
   errorText: {
-    fontSize: getResponsiveFontSize(18),
+    fontSize: getResponsiveFontSize(15),
     textAlign: 'center',
     marginTop: getResponsiveSize(50),
   },
   actionButtons: {
     flexDirection: 'row',
-    gap: getResponsiveSize(spacing.md),
-    marginTop: getResponsiveSize(spacing.lg),
+    gap: spacing.md,
+    marginTop: spacing.lg,
+    marginBottom: spacing.xl, // Extra bottom margin
+    zIndex: 1000, // Ensure buttons are above other elements
+    elevation: 10, // Android elevation
   },
   actionButton: {
     flex: 1,
-    paddingVertical: getResponsiveSize(spacing.md),
+    paddingVertical: spacing.md,
     borderRadius: borderRadius.lg,
     alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
+    minHeight: 44,
+    zIndex: 1001, // Higher z-index for buttons
+    elevation: 11, // Android elevation
   },
   actionButtonText: {
-    fontSize: getResponsiveFontSize(16),
+    fontSize: 14,
     fontWeight: '600',
     color: 'white',
   },
@@ -458,7 +509,7 @@ const styles = StyleSheet.create({
     marginTop: getResponsiveSize(spacing.lg),
   },
   sectionTitle: {
-    fontSize: getResponsiveFontSize(20),
+    fontSize: getResponsiveFontSize(17),
     fontWeight: 'bold',
     marginBottom: getResponsiveSize(spacing.md),
   },
@@ -466,30 +517,30 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   flawTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     marginBottom: spacing.xs,
   },
   deviationText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '500',
     flexWrap: 'wrap',
     flexShrink: 1,
   },
   flawIssue: {
-    fontSize: 14,
+    fontSize: 12,
     marginBottom: spacing.xs,
   },
   recommendationContainer: {
     marginTop: spacing.xs,
   },
   recommendationLabel: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     marginBottom: spacing.xs,
   },
   recommendationText: {
-    fontSize: 14,
+    fontSize: 12,
   },
   tipItem: {
     flexDirection: 'row',
@@ -497,11 +548,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   tipBullet: {
-    fontSize: 16,
+    fontSize: 14,
     marginRight: spacing.xs,
   },
   tipText: {
-    fontSize: 14,
+    fontSize: 12,
   },
   riskItem: {
     flexDirection: 'row',
@@ -509,11 +560,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   riskBullet: {
-    fontSize: 16,
+    fontSize: 14,
     marginRight: spacing.xs,
   },
   riskText: {
-    fontSize: 14,
+    fontSize: 12,
   },
   biomechanicsHeader: {
     flexDirection: 'row',
@@ -534,12 +585,12 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   biomechanicalLabel: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     flex: 1,
   },
   biomechanicalConfidence: {
-    fontSize: 12,
+    fontSize: 10,
     marginBottom: spacing.xs,
   },
   biomechanicalValue: {
@@ -548,15 +599,15 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   biomechanicalObserved: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
   },
   biomechanicalExpected: {
-    fontSize: 14,
+    fontSize: 12,
   },
   biomechanicalAnalysis: {
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 12,
+    lineHeight: 18,
   },
   videoContainer: {
     width: '100%',
@@ -575,7 +626,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   fallbackText: {
-    fontSize: 14,
+    fontSize: 12,
     fontStyle: 'italic',
     marginTop: spacing.xs,
   },

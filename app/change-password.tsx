@@ -4,8 +4,8 @@ import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 're
 import { Button, Text, TextInput, useTheme } from 'react-native-paper';
 import Toast from 'react-native-toast-message';
 import apiService from '../src/services/api';
-import { borderRadius, spacing } from '../src/theme';
-import { getResponsiveSize, getResponsiveFontSize } from '../src/utils/responsive';
+import { spacing } from '../src/theme';
+import { getResponsiveFontSize, getResponsiveSize } from '../src/utils/responsive';
 
 export default function ChangePasswordScreen() {
   const theme = useTheme();
@@ -107,10 +107,10 @@ export default function ChangePasswordScreen() {
         <View style={styles.content}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={[styles.title, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(28) }]}>
+            <Text style={[styles.title, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(24) }]}>
               Change Password
             </Text>
-            <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(16) }]}>
+            <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
               Enter your current password and choose a new one
             </Text>
           </View>
@@ -168,7 +168,7 @@ export default function ChangePasswordScreen() {
               autoCorrect={false}
             />
 
-            <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(12) }]}>
+            <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(10) }]}>
               Password must be at least 6 characters long
             </Text>
 

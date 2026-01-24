@@ -6,7 +6,6 @@ import Toast from 'react-native-toast-message';
 import apiService from '../src/services/api';
 import { borderRadius, colors, shadows, spacing } from '../src/theme';
 import { TrainingPlan } from '../src/types';
-import { getResponsiveSize, getResponsiveFontSize } from '../src/utils/responsive';
 
 export default function TrainingPlanScreen() {
   const theme = useTheme();
@@ -412,7 +411,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: 'bold',
   },
   scrollView: {
@@ -425,7 +424,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: spacing.md,
-    fontSize: 16,
+    fontSize: 14,
   },
   generateContainer: {
     padding: spacing.lg,
@@ -439,19 +438,19 @@ const styles = StyleSheet.create({
     ...shadows.md,
   },
   generateIcon: {
-    fontSize: 64,
+    fontSize: 56,
     marginBottom: spacing.lg,
   },
   generateTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
     textAlign: 'center',
     marginBottom: spacing.sm,
   },
   generateDescription: {
-    fontSize: 16,
+    fontSize: 14,
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: 20,
     marginBottom: spacing.xl,
   },
   generateButton: {
@@ -474,23 +473,23 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   overallNotesIcon: {
-    fontSize: 24,
+    fontSize: 20,
     marginRight: spacing.sm,
   },
   overallNotesTitle: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: '600',
   },
   overallNotesText: {
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 12,
+    lineHeight: 18,
   },
   daysContainer: {
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.lg,
   },
   daysTitle: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: '600',
     marginBottom: spacing.md,
   },
@@ -517,20 +516,20 @@ const styles = StyleSheet.create({
   },
   dayNumberText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
   },
   dayInfo: {
     alignItems: 'center',
   },
   dayFocus: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '600',
     textAlign: 'center',
     marginBottom: spacing.xs,
   },
   dayDuration: {
-    fontSize: 10,
+    fontSize: 9,
     textAlign: 'center',
   },
   selectedDayCard: {
@@ -545,7 +544,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   selectedDayTitle: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: 'bold',
     flex: 1,
   },
@@ -561,11 +560,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   sectionIcon: {
-    fontSize: 20,
+    fontSize: 17,
     marginRight: spacing.sm,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
   },
   exerciseItem: {
@@ -574,15 +573,15 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   bulletPoint: {
-    fontSize: 16,
+    fontSize: 14,
     marginRight: spacing.sm,
     marginTop: 2,
     color: colors.cricket.green,
   },
   exerciseText: {
-    fontSize: 14,
+    fontSize: 12,
     flex: 1,
-    lineHeight: 20,
+    lineHeight: 18,
   },
   drillCard: {
     marginBottom: spacing.sm,
@@ -594,18 +593,18 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   drillName: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     flex: 1,
   },
   drillNotes: {
-    fontSize: 12,
+    fontSize: 10,
     fontStyle: 'italic',
     marginTop: spacing.xs,
   },
   progressionText: {
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 12,
+    lineHeight: 18,
   },
   notesText: {
     fontSize: 14,

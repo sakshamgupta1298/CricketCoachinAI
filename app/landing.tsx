@@ -79,19 +79,19 @@ export default function LandingScreen() {
           </Animated.View>
           <Animated.Text 
             entering={FadeInDown.delay(300).springify()}
-            style={[styles.appTitle, { fontSize: getResponsiveFontSize(42), marginTop: titleMarginTop }]}
+            style={[styles.appTitle, { fontSize: getResponsiveFontSize(35), marginTop: titleMarginTop }]}
           >
             CrickCoach AI
           </Animated.Text>
           <Animated.Text 
             entering={FadeInDown.delay(400).springify()}
-            style={[styles.tagline, { fontSize: getResponsiveFontSize(18) }]}
+            style={[styles.tagline, { fontSize: getResponsiveFontSize(15) }]}
           >
             Your Personal AI-Powered Cricket Coach
           </Animated.Text>
           <Animated.Text 
             entering={FadeInDown.delay(500).springify()}
-            style={[styles.description, { fontSize: getResponsiveFontSize(17), maxWidth: getWidthPercentage(85) }]}
+            style={[styles.description, { fontSize: getResponsiveFontSize(14), maxWidth: getWidthPercentage(85) }]}
           >
             Upload your cricket videos and get AI-powered analysis of your batting and bowling techniques with detailed biomechanical insights.
           </Animated.Text>
@@ -102,7 +102,7 @@ export default function LandingScreen() {
       <View style={styles.section}>
         <Animated.Text 
           entering={FadeInUp.delay(100).springify()}
-          style={[styles.sectionTitle, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(28) }]}
+          style={[styles.sectionTitle, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(24) }]}
         >
           What You Can Do
         </Animated.Text>
@@ -117,11 +117,11 @@ export default function LandingScreen() {
               style={styles.featureCard}
             >
               <View style={styles.featureContent}>
-                <Text style={[styles.featureIcon, { fontSize: getResponsiveSize(48) }]}>{feature.icon}</Text>
-                <Text style={[styles.featureTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(17) }]}>
+                <Text style={[styles.featureIcon, { fontSize: getResponsiveSize(40) }]}>{feature.icon}</Text>
+                <Text style={[styles.featureTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>
                   {feature.title}
                 </Text>
-                <Text style={[styles.featureDescription, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(13) }]}>
+                <Text style={[styles.featureDescription, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(11) }]}>
                   {feature.description}
                 </Text>
               </View>
@@ -134,7 +134,7 @@ export default function LandingScreen() {
       <View style={styles.section}>
         <Animated.Text 
           entering={FadeInUp.delay(100).springify()}
-          style={[styles.sectionTitle, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(28) }]}
+          style={[styles.sectionTitle, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(24) }]}
         >
           How It Works
         </Animated.Text>
@@ -158,13 +158,13 @@ export default function LandingScreen() {
                   height: getResponsiveSize(48),
                   borderRadius: getResponsiveSize(24),
                 }]}>
-                  <Text style={[styles.stepNumberText, { fontSize: getResponsiveFontSize(20) }]}>{stepNum}</Text>
+                  <Text style={[styles.stepNumberText, { fontSize: getResponsiveFontSize(17) }]}>{stepNum}</Text>
                 </View>
                 <View style={styles.stepContent}>
-                  <Text style={[styles.stepTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(19) }]}>
+                  <Text style={[styles.stepTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(16) }]}>
                     {step.title}
                   </Text>
-                  <Text style={[styles.stepDescription, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(15) }]}>
+                  <Text style={[styles.stepDescription, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(13) }]}>
                     {step.description}
                   </Text>
                 </View>
@@ -179,13 +179,13 @@ export default function LandingScreen() {
         <PremiumCard variant="elevated" padding="large" animated delay={200}>
           <Animated.Text 
             entering={FadeInUp.delay(300).springify()}
-            style={[styles.ctaTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(28) }]}
+            style={[styles.ctaTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(24) }]}
           >
             Ready to Improve Your Game?
           </Animated.Text>
           <Animated.Text 
             entering={FadeInUp.delay(400).springify()}
-            style={[styles.ctaDescription, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(17) }]}
+            style={[styles.ctaDescription, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}
           >
             Start analyzing your cricket technique with AI-powered insights
           </Animated.Text>
@@ -268,11 +268,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    gap: getResponsiveSize(spacing.md),
   },
   featureCard: {
     width: (screenWidth - getResponsiveSize(spacing.lg) * 2 - getResponsiveSize(spacing.md)) / 2,
     minHeight: getResponsiveSize(160),
+    marginBottom: getResponsiveSize(spacing.md),
   },
   featureContent: {
     alignItems: 'center',

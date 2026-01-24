@@ -6,7 +6,7 @@ import Toast from 'react-native-toast-message';
 import { useAuth } from '../../src/context/AuthContext';
 import apiService from '../../src/services/api';
 import { borderRadius, shadows, spacing } from '../../src/theme';
-import { getResponsiveSize, getResponsiveFontSize } from '../../src/utils/responsive';
+import { getResponsiveFontSize, getResponsiveSize } from '../../src/utils/responsive';
 
 export default function ProfileScreen() {
   const theme = useTheme();
@@ -102,11 +102,11 @@ export default function ProfileScreen() {
         width: getResponsiveSize(40),
         height: getResponsiveSize(40),
       }]}>
-        <Text style={[styles.iconText, { color: iconColor, fontSize: getResponsiveSize(20) }]}>{icon}</Text>
+        <Text style={[styles.iconText, { color: iconColor, fontSize: getResponsiveSize(18) }]}>{icon}</Text>
       </View>
       <View style={styles.infoContent}>
-        <Text style={[styles.infoLabel, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(12) }]}>{label}</Text>
-        <Text style={[styles.infoValue, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(16) }]}>{value}</Text>
+        <Text style={[styles.infoLabel, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(10) }]}>{label}</Text>
+        <Text style={[styles.infoValue, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>{value}</Text>
       </View>
     </View>
   );
@@ -118,11 +118,11 @@ export default function ProfileScreen() {
         width: getResponsiveSize(48),
         height: getResponsiveSize(48),
       }]}>
-        <Text style={[styles.featureIcon, { color: iconColor, fontSize: getResponsiveSize(24) }]}>{icon}</Text>
+        <Text style={[styles.featureIcon, { color: iconColor, fontSize: getResponsiveSize(20) }]}>{icon}</Text>
       </View>
       <View style={styles.featureContent}>
-        <Text style={[styles.featureTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(16) }]}>{title}</Text>
-        <Text style={[styles.featureDescription, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>{description}</Text>
+        <Text style={[styles.featureTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>{title}</Text>
+        <Text style={[styles.featureDescription, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(12) }]}>{description}</Text>
       </View>
     </View>
   );
@@ -134,10 +134,10 @@ export default function ProfileScreen() {
       activeOpacity={0.7}
     >
       <View style={styles.actionItemLeft}>
-        <Text style={[styles.actionIcon, { fontSize: getResponsiveSize(20) }]}>{icon}</Text>
-        <Text style={[styles.actionLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(16) }]}>{label}</Text>
+        <Text style={[styles.actionIcon, { fontSize: getResponsiveSize(18) }]}>{icon}</Text>
+        <Text style={[styles.actionLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>{label}</Text>
       </View>
-      <Text style={[styles.actionArrow, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(24) }]}>›</Text>
+      <Text style={[styles.actionArrow, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(20) }]}>›</Text>
     </TouchableOpacity>
   );
 
@@ -164,7 +164,7 @@ export default function ProfileScreen() {
 
       {/* Account Information */}
       <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(20) }]}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(17) }]}>
           Account Information
         </Text>
         <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
@@ -191,7 +191,7 @@ export default function ProfileScreen() {
 
       {/* App Features */}
       <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(20) }]}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(17) }]}>
           App Features
             </Text>
         <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
@@ -218,7 +218,7 @@ export default function ProfileScreen() {
 
       {/* Account Actions */}
       <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(20) }]}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(17) }]}>
           Account Actions
             </Text>
         <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
@@ -256,14 +256,14 @@ export default function ProfileScreen() {
               onPress={handleLogout}
         activeOpacity={0.8}
             >
-        <Text style={[styles.logoutIcon, { fontSize: getResponsiveSize(20) }]}>↪</Text>
-        <Text style={[styles.logoutText, { color: theme.colors.onError, fontSize: getResponsiveFontSize(16) }]}>
-              Logout
-            </Text>
+        <Text style={[styles.logoutIcon, { fontSize: getResponsiveSize(18) }]}>↪</Text>
+        <Text style={[styles.logoutText, { color: theme.colors.onError, fontSize: getResponsiveFontSize(14) }]}>
+          Logout
+        </Text>
       </TouchableOpacity>
 
       {/* App Version */}
-      <Text style={[styles.appVersion, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
+      <Text style={[styles.appVersion, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(12) }]}>
         CricketCoach AI v1.0.0
             </Text>
     </ScrollView>

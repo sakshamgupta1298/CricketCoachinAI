@@ -1,6 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Menu, RadioButton, Text, TextInput, useTheme } from 'react-native-paper';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
@@ -12,7 +12,7 @@ import { useUpload } from '../../src/context/UploadContext';
 import apiService from '../../src/services/api';
 import { borderRadius, colors, spacing } from '../../src/theme';
 import { BowlerType, PlayerSide, PlayerType, UploadFormData } from '../../src/types';
-import { getResponsiveSize, getResponsiveFontSize } from '../../src/utils/responsive';
+import { getResponsiveFontSize, getResponsiveSize } from '../../src/utils/responsive';
 
 export default function UploadScreen() {
   const theme = useTheme();
@@ -195,10 +195,10 @@ export default function UploadScreen() {
           entering={FadeInDown.delay(100).springify()}
           style={styles.header}
         >
-          <Text style={[styles.title, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(28) }]}>
+          <Text style={[styles.title, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(24) }]}>
             Upload Video
           </Text>
-          <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(16) }]}>
+          <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
             Select a cricket video for AI analysis
           </Text>
         </Animated.View>
@@ -206,7 +206,7 @@ export default function UploadScreen() {
         {/* Player Type Selection */}
         <Animated.View entering={FadeInUp.delay(200).springify()}>
           <PremiumCard variant="elevated" padding="large" style={styles.card}>
-            <Text style={[styles.cardTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(20) }]}>
+            <Text style={[styles.cardTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(17) }]}>
               Player Type
             </Text>
             <RadioButton.Group onValueChange={value => setPlayerType(value as PlayerType)} value={playerType}>
@@ -220,7 +220,7 @@ export default function UploadScreen() {
                   activeOpacity={0.7}
                 >
                   <RadioButton value="batsman" />
-                  <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(16) }]}>Batsman</Text>
+                  <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>Batsman</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[
@@ -231,7 +231,7 @@ export default function UploadScreen() {
                   activeOpacity={0.7}
                 >
                   <RadioButton value="bowler" />
-                  <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(16) }]}>Bowler</Text>
+                  <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>Bowler</Text>
                 </TouchableOpacity>
               </View>
             </RadioButton.Group>
@@ -241,7 +241,7 @@ export default function UploadScreen() {
         {/* Player Side Selection */}
         <Animated.View entering={FadeInUp.delay(300).springify()}>
           <PremiumCard variant="elevated" padding="large" style={styles.card}>
-            <Text style={[styles.cardTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(20) }]}>
+            <Text style={[styles.cardTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(17) }]}>
               {playerType === 'batsman' ? 'Batting Side' : 'Bowling Side'}
             </Text>
             <RadioButton.Group onValueChange={value => setPlayerSide(value as PlayerSide)} value={playerSide}>
@@ -255,7 +255,7 @@ export default function UploadScreen() {
                   activeOpacity={0.7}
                 >
                   <RadioButton value="right" />
-                  <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(16) }]}>Right</Text>
+                  <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>Right</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[
@@ -266,7 +266,7 @@ export default function UploadScreen() {
                   activeOpacity={0.7}
                 >
                   <RadioButton value="left" />
-                  <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(16) }]}>Left</Text>
+                  <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>Left</Text>
                 </TouchableOpacity>
               </View>
             </RadioButton.Group>
@@ -277,10 +277,10 @@ export default function UploadScreen() {
         {playerType === 'batsman' && (
           <Animated.View entering={FadeInUp.delay(400).springify()}>
             <PremiumCard variant="elevated" padding="large" style={styles.card}>
-              <Text style={[styles.cardTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(20) }]}>
+              <Text style={[styles.cardTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(17) }]}>
                 Shot Type (Optional)
               </Text>
-              <Text style={[styles.cardSubtitle, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
+              <Text style={[styles.cardSubtitle, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(12) }]}>
                 Select a shot type or leave empty for automatic detection
               </Text>
               
@@ -296,10 +296,10 @@ export default function UploadScreen() {
                     onPress={() => setShotTypeMenuVisible(true)}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.dropdownText, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(16) }]}>
+                    <Text style={[styles.dropdownText, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>
                       {shotType ? getShotDisplayName(shotType) : 'Select Shot Type (Optional)'}
                     </Text>
-                    <Text style={[styles.dropdownIcon, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(12) }]}>
+                    <Text style={[styles.dropdownIcon, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(10) }]}>
                       ▼
                     </Text>
                   </TouchableOpacity>
@@ -346,7 +346,7 @@ export default function UploadScreen() {
                   style={styles.clearButtonContainer}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.clearButtonText, { color: theme.colors.error, fontSize: getResponsiveFontSize(14) }]}>
+                  <Text style={[styles.clearButtonText, { color: theme.colors.error, fontSize: getResponsiveFontSize(12) }]}>
                     Clear Selection (Use Auto Detection)
                   </Text>
                 </TouchableOpacity>
@@ -359,7 +359,7 @@ export default function UploadScreen() {
         {playerType === 'bowler' && (
           <Animated.View entering={FadeInUp.delay(400).springify()}>
             <PremiumCard variant="elevated" padding="large" style={styles.card}>
-            <Text style={[styles.cardTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(20) }]}>
+            <Text style={[styles.cardTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(17) }]}>
               Bowler Type
             </Text>
               <RadioButton.Group onValueChange={value => setBowlerType(value as BowlerType)} value={bowlerType}>
@@ -373,7 +373,7 @@ export default function UploadScreen() {
                     activeOpacity={0.7}
                   >
                     <RadioButton value="fast_bowler" />
-                    <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(16) }]}>Fast Bowler</Text>
+                    <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>Fast Bowler</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[
@@ -384,7 +384,7 @@ export default function UploadScreen() {
                     activeOpacity={0.7}
                   >
                     <RadioButton value="spin_bowler" />
-                    <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(16) }]}>Spin Bowler</Text>
+                    <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>Spin Bowler</Text>
                   </TouchableOpacity>
                 </View>
               </RadioButton.Group>
@@ -395,7 +395,7 @@ export default function UploadScreen() {
         {/* Video Selection */}
         <Animated.View entering={FadeInUp.delay(500).springify()}>
           <PremiumCard variant="elevated" padding="large" style={styles.card}>
-            <Text style={[styles.cardTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(20) }]}>
+            <Text style={[styles.cardTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(17) }]}>
               Select Video
             </Text>
             
@@ -405,23 +405,23 @@ export default function UploadScreen() {
                 onPress={pickVideo}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.uploadIcon, { fontSize: getResponsiveSize(56) }]}>📤</Text>
-                <Text style={[styles.uploadText, { color: theme.colors.primary, fontSize: getResponsiveFontSize(20) }]}>
+                <Text style={[styles.uploadIcon, { fontSize: getResponsiveSize(48) }]}>📤</Text>
+                <Text style={[styles.uploadText, { color: theme.colors.primary, fontSize: getResponsiveFontSize(17) }]}>
                   Choose Video
                 </Text>
-                <Text style={[styles.uploadSubtext, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(15) }]}>
+                <Text style={[styles.uploadSubtext, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(13) }]}>
                   MP4, AVI, MOV, MKV (Max 100MB)
                 </Text>
               </TouchableOpacity>
             ) : (
               <PremiumCard variant="outlined" padding="medium" style={styles.videoInfo}>
                 <View style={styles.videoContent}>
-                  <Text style={[styles.videoIcon, { fontSize: getResponsiveSize(32) }]}>🎥</Text>
+                  <Text style={[styles.videoIcon, { fontSize: getResponsiveSize(28) }]}>🎥</Text>
                   <View style={styles.videoDetails}>
-                    <Text style={[styles.videoName, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(16) }]}>
+                    <Text style={[styles.videoName, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>
                       {selectedVideo.name}
                     </Text>
-                    <Text style={[styles.videoSize, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
+                    <Text style={[styles.videoSize, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(12) }]}>
                       {formatFileSize(selectedVideo.size)}
                     </Text>
                   </View>
@@ -430,7 +430,7 @@ export default function UploadScreen() {
                     onPress={() => setSelectedVideo(null)}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.removeIcon, { fontSize: getResponsiveFontSize(20) }]}>✕</Text>
+                    <Text style={[styles.removeIcon, { fontSize: getResponsiveFontSize(17) }]}>✕</Text>
                   </TouchableOpacity>
                 </View>
               </PremiumCard>
@@ -454,20 +454,20 @@ export default function UploadScreen() {
         {/* Tips */}
         <Animated.View entering={FadeInUp.delay(700).springify()}>
           <PremiumCard variant="outlined" padding="large" style={styles.card}>
-            <Text style={[styles.cardTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(20) }]}>
+            <Text style={[styles.cardTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(17) }]}>
               💡 Tips for Best Results
             </Text>
             <View style={styles.tipsList}>
-              <Text style={[styles.tip, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
+              <Text style={[styles.tip, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(12) }]}>
                 • Ensure good lighting and clear visibility
               </Text>
-              <Text style={[styles.tip, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
+              <Text style={[styles.tip, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(12) }]}>
                 • Record from a side angle for better analysis
               </Text>
-              <Text style={[styles.tip, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
+              <Text style={[styles.tip, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(12) }]}>
                 • Keep the video steady and focused on the player
               </Text>
-              <Text style={[styles.tip, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
+              <Text style={[styles.tip, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(12) }]}>
                 • Include the complete action in the frame
               </Text>
             </View>

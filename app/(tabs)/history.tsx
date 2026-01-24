@@ -6,7 +6,7 @@ import Toast from 'react-native-toast-message';
 import apiService from '../../src/services/api';
 import { borderRadius, colors, shadows, spacing } from '../../src/theme';
 import { HistoryItem } from '../../src/types';
-import { getResponsiveSize, getResponsiveFontSize } from '../../src/utils/responsive';
+import { getResponsiveFontSize, getResponsiveSize } from '../../src/utils/responsive';
 
 export default function HistoryScreen() {
   const theme = useTheme();
@@ -120,15 +120,15 @@ export default function HistoryScreen() {
       <Card.Content>
         <View style={styles.itemHeader}>
           <View style={styles.itemIcon}>
-            <Text style={[styles.playerTypeIcon, { fontSize: getResponsiveSize(32) }]}>
+            <Text style={[styles.playerTypeIcon, { fontSize: getResponsiveSize(28) }]}>
               {getPlayerTypeIcon(item.player_type)}
             </Text>
           </View>
           <View style={styles.itemInfo}>
-            <Text style={[styles.filename, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(16) }]}>
+            <Text style={[styles.filename, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>
               {item.filename}
             </Text>
-            <Text style={[styles.date, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
+            <Text style={[styles.date, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(12) }]}>
               {formatDate(item.created)}
             </Text>
           </View>
@@ -167,14 +167,9 @@ export default function HistoryScreen() {
         </View>
 
         <View style={styles.itemFooter}>
-          <Text style={[styles.fileSize, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(12) }]}>
+          <Text style={[styles.fileSize, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(10) }]}>
             {formatFileSize(item.size)}
           </Text>
-          {item.has_gpt_feedback && (
-            <Chip mode="outlined" style={styles.gptChip}>
-              GPT Analysis
-            </Chip>
-          )}
         </View>
 
         <View style={styles.actionButtons}>
@@ -182,7 +177,7 @@ export default function HistoryScreen() {
             style={[styles.viewButton, { backgroundColor: theme.colors.primary }]}
             onPress={() => handleViewResult(item)}
           >
-            <Text style={[styles.viewButtonText, { fontSize: getResponsiveFontSize(14) }]}>View Analysis</Text>
+            <Text style={[styles.viewButtonText, { fontSize: getResponsiveFontSize(12) }]}>View Analysis</Text>
           </TouchableOpacity>
           
           <TouchableOpacity
@@ -192,7 +187,7 @@ export default function HistoryScreen() {
               params: { filename: item.filename, days: '7' }
             })}
           >
-            <Text style={[styles.viewButtonText, { fontSize: getResponsiveFontSize(14) }]}>Training Plan</Text>
+            <Text style={[styles.viewButtonText, { fontSize: getResponsiveFontSize(12) }]}>Training Plan</Text>
           </TouchableOpacity>
         </View>
       </Card.Content>
@@ -201,18 +196,18 @@ export default function HistoryScreen() {
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <Text style={[styles.emptyIcon, { fontSize: getResponsiveSize(64) }]}>📋</Text>
-      <Text style={[styles.emptyTitle, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(24) }]}>
+      <Text style={[styles.emptyIcon, { fontSize: getResponsiveSize(56) }]}>📋</Text>
+      <Text style={[styles.emptyTitle, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(20) }]}>
         No Analysis History
       </Text>
-      <Text style={[styles.emptySubtitle, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(16) }]}>
+      <Text style={[styles.emptySubtitle, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
         Upload your first cricket video to see analysis history here
       </Text>
       <TouchableOpacity
         style={[styles.uploadButton, { backgroundColor: theme.colors.primary }]}
         onPress={() => router.push('/upload')}
       >
-        <Text style={[styles.uploadButtonText, { fontSize: getResponsiveFontSize(16) }]}>Upload Video</Text>
+        <Text style={[styles.uploadButtonText, { fontSize: getResponsiveFontSize(14) }]}>Upload Video</Text>
       </TouchableOpacity>
     </View>
   );
@@ -222,7 +217,7 @@ export default function HistoryScreen() {
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={[styles.loadingText, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(16) }]}>
+          <Text style={[styles.loadingText, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
             Loading history...
           </Text>
         </View>
@@ -234,10 +229,10 @@ export default function HistoryScreen() {
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Header */}
       <Surface style={[styles.header, { backgroundColor: theme.colors.surface }]}>
-        <Text style={[styles.title, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(28) }]}>
+        <Text style={[styles.title, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(24) }]}>
           Analysis History
         </Text>
-        <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(16) }]}>
+        <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
           {filteredHistory.length} analysis{filteredHistory.length !== 1 ? 'es' : ''} found
         </Text>
       </Surface>
@@ -312,7 +307,7 @@ const styles = StyleSheet.create({
   header: {
     padding: getResponsiveSize(spacing.lg),
     paddingTop: getResponsiveSize(spacing.xl + 20),
-    ...shadows.small,
+    ...shadows.sm,
   },
   title: {
     fontWeight: 'bold',
@@ -347,7 +342,7 @@ const styles = StyleSheet.create({
     borderColor: '#1976D2',
   },
   filterText: {
-    fontSize: getResponsiveFontSize(14),
+    fontSize: getResponsiveFontSize(12),
     fontWeight: '500',
     color: '#757575', // theme.colors.onSurfaceVariant equivalent
   },
@@ -360,7 +355,7 @@ const styles = StyleSheet.create({
   },
   historyCard: {
     marginBottom: getResponsiveSize(spacing.lg),
-    ...shadows.small,
+    ...shadows.sm,
   },
   itemHeader: {
     flexDirection: 'row',
@@ -407,10 +402,6 @@ const styles = StyleSheet.create({
   },
   fileSize: {
     // fontSize set dynamically
-  },
-  gptChip: {
-    backgroundColor: colors.success + '20',
-    borderColor: colors.success,
   },
   viewButton: {
     paddingVertical: getResponsiveSize(spacing.sm),

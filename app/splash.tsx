@@ -6,21 +6,21 @@ import React, { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Text, useTheme } from 'react-native-paper';
 import Animated, {
-    Easing,
-    FadeIn,
-    FadeOut,
-    useAnimatedStyle,
-    useSharedValue,
-    withDelay,
-    withRepeat,
-    withSequence,
-    withTiming
+  Easing,
+  FadeIn,
+  FadeOut,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withTiming
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-    getResponsiveFontSize,
-    getResponsiveSize,
-    screenWidth
+  getResponsiveFontSize,
+  getResponsiveSize,
+  screenWidth
 } from '../src/utils/responsive';
 
 // Keep the splash screen visible while we fetch resources
@@ -120,8 +120,8 @@ export default function SplashScreenComponent() {
   
   // Responsive dimensions
   const logoSize = getResponsiveSize(150);
-  const appNameFontSize = getResponsiveFontSize(32);
-  const taglineFontSize = getResponsiveFontSize(16);
+  const appNameFontSize = getResponsiveFontSize(27);
+  const taglineFontSize = getResponsiveFontSize(14);
   const logoMarginBottom = getResponsiveSize(40);
   const textMarginBottom = getResponsiveSize(60);
   const loadingMarginTop = getResponsiveSize(20);

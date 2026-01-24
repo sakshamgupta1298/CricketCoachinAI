@@ -26,12 +26,6 @@ export default function HomeScreen() {
       icon: '📅',
       color: colors.cricket.blue,
     },
-    {
-      label: 'Improvement',
-      value: '0%',
-      icon: '📈',
-      color: colors.cricket.orange,
-    },
   ]);
   const [loading, setLoading] = useState(true);
 
@@ -54,8 +48,14 @@ export default function HomeScreen() {
       setLoading(true);
       const response = await apiService.getAnalysisHistory();
       
+      console.log('📊 [HOME] Analysis history response:', response);
+      
       if (response.success && response.data) {
-        const history = response.data;
+        // Ensure data is an array
+        const history = Array.isArray(response.data) ? response.data : [];
+        console.log('📊 [HOME] History array length:', history.length);
+        console.log('📊 [HOME] History items:', history);
+        
         const totalAnalyses = history.length;
         
         // Calculate analyses this month
@@ -63,25 +63,18 @@ export default function HomeScreen() {
         const currentMonth = now.getMonth();
         const currentYear = now.getFullYear();
         const thisMonthAnalyses = history.filter((item: any) => {
-          const itemDate = new Date(item.created);
-          return itemDate.getMonth() === currentMonth && itemDate.getFullYear() === currentYear;
+          if (!item || !item.created) return false;
+          try {
+            const itemDate = new Date(item.created);
+            return itemDate.getMonth() === currentMonth && itemDate.getFullYear() === currentYear;
+          } catch (e) {
+            console.error('Error parsing date:', item.created, e);
+            return false;
+          }
         }).length;
         
-        // Calculate improvement (comparing this month to last month)
-        const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
-        const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
-        const lastMonthAnalyses = history.filter((item: any) => {
-          const itemDate = new Date(item.created);
-          return itemDate.getMonth() === lastMonth && itemDate.getFullYear() === lastMonthYear;
-        }).length;
-        
-        let improvement = '0%';
-        if (lastMonthAnalyses > 0) {
-          const improvementValue = Math.round(((thisMonthAnalyses - lastMonthAnalyses) / lastMonthAnalyses) * 100);
-          improvement = `${improvementValue >= 0 ? '+' : ''}${improvementValue}%`;
-        } else if (thisMonthAnalyses > 0) {
-          improvement = `+${thisMonthAnalyses * 100}%`;
-        }
+        console.log('📊 [HOME] Total analyses:', totalAnalyses);
+        console.log('📊 [HOME] This month analyses:', thisMonthAnalyses);
         
         setStats([
           {
@@ -96,16 +89,42 @@ export default function HomeScreen() {
             icon: '📅',
             color: colors.cricket.blue,
           },
+        ]);
+      } else {
+        console.warn('📊 [HOME] No data or unsuccessful response:', response);
+        // Set to 0 if no data
+        setStats([
           {
-            label: 'Improvement',
-            value: improvement,
-            icon: '📈',
-            color: colors.cricket.orange,
+            label: 'Total Analyses',
+            value: '0',
+            icon: '📊',
+            color: colors.cricket.green,
+          },
+          {
+            label: 'This Month',
+            value: '0',
+            icon: '📅',
+            color: colors.cricket.blue,
           },
         ]);
       }
     } catch (error) {
-      console.error('Error loading analysis stats:', error);
+      console.error('❌ [HOME] Error loading analysis stats:', error);
+      // Set to 0 on error
+      setStats([
+        {
+          label: 'Total Analyses',
+          value: '0',
+          icon: '📊',
+          color: colors.cricket.green,
+        },
+        {
+          label: 'This Month',
+          value: '0',
+          icon: '📅',
+          color: colors.cricket.blue,
+        },
+      ]);
     } finally {
       setLoading(false);
     }
@@ -144,10 +163,10 @@ export default function HomeScreen() {
           entering={FadeInDown.delay(100).springify()}
           style={styles.headerContent}
         >
-          <Text style={[styles.greeting, { fontSize: getResponsiveFontSize(32) }]}>
+          <Text style={[styles.greeting, { fontSize: getResponsiveFontSize(27) }]}>
             Welcome back{user ? `, ${user.username}` : ''}!
           </Text>
-          <Text style={[styles.subtitle, { fontSize: getResponsiveFontSize(17) }]}>
+          <Text style={[styles.subtitle, { fontSize: getResponsiveFontSize(14) }]}>
             Ready to improve your cricket game?
           </Text>
         </Animated.View>
@@ -157,7 +176,7 @@ export default function HomeScreen() {
       <View style={styles.section}>
         <Animated.Text 
           entering={FadeInUp.delay(200).springify()}
-          style={[styles.sectionTitle, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(24) }]}
+          style={[styles.sectionTitle, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(20) }]}
         >
           Quick Actions
         </Animated.Text>
@@ -166,6 +185,7 @@ export default function HomeScreen() {
             <Animated.View
               key={index}
               entering={FadeInDown.delay(300 + index * 100).springify()}
+              style={styles.actionCardWrapper}
             >
               <TouchableOpacity
                 style={styles.actionCard}
@@ -186,12 +206,12 @@ export default function HomeScreen() {
                     height: getResponsiveSize(64),
                     borderRadius: getResponsiveSize(32),
                   }]}>
-                    <Text style={[styles.actionIcon, { fontSize: getResponsiveSize(28) }]}>{action.icon}</Text>
+                    <Text style={[styles.actionIcon, { fontSize: getResponsiveSize(24) }]}>{action.icon}</Text>
                   </View>
-                  <Text style={[styles.actionTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(17) }]}>
+                  <Text style={[styles.actionTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>
                     {action.title}
                   </Text>
-                  <Text style={[styles.actionSubtitle, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(13) }]}>
+                  <Text style={[styles.actionSubtitle, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(11) }]}>
                     {action.subtitle}
                   </Text>
                 </PremiumCard>
@@ -205,7 +225,7 @@ export default function HomeScreen() {
       <View style={styles.section}>
         <Animated.Text 
           entering={FadeInUp.delay(200).springify()}
-          style={[styles.sectionTitle, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(24) }]}
+          style={[styles.sectionTitle, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(20) }]}
         >
           Your Progress
         </Animated.Text>
@@ -231,12 +251,12 @@ export default function HomeScreen() {
                     height: getResponsiveSize(48),
                     borderRadius: getResponsiveSize(24),
                   }]}>
-                    <Text style={[styles.statIcon, { fontSize: getResponsiveSize(24) }]}>{stat.icon}</Text>
+                    <Text style={[styles.statIcon, { fontSize: getResponsiveSize(20) }]}>{stat.icon}</Text>
                   </View>
-                  <Text style={[styles.statValue, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(22) }]}>
+                  <Text style={[styles.statValue, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(18) }]}>
                     {stat.value}
                   </Text>
-                  <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(12) }]}>
+                  <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(10) }]}>
                     {stat.label}
                   </Text>
                 </View>
@@ -250,10 +270,10 @@ export default function HomeScreen() {
       <View style={styles.section}>
         <Animated.View entering={FadeInUp.delay(400).springify()}>
           <PremiumCard variant="elevated" padding="large" style={styles.ctaCard}>
-            <Text style={[styles.ctaTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(24) }]}>
+            <Text style={[styles.ctaTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(20) }]}>
               Start Your Analysis
             </Text>
-            <Text style={[styles.ctaDescription, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(16) }]}>
+            <Text style={[styles.ctaDescription, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
               Upload a cricket video and get instant AI-powered feedback on your technique
             </Text>
             <View style={styles.ctaButtonContainer}>
@@ -310,6 +330,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: getResponsiveSize(spacing.md),
+  },
+  actionCardWrapper: {
+    flex: 1,
   },
   actionCard: {
     flex: 1,

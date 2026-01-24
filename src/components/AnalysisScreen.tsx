@@ -15,7 +15,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { borderRadius, spacing } from '../theme';
-import { getResponsiveSize, getResponsiveFontSize, screenWidth } from '../utils/responsive';
+import { getResponsiveFontSize, getResponsiveSize, screenWidth } from '../utils/responsive';
 
 interface AnalysisScreenProps {
   visible: boolean;

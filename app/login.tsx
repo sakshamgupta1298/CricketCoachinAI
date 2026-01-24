@@ -194,13 +194,13 @@ export default function LoginScreen() {
             </Animated.View>
             <Animated.Text 
               entering={FadeInDown.delay(300).springify()}
-              style={[styles.appTitle, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(36) }]}
+              style={[styles.appTitle, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(30) }]}
             >
               CrickCoach AI
             </Animated.Text>
             <Animated.Text 
               entering={FadeInDown.delay(400).springify()}
-              style={[styles.subtitle, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(17) }]}
+              style={[styles.subtitle, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}
             >
               {isLogin ? 'Welcome back!' : 'Create your account'}
             </Animated.Text>
@@ -209,7 +209,7 @@ export default function LoginScreen() {
           {/* Auth Card */}
           <Animated.View entering={FadeInUp.delay(500).springify()}>
             <PremiumCard variant="elevated" padding="large" style={styles.authCard}>
-              <Text style={[styles.cardTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(28) }]}>
+              <Text style={[styles.cardTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(24) }]}>
                 {isLogin ? 'Login' : 'Register'}
               </Text>
 
@@ -295,7 +295,7 @@ export default function LoginScreen() {
                 style={styles.toggleContainer}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.toggleText, { color: theme.colors.primary, fontSize: getResponsiveFontSize(16) }]}>
+                <Text style={[styles.toggleText, { color: theme.colors.primary, fontSize: getResponsiveFontSize(14) }]}>
                   {isLogin ? "Don't have an account? " : 'Already have an account? '}
                   <Text style={styles.toggleTextBold}>
                     {isLogin ? 'Register' : 'Login'}
@@ -312,7 +312,7 @@ export default function LoginScreen() {
               style={styles.backContainer}
               activeOpacity={0.7}
             >
-              <Text style={[styles.backText, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(16) }]}>
+              <Text style={[styles.backText, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
                 ← Back to Home
               </Text>
             </TouchableOpacity>
@@ -375,7 +375,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   inputContent: {
-    fontSize: getResponsiveFontSize(16),
+    fontSize: getResponsiveFontSize(14),
   },
   buttonContainer: {
     marginTop: getResponsiveSize(spacing.md),
