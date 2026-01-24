@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Text, TextInput, useTheme } from 'react-native-paper';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
@@ -11,7 +11,7 @@ import apiService from '../src/services/api';
 import { spacing } from '../src/theme';
 import { getResponsiveFontSize, getResponsiveSize } from '../src/utils/responsive';
 
-export default function VerifyOTPScreen() {
+export default function VerifyUsernameOTPScreen() {
   const theme = useTheme();
   const params = useLocalSearchParams();
   const email = (params.email as string) || '';
@@ -99,20 +99,19 @@ export default function VerifyOTPScreen() {
 
     setLoading(true);
     try {
-      const response = await apiService.verifyOTP(email, otpString);
+      const response = await apiService.verifyUsernameOTP(email, otpString);
       
       if (response.success) {
         Toast.show({
           type: 'success',
           text1: 'OTP Verified',
-          text2: 'Please set your new password',
+          text2: 'Your username has been sent to your email address',
         });
         
-        // Navigate to reset password screen
-        router.replace({
-          pathname: '/reset-password',
-          params: { email, otp: otpString },
-        });
+        // Navigate back to login after a delay
+        setTimeout(() => {
+          router.replace('/login');
+        }, 2000);
       } else {
         Toast.show({
           type: 'error',
@@ -147,7 +146,7 @@ export default function VerifyOTPScreen() {
 
     setLoading(true);
     try {
-      const response = await apiService.forgotPassword(email);
+      const response = await apiService.forgotUsername(email);
       
       if (response.success) {
         Toast.show({

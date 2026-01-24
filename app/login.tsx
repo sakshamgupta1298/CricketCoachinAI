@@ -289,17 +289,31 @@ export default function LoginScreen() {
                 />
               </View>
 
-              {/* Forgot Password Link (Login only) */}
+              {/* Forgot Password and Username Links (Login only) */}
               {isLogin && (
-                <TouchableOpacity 
-                  onPress={() => router.push('/forgot-password' as any)} 
-                  style={styles.forgotPasswordContainer}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.forgotPasswordText, { color: theme.colors.primary, fontSize: getResponsiveFontSize(14) }]}>
-                    Forgot Password?
+                <View style={styles.forgotLinksContainer}>
+                  <TouchableOpacity 
+                    onPress={() => router.push('/forgot-password' as any)} 
+                    style={styles.forgotLink}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.forgotLinkText, { color: theme.colors.primary, fontSize: getResponsiveFontSize(14) }]}>
+                      Forgot Password?
+                    </Text>
+                  </TouchableOpacity>
+                  <Text style={[styles.forgotLinkSeparator, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
+                    |
                   </Text>
-                </TouchableOpacity>
+                  <TouchableOpacity 
+                    onPress={() => router.push('/forgot-username' as any)} 
+                    style={styles.forgotLink}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.forgotLinkText, { color: theme.colors.primary, fontSize: getResponsiveFontSize(14) }]}>
+                      Forgot Username?
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               )}
 
               {/* Toggle Mode */}
@@ -394,14 +408,23 @@ const styles = StyleSheet.create({
     marginTop: getResponsiveSize(spacing.md),
     marginBottom: getResponsiveSize(spacing.md),
   },
-  forgotPasswordContainer: {
+  forgotLinksContainer: {
     marginTop: getResponsiveSize(spacing.md),
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: getResponsiveSize(spacing.sm),
+    gap: getResponsiveSize(spacing.sm),
   },
-  forgotPasswordText: {
+  forgotLink: {
+    // Container for individual link
+  },
+  forgotLinkText: {
     fontWeight: '600',
     textAlign: 'center',
+    // fontSize set dynamically
+  },
+  forgotLinkSeparator: {
     // fontSize set dynamically
   },
   toggleContainer: {

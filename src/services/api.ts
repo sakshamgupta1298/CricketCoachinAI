@@ -1260,6 +1260,84 @@ class ApiService {
     }
   }
 
+  // Forgot Username Methods
+  async forgotUsername(email: string): Promise<ApiResponse<any>> {
+    try {
+      console.log('=== FORGOT USERNAME PROCESS STARTED ===');
+      console.log('Email:', email);
+      
+      if (!email) {
+        return {
+          success: false,
+          error: 'Email is required',
+        };
+      }
+      
+      console.log('Calling backend forgot username endpoint...');
+      const response = await this.jsonApi.post('/api/auth/forgot-username', {
+        email,
+      });
+      
+      console.log('Backend forgot username call successful');
+      
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error: any) {
+      console.error('Forgot Username Error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+      
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message || 'Failed to send OTP. Please try again.',
+      };
+    }
+  }
+
+  async verifyUsernameOTP(email: string, otp: string): Promise<ApiResponse<any>> {
+    try {
+      console.log('=== VERIFY USERNAME OTP PROCESS STARTED ===');
+      console.log('Email:', email);
+      
+      if (!email || !otp) {
+        return {
+          success: false,
+          error: 'Email and OTP are required',
+        };
+      }
+      
+      console.log('Calling backend verify username OTP endpoint...');
+      const response = await this.jsonApi.post('/api/auth/verify-username-otp', {
+        email,
+        otp,
+      });
+      
+      console.log('Backend verify username OTP call successful');
+      
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error: any) {
+      console.error('Verify Username OTP Error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+      
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message || 'Invalid OTP. Please try again.',
+      };
+    }
+  }
+
   // Token Storage Methods
   async storeAuthData(token: string, user: any): Promise<void> {
     try {

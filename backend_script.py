@@ -3632,6 +3632,256 @@ def reset_password():
         logger.error(f"Reset password error: {str(e)}", exc_info=True)
         return jsonify({'error': 'Failed to reset password'}), 500
 
+def send_username_email(email, username):
+    """Send username email to user"""
+    try:
+        subject = "CrickCoach AI - Your Username"
+        
+        html_body = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background-color: #4CAF50; color: white; padding: 20px; text-align: center; }}
+                .content {{ padding: 20px; background-color: #f9f9f9; }}
+                .username-box {{ background-color: #fff; border: 2px solid #4CAF50; padding: 20px; text-align: center; margin: 20px 0; }}
+                .username-text {{ font-size: 24px; font-weight: bold; color: #4CAF50; }}
+                .footer {{ text-align: center; padding: 20px; color: #666; font-size: 12px; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>CrickCoach AI</h1>
+                </div>
+                <div class="content">
+                    <h2>Username Recovery</h2>
+                    <p>You have requested to retrieve your username. Your username is:</p>
+                    <div class="username-box">
+                        <div class="username-text">{username}</div>
+                    </div>
+                    <p>If you did not request this username recovery, please ignore this email.</p>
+                </div>
+                <div class="footer">
+                    <p>© 2024 CrickCoach AI. All rights reserved.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        text_body = f"""
+        CrickCoach AI - Your Username
+        
+        You have requested to retrieve your username. Your username is:
+        
+        Username: {username}
+        
+        If you did not request this username recovery, please ignore this email.
+        
+        © 2024 CrickCoach AI. All rights reserved.
+        """
+        
+        return send_email_via_smtp2go(email, subject, html_body, text_body)
+        
+    except Exception as e:
+        logger.error(f"Error creating username email: {str(e)}", exc_info=True)
+        return False
+
+# Forgot Username Endpoints
+@app.route('/api/auth/forgot-username', methods=['POST'])
+def forgot_username():
+    """Send OTP to user's email for username recovery"""
+    try:
+        logger.info("=== FORGOT USERNAME REQUEST ===")
+        data = request.get_json()
+        logger.debug(f"Request data: {data}")
+        
+        if not data:
+            logger.warning("No data provided in forgot username request")
+            return jsonify({'error': 'No data provided'}), 400
+        
+        email = data.get('email', '').strip().lower()
+        logger.info(f"Forgot username request for email: {email}")
+        
+        if not email:
+            logger.warning("Email not provided in forgot username request")
+            return jsonify({'error': 'Email is required'}), 400
+        
+        # Email format validation
+        email_pattern = r'^[^\s@]+@[^\s@]+\.[^\s@]+$'
+        if not re.match(email_pattern, email):
+            logger.warning(f"Invalid email format in forgot username request: {email}")
+            return jsonify({'error': 'Please enter a valid email address'}), 400
+        
+        # Check if user exists
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM users WHERE email = ?', (email,))
+        user = cursor.fetchone()
+        conn.close()
+        
+        if not user:
+            # Don't reveal if email exists or not for security
+            logger.info(f"Email not found in database: {email} (but not revealing to user)")
+            # Still return success to prevent email enumeration
+            return jsonify({
+                'success': True,
+                'message': 'If the email exists, an OTP has been sent'
+            })
+        
+        # Clean up expired OTPs
+        cleanup_expired_otps()
+        
+        # Generate OTP
+        otp = generate_otp(OTP_LENGTH)
+        logger.info(f"Generated OTP for {email}: {otp}")
+        
+        # Store OTP (we'll use the same OTP storage but with a different prefix or separate storage)
+        # For simplicity, we'll use the same storage but mark it differently
+        store_otp(email, otp)
+        
+        # Send OTP email (reuse the same OTP email function but with different subject)
+        subject = "CrickCoach AI - Username Recovery OTP"
+        html_body = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background-color: #4CAF50; color: white; padding: 20px; text-align: center; }}
+                .content {{ padding: 20px; background-color: #f9f9f9; }}
+                .otp-box {{ background-color: #fff; border: 2px solid #4CAF50; padding: 20px; text-align: center; margin: 20px 0; }}
+                .otp-code {{ font-size: 32px; font-weight: bold; color: #4CAF50; letter-spacing: 5px; }}
+                .footer {{ text-align: center; padding: 20px; color: #666; font-size: 12px; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>CrickCoach AI</h1>
+                </div>
+                <div class="content">
+                    <h2>Username Recovery Request</h2>
+                    <p>You have requested to recover your username. Please use the following OTP code to verify your email address:</p>
+                    <div class="otp-box">
+                        <div class="otp-code">{otp}</div>
+                    </div>
+                    <p>This OTP will expire in {OTP_EXPIRATION_MINUTES} minutes.</p>
+                    <p>If you did not request this username recovery, please ignore this email.</p>
+                </div>
+                <div class="footer">
+                    <p>© 2024 CrickCoach AI. All rights reserved.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        text_body = f"""
+        CrickCoach AI - Username Recovery OTP
+        
+        You have requested to recover your username. Please use the following OTP code to verify your email address:
+        
+        OTP Code: {otp}
+        
+        This OTP will expire in {OTP_EXPIRATION_MINUTES} minutes.
+        
+        If you did not request this username recovery, please ignore this email.
+        
+        © 2024 CrickCoach AI. All rights reserved.
+        """
+        
+        email_sent = send_email_via_smtp2go(email, subject, html_body, text_body)
+        
+        if not email_sent:
+            logger.error(f"Failed to send OTP email to {email}")
+            # Remove stored OTP if email failed
+            if email in otp_storage:
+                del otp_storage[email]
+            return jsonify({'error': 'Failed to send OTP email. Please try again later.'}), 500
+        
+        logger.info(f"OTP sent successfully to {email}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'OTP has been sent to your email address'
+        })
+        
+    except Exception as e:
+        logger.error(f"Forgot username error: {str(e)}", exc_info=True)
+        return jsonify({'error': 'Failed to process forgot username request'}), 500
+
+@app.route('/api/auth/verify-username-otp', methods=['POST'])
+def verify_username_otp():
+    """Verify OTP for username recovery and send username email"""
+    try:
+        logger.info("=== VERIFY USERNAME OTP REQUEST ===")
+        data = request.get_json()
+        logger.debug(f"Request data: {data}")
+        
+        if not data:
+            logger.warning("No data provided in verify username OTP request")
+            return jsonify({'error': 'No data provided'}), 400
+        
+        email = data.get('email', '').strip().lower()
+        otp = data.get('otp', '').strip()
+        
+        logger.info(f"Username OTP verification request for email: {email}")
+        
+        if not email or not otp:
+            logger.warning("Email or OTP not provided in verify username OTP request")
+            return jsonify({'error': 'Email and OTP are required'}), 400
+        
+        # Clean up expired OTPs
+        cleanup_expired_otps()
+        
+        # Verify OTP
+        if not verify_otp(email, otp):
+            logger.warning(f"OTP verification failed for email: {email}")
+            return jsonify({'error': 'Invalid or expired OTP'}), 400
+        
+        # OTP verified, get user from database
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM users WHERE email = ?', (email,))
+        user = cursor.fetchone()
+        conn.close()
+        
+        if not user:
+            logger.warning(f"User not found in database: {email}")
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Get username
+        username = user['username']
+        logger.info(f"Username found for email {email}: {username}")
+        
+        # Send username email
+        email_sent = send_username_email(email, username)
+        
+        if not email_sent:
+            logger.error(f"Failed to send username email to {email}")
+            return jsonify({'error': 'Failed to send username email. Please try again later.'}), 500
+        
+        # Remove OTP from storage after successful verification
+        email_lower = email.lower()
+        if email_lower in otp_storage:
+            del otp_storage[email_lower]
+        
+        logger.info(f"Username sent successfully to {email}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Your username has been sent to your email address'
+        })
+        
+    except Exception as e:
+        logger.error(f"Verify username OTP error: {str(e)}", exc_info=True)
+        return jsonify({'error': 'Failed to verify OTP'}), 500
+
 if __name__ == '__main__':
     # Initialize database
     logger.info("Initializing database...")
