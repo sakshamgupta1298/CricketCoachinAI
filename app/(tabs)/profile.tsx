@@ -86,6 +86,12 @@ export default function ProfileScreen() {
   const handleAccountAction = (action: string) => {
     if (action === 'Change Password') {
       router.push('/change-password');
+    } else if (action === 'Privacy Policy') {
+      router.push('/privacy-policy');
+    } else if (action === 'About') {
+      router.push('/about');
+    } else if (action === 'Help & Support') {
+      router.push('/help-and-support');
     } else {
       Alert.alert(
         'Coming Soon',
@@ -226,11 +232,6 @@ export default function ProfileScreen() {
             icon="🔒"
             label="Change Password"
             onPress={() => handleAccountAction('Change Password')}
-          />
-          <ActionItem
-            icon="⚙️"
-            label="Settings"
-            onPress={() => handleAccountAction('Settings')}
           />
           <ActionItem
             icon="❓"

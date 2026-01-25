@@ -76,6 +76,36 @@ function ThemedApp() {
                 headerTintColor: theme.colors.onSurface,
               }}
             />
+            <Stack.Screen 
+              name="privacy-policy" 
+              options={{
+                headerShown: true,
+                title: 'Privacy Policy',
+                headerBackTitle: 'Back',
+                headerStyle: { backgroundColor: theme.colors.surface },
+                headerTintColor: theme.colors.onSurface,
+              }}
+            />
+            <Stack.Screen 
+              name="about" 
+              options={{
+                headerShown: true,
+                title: 'About Us',
+                headerBackTitle: 'Back',
+                headerStyle: { backgroundColor: theme.colors.surface },
+                headerTintColor: theme.colors.onSurface,
+              }}
+            />
+            <Stack.Screen 
+              name="help-and-support" 
+              options={{
+                headerShown: true,
+                title: 'Help & Support',
+                headerBackTitle: 'Back',
+                headerStyle: { backgroundColor: theme.colors.surface },
+                headerTintColor: theme.colors.onSurface,
+              }}
+            />
           </Stack>
           <Toast />
           <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />

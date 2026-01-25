@@ -7,12 +7,14 @@ import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import Toast from 'react-native-toast-message';
 import { PremiumButton } from '../src/components/ui/PremiumButton';
 import { PremiumCard } from '../src/components/ui/PremiumCard';
+import { useAuth } from '../src/context/AuthContext';
 import apiService from '../src/services/api';
 import { spacing } from '../src/theme';
 import { getResponsiveFontSize, getResponsiveSize } from '../src/utils/responsive';
 
 export default function LoginScreen() {
   const theme = useTheme();
+  const { login: loginContext } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   
@@ -116,6 +118,9 @@ export default function LoginScreen() {
         
         // Store token and user data
         await apiService.storeAuthData(response.data.token, response.data.user);
+        
+        // Update AuthContext
+        loginContext(response.data.user, response.data.token);
         
         console.log('🎉 [LOGIN_SCREEN] Auth data stored, showing success toast');
         

@@ -82,14 +82,10 @@ class BackgroundUploadService {
         // Resume checking if upload was in progress
         if (this.uploadState && 
             (this.uploadState.status === 'uploading' || this.uploadState.status === 'processing')) {
-          const elapsed = Date.now() - this.uploadState.startTime;
-          if (elapsed < MAX_UPLOAD_TIME) {
-            console.log('🔄 [BACKGROUND_UPLOAD] Resuming upload check...');
-            this.startPolling();
-          } else {
-            console.log('⏱️ [BACKGROUND_UPLOAD] Upload timeout exceeded, marking as failed');
-            await this.markAsFailed('Upload timeout exceeded');
-          }
+          // Always resume checking - checkUploadStatus will verify with backend first
+          // before marking as failed, even if timeout exceeded
+          console.log('🔄 [BACKGROUND_UPLOAD] Resuming upload check...');
+          this.startPolling();
         }
       }
     } catch (error) {
@@ -270,26 +266,27 @@ class BackgroundUploadService {
     if (!this.uploadState) return;
 
     const elapsed = Date.now() - this.uploadState.startTime;
+    const jobId = this.uploadState.jobId;
     
-    // Check timeout (for entire job: upload + analysis)
-    if (elapsed > MAX_UPLOAD_TIME) {
-      console.log('⏱️ [BACKGROUND_UPLOAD] Maximum job time exceeded (analysis taking too long)');
-      await this.markAsFailed('Analysis is taking longer than expected. Please check back later or contact support.');
+    if (!jobId) {
+      console.log('⏳ [BACKGROUND_UPLOAD] No jobId yet; waiting...');
+      // If no jobId and timeout exceeded, mark as failed
+      if (elapsed > MAX_UPLOAD_TIME) {
+        console.log('⏱️ [BACKGROUND_UPLOAD] Maximum job time exceeded (no jobId received)');
+        await this.markAsFailed('Upload timeout exceeded. Please try again.');
+      }
       return;
     }
 
     try {
-      const jobId = this.uploadState.jobId;
-      if (!jobId) {
-        console.log('⏳ [BACKGROUND_UPLOAD] No jobId yet; waiting...');
-        return;
-      }
-
       console.log('🔍 [BACKGROUND_UPLOAD] Polling for job result:', jobId);
       const jobResponse = await apiService.getJobResult(jobId);
 
       if (jobResponse.success && jobResponse.data) {
         const status = jobResponse.data.status;
+        
+        // Always check backend status first, even if timeout exceeded
+        // The job might have completed while app was in background
         if (status === 'completed' && jobResponse.data.result) {
           console.log('✅ [BACKGROUND_UPLOAD] Job completed, result received');
           this.uploadState.status = 'completed';
@@ -311,11 +308,34 @@ class BackgroundUploadService {
           return;
         }
 
-        console.log('⏳ [BACKGROUND_UPLOAD] Job not ready yet, status:', status);
+        // If job is still processing, check timeout
+        if (status === 'queued' || status === 'processing') {
+          if (elapsed > MAX_UPLOAD_TIME) {
+            console.log('⏱️ [BACKGROUND_UPLOAD] Maximum job time exceeded (analysis taking too long)');
+            await this.markAsFailed('Analysis is taking longer than expected. Please check back later or contact support.');
+            return;
+          }
+          console.log('⏳ [BACKGROUND_UPLOAD] Job not ready yet, status:', status);
+        } else {
+          console.log('⏳ [BACKGROUND_UPLOAD] Job not ready yet, status:', status);
+        }
       } else {
+        // If we can't get job status and timeout exceeded, mark as failed
+        if (elapsed > MAX_UPLOAD_TIME) {
+          console.log('⏱️ [BACKGROUND_UPLOAD] Maximum job time exceeded (unable to check status)');
+          await this.markAsFailed('Analysis is taking longer than expected. Please check back later or contact support.');
+          return;
+        }
         console.log('🔄 [BACKGROUND_UPLOAD] Job status check failed, will retry:', jobResponse.error);
       }
     } catch (error: any) {
+      // Error checking status - check timeout before continuing
+      if (elapsed > MAX_UPLOAD_TIME) {
+        console.log('⏱️ [BACKGROUND_UPLOAD] Maximum job time exceeded (error checking status)');
+        await this.markAsFailed('Analysis is taking longer than expected. Please check back later or contact support.');
+        return;
+      }
+      
       // Error checking status - continue polling unless it's a 404 (not found)
       if (error.message?.includes('404') || error.message?.includes('not found')) {
         console.log('⏳ [BACKGROUND_UPLOAD] Job not found yet (404), will continue polling...');

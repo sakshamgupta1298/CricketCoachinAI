@@ -134,8 +134,14 @@ class ApiService {
 
     // Response interceptor
     this.api.interceptors.response.use(
-      (response) => {
+      async (response) => {
         console.log('✅ [API_RESPONSE] Response received:', response.status, response.config.url);
+        
+        // Refresh token expiration on successful authenticated requests
+        if (response.status === 200 && response.config.headers['Authorization']) {
+          await this.refreshTokenExpiration();
+        }
+        
         return response;
       },
       async (error) => {
@@ -190,8 +196,14 @@ class ApiService {
 
     // JSON API response interceptor
     this.jsonApi.interceptors.response.use(
-      (response) => {
+      async (response) => {
         console.log('✅ [JSON_API_RESPONSE] JSON response received:', response.status, response.config.url);
+        
+        // Refresh token expiration on successful authenticated requests
+        if (response.status === 200 && response.config.headers['Authorization']) {
+          await this.refreshTokenExpiration();
+        }
+        
         return response;
       },
       async (error) => {
@@ -966,6 +978,12 @@ class ApiService {
           'Authorization': `Bearer ${token}`,
         },
       });
+      
+      // If verification successful, refresh token expiration
+      if (response.status === 200) {
+        await this.refreshTokenExpiration();
+      }
+      
       return {
         success: true,
         data: response.data,
@@ -1339,17 +1357,23 @@ class ApiService {
   }
 
   // Token Storage Methods
+  // Token expiration: 7 days (in milliseconds)
+  private readonly TOKEN_EXPIRATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
   async storeAuthData(token: string, user: any): Promise<void> {
     try {
       console.log('Storing auth data...');
+      const now = Date.now();
       const authData = {
         token,
         user,
-        timestamp: Date.now(),
+        timestamp: now,
+        expiresAt: now + this.TOKEN_EXPIRATION_MS, // 7 days from now
       };
       
       await AsyncStorage.setItem('authData', JSON.stringify(authData));
       console.log('Auth data stored successfully');
+      console.log(`Token expires at: ${new Date(authData.expiresAt).toISOString()}`);
       
       // Set default authorization header for future requests
       this.api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
@@ -1367,7 +1391,19 @@ class ApiService {
       const authData = await AsyncStorage.getItem('authData');
       if (authData) {
         const parsed = JSON.parse(authData);
+        
+        // Check if token has expired
+        const now = Date.now();
+        const expiresAt = parsed.expiresAt || (parsed.timestamp + this.TOKEN_EXPIRATION_MS);
+        
+        if (now >= expiresAt) {
+          console.log('Token has expired, clearing auth data');
+          await this.clearAuthData();
+          return null;
+        }
+        
         console.log('Token retrieved successfully');
+        console.log(`Token expires in: ${Math.floor((expiresAt - now) / (1000 * 60 * 60 * 24))} days`);
         return parsed.token;
       }
       console.log('No auth data found');
@@ -1378,12 +1414,101 @@ class ApiService {
     }
   }
 
+  // Check if stored auth data is valid (not expired)
+  async isAuthDataValid(): Promise<boolean> {
+    try {
+      const authData = await AsyncStorage.getItem('authData');
+      if (!authData) {
+        return false;
+      }
+      
+      const parsed = JSON.parse(authData);
+      const now = Date.now();
+      const expiresAt = parsed.expiresAt || (parsed.timestamp + this.TOKEN_EXPIRATION_MS);
+      
+      return now < expiresAt;
+    } catch (error) {
+      console.error('Error checking auth data validity:', error);
+      return false;
+    }
+  }
+
+  // Get stored auth data (token + user) if valid
+  async getStoredAuthData(): Promise<{ token: string; user: any } | null> {
+    try {
+      const authData = await AsyncStorage.getItem('authData');
+      if (!authData) {
+        return null;
+      }
+      
+      const parsed = JSON.parse(authData);
+      const now = Date.now();
+      const expiresAt = parsed.expiresAt || (parsed.timestamp + this.TOKEN_EXPIRATION_MS);
+      
+      if (now >= expiresAt) {
+        console.log('Auth data has expired, clearing...');
+        await this.clearAuthData();
+        return null;
+      }
+      
+      return {
+        token: parsed.token,
+        user: parsed.user,
+      };
+    } catch (error) {
+      console.error('Error getting stored auth data:', error);
+      return null;
+    }
+  }
+
+  // Refresh token expiration (extend by 7 days from now)
+  async refreshTokenExpiration(): Promise<void> {
+    try {
+      const authData = await AsyncStorage.getItem('authData');
+      if (!authData) {
+        return;
+      }
+      
+      const parsed = JSON.parse(authData);
+      const now = Date.now();
+      
+      // Only refresh if token is still valid
+      const expiresAt = parsed.expiresAt || (parsed.timestamp + this.TOKEN_EXPIRATION_MS);
+      if (now >= expiresAt) {
+        console.log('Token already expired, cannot refresh');
+        await this.clearAuthData();
+        return;
+      }
+      
+      // Extend expiration by 7 days from now
+      parsed.expiresAt = now + this.TOKEN_EXPIRATION_MS;
+      parsed.timestamp = now; // Update timestamp
+      
+      await AsyncStorage.setItem('authData', JSON.stringify(parsed));
+      console.log('Token expiration refreshed');
+      console.log(`New expiration: ${new Date(parsed.expiresAt).toISOString()}`);
+    } catch (error) {
+      console.error('Error refreshing token expiration:', error);
+    }
+  }
+
   async getStoredUser(): Promise<any | null> {
     try {
       console.log('Getting stored user...');
       const authData = await AsyncStorage.getItem('authData');
       if (authData) {
         const parsed = JSON.parse(authData);
+        
+        // Check if token has expired
+        const now = Date.now();
+        const expiresAt = parsed.expiresAt || (parsed.timestamp + this.TOKEN_EXPIRATION_MS);
+        
+        if (now >= expiresAt) {
+          console.log('Token has expired, clearing auth data');
+          await this.clearAuthData();
+          return null;
+        }
+        
         console.log('User data retrieved successfully');
         return parsed.user;
       }
@@ -1436,6 +1561,9 @@ class ApiService {
       if (token) {
         this.api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
         this.jsonApi.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        console.log('✅ [AUTH] Auth headers initialized from stored token');
+      } else {
+        console.log('ℹ️ [AUTH] No valid token found');
       }
     } catch (error) {
       console.error('Error initializing auth:', error);

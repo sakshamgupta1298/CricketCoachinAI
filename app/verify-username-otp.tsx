@@ -243,10 +243,12 @@ export default function VerifyUsernameOTPScreen() {
                         backgroundColor: theme.colors.surface,
                         borderColor: digit ? theme.colors.primary : theme.colors.outline,
                         borderWidth: 2,
+                        textAlign: 'center',
                       }]}
                       keyboardType="number-pad"
                       maxLength={1}
                       textAlign="center"
+                      textAlignVertical="center"
                       contentStyle={styles.otpInputContent}
                       disabled={loading}
                       selectTextOnFocus
@@ -374,14 +376,19 @@ const styles = StyleSheet.create({
     width: '100%',
     height: getResponsiveSize(65),
     borderRadius: getResponsiveSize(12),
-    fontSize: getResponsiveFontSize(24),
-    fontWeight: 'bold',
+    textAlign: 'center',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   otpInputContent: {
-    fontSize: getResponsiveFontSize(24),
+    fontSize: getResponsiveFontSize(20),
     fontWeight: 'bold',
     textAlign: 'center',
+    textAlignVertical: 'center',
     paddingVertical: 0,
+    paddingHorizontal: 0,
+    marginVertical: 0,
+    includeFontPadding: false,
   },
   timerContainer: {
     alignItems: 'center',

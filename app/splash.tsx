@@ -17,6 +17,7 @@ import Animated, {
   withTiming
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuth } from '../src/context/AuthContext';
 import {
   getResponsiveFontSize,
   getResponsiveSize,
@@ -112,6 +113,7 @@ const LoadingDots = ({ color, dotSize = 8, gap = 8 }: { color: string; dotSize?:
 export default function SplashScreenComponent() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const { isAuthenticated, isLoading } = useAuth();
   const [imageError, setImageError] = React.useState(false);
   
   // Animation values
@@ -139,17 +141,26 @@ export default function SplashScreenComponent() {
     );
     // Keep opacity at 1 (visible)
     opacity.value = 1;
-
-    // Simulate loading time (4 seconds)
-    const timer = setTimeout(() => {
-      // Navigate to landing after fade out animation
-      setTimeout(() => {
-        router.replace('/landing');
-      }, 500);
-    }, 4000);
-
-    return () => clearTimeout(timer);
   }, []);
+
+  // Handle navigation after auth state is loaded
+  useEffect(() => {
+    if (!isLoading) {
+      // Wait a bit for animation, then navigate
+      const minDisplayTime = 2000; // Minimum 2 seconds for splash
+      const timer = setTimeout(() => {
+        if (isAuthenticated) {
+          console.log('✅ [SPLASH] User is authenticated, navigating to home');
+          router.replace('/(tabs)/home');
+        } else {
+          console.log('ℹ️ [SPLASH] User not authenticated, navigating to landing');
+          router.replace('/landing');
+        }
+      }, minDisplayTime);
+
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading, isAuthenticated]);
 
   const logoAnimatedStyle = useAnimatedStyle(() => {
     return {
