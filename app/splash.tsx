@@ -113,7 +113,18 @@ const LoadingDots = ({ color, dotSize = 8, gap = 8 }: { color: string; dotSize?:
 export default function SplashScreenComponent() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { isAuthenticated, isLoading } = useAuth();
+  
+  // Get auth state - wrap in ErrorBoundary at layout level if needed
+  let authState;
+  try {
+    authState = useAuth();
+  } catch (error) {
+    console.error('❌ [SPLASH] Error getting auth state:', error);
+    // Create a fallback auth state object
+    authState = { isAuthenticated: false, isLoading: false };
+  }
+  
+  const { isAuthenticated = false, isLoading = true } = authState || {};
   const [imageError, setImageError] = React.useState(false);
   
   // Animation values

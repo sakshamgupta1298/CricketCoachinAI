@@ -230,23 +230,31 @@ class ApiService {
 
   private determineBaseURL(): string {
     // Use the configuration from config.js
-    console.log('🔍 [API] Determining base URL...');
-    console.log('🔧 [API] __DEV__:', __DEV__);
-    console.log('📱 [API] Platform:', Platform.OS);
+    try {
+      console.log('🔍 [API] Determining base URL...');
+      console.log('🔧 [API] __DEV__:', __DEV__);
+      console.log('📱 [API] Platform:', Platform.OS);
     
-    // Use the currentConfig from config.js
-    const configURL = currentConfig.API_BASE_URL;
-    console.log('✅ [API] Using API URL from config:', configURL);
-    
-    // Add additional logging for debugging
-    console.log('🌐 [API] Full URL will be:', configURL);
-    console.log('📱 [API] Platform details:', {
-      platform: Platform.OS,
-      version: Platform.Version,
-      isDev: __DEV__
-    });
-    
-    return configURL;
+      // Use the currentConfig from config.js
+      const configURL = currentConfig?.API_BASE_URL || 'http://165.232.184.91';
+      console.log('✅ [API] Using API URL from config:', configURL);
+      
+      // Add additional logging for debugging
+      console.log('🌐 [API] Full URL will be:', configURL);
+      console.log('📱 [API] Platform details:', {
+        platform: Platform.OS,
+        version: Platform.Version,
+        isDev: __DEV__
+      });
+      
+      return configURL;
+    } catch (error) {
+      console.error('❌ [API] Error determining base URL:', error);
+      // Fallback to default URL
+      const fallbackURL = 'http://165.232.184.91';
+      console.warn('⚠️ [API] Using fallback URL:', fallbackURL);
+      return fallbackURL;
+    }
   }
 
   // Health check endpoint
