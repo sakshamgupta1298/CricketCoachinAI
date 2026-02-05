@@ -24,8 +24,12 @@ import {
   screenWidth
 } from '../src/utils/responsive';
 
-// Keep the splash screen visible while we fetch resources
-SplashScreen.preventAutoHideAsync();
+// Keep the native splash screen visible until *we* hide it.
+// Important: always catch here—calling this at module scope can otherwise create
+// unhandled promise rejections on reloads / edge cases.
+void SplashScreen.preventAutoHideAsync().catch((e) => {
+  console.log('⚠️ [SPLASH] preventAutoHideAsync failed (ignored):', (e as any)?.message ?? e);
+});
 
 // Loading Dots Component
 const LoadingDots = ({ color, dotSize = 8, gap = 8 }: { color: string; dotSize?: number; gap?: number }) => {
@@ -75,37 +79,46 @@ const LoadingDots = ({ color, dotSize = 8, gap = 8 }: { color: string; dotSize?:
   }));
 
   return (
-    <View style={[styles.loadingDots, { gap }]}>
-      <Animated.View style={[
-        styles.dot, 
-        { 
-          backgroundColor: color,
-          width: dotSize,
-          height: dotSize,
-          borderRadius: dotSize / 2,
-        }, 
-        dot1Style
-      ]} />
-      <Animated.View style={[
-        styles.dot, 
-        { 
-          backgroundColor: color,
-          width: dotSize,
-          height: dotSize,
-          borderRadius: dotSize / 2,
-        }, 
-        dot2Style
-      ]} />
-      <Animated.View style={[
-        styles.dot, 
-        { 
-          backgroundColor: color,
-          width: dotSize,
-          height: dotSize,
-          borderRadius: dotSize / 2,
-        }, 
-        dot3Style
-      ]} />
+    <View style={styles.loadingDots}>
+      <Animated.View
+        style={[
+          styles.dot,
+          {
+            backgroundColor: color,
+            width: dotSize,
+            height: dotSize,
+            borderRadius: dotSize / 2,
+            marginRight: gap,
+          },
+          dot1Style,
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.dot,
+          {
+            backgroundColor: color,
+            width: dotSize,
+            height: dotSize,
+            borderRadius: dotSize / 2,
+            marginRight: gap,
+          },
+          dot2Style,
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.dot,
+          {
+            backgroundColor: color,
+            width: dotSize,
+            height: dotSize,
+            borderRadius: dotSize / 2,
+            marginRight: 0,
+          },
+          dot3Style,
+        ]}
+      />
     </View>
   );
 };
@@ -115,6 +128,9 @@ export default function SplashScreenComponent() {
   const insets = useSafeAreaInsets();
   const { isAuthenticated, isLoading } = useAuth();
   const [imageError, setImageError] = React.useState(false);
+
+  // If you don't see this log, the splash route isn't mounting (or is crashing before render).
+  console.log('🎬 [SPLASH] Render. isLoading=', isLoading, 'isAuthenticated=', isAuthenticated);
   
   // Animation values
   const scale = useSharedValue(0.8);
@@ -131,8 +147,12 @@ export default function SplashScreenComponent() {
   const dotGap = getResponsiveSize(8);
 
   useEffect(() => {
-    // Hide native splash screen immediately to show our custom one
-    SplashScreen.hideAsync();
+    // Hide native splash screen to show our custom one.
+    // Always catch to avoid unhandled promise rejections (can prevent JS from progressing).
+    void SplashScreen.hideAsync().catch((e) => {
+      console.log('⚠️ [SPLASH] hideAsync failed (ignored):', (e as any)?.message ?? e);
+    });
+    console.log('🎬 [SPLASH] First effect ran (hideAsync triggered)');
     // Animate splash icon entrance with bounce effect, then keep it static
     scale.value = withSequence(
       withTiming(0.5, { duration: 0 }), // Start small
@@ -146,6 +166,7 @@ export default function SplashScreenComponent() {
   // Handle navigation after auth state is loaded
   useEffect(() => {
     if (!isLoading) {
+      console.log('⏩ [SPLASH] Auth loading finished. isAuthenticated=', isAuthenticated);
       // Wait a bit for animation, then navigate
       const minDisplayTime = 2000; // Minimum 2 seconds for splash
       const timer = setTimeout(() => {
@@ -308,7 +329,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
   },
   dot: {
     // width, height, and borderRadius are set dynamically

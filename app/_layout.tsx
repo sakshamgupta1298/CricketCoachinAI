@@ -5,6 +5,8 @@ import { Provider as PaperProvider } from 'react-native-paper';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
+import * as SplashScreen from 'expo-splash-screen';
+import React from 'react';
 
 // Import context
 import { AuthProvider } from '../src/context/AuthContext';
@@ -16,6 +18,16 @@ import { darkTheme, lightTheme } from '../src/theme';
 function ThemedApp() {
   const colorScheme = useColorScheme();
   const theme = colorScheme === 'dark' ? darkTheme : lightTheme;
+
+  // Useful startup breadcrumb: confirms expo-router RootLayout is mounted
+  console.log('🧭 [ROUTER] RootLayout mounted. initialRouteName=splash');
+
+  // Never let iOS sit on the native splash if our custom splash route doesn't mount for some reason.
+  React.useEffect(() => {
+    void SplashScreen.hideAsync().catch((e) => {
+      console.log('⚠️ [ROUTER] hideAsync failed (ignored):', (e as any)?.message ?? e);
+    });
+  }, []);
 
   return (
     <PaperProvider theme={theme}>

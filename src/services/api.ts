@@ -1154,6 +1154,46 @@ class ApiService {
     }
   }
 
+  async deleteAllVideos(): Promise<ApiResponse<any>> {
+    try {
+      console.log('=== DELETE ALL VIDEOS PROCESS STARTED ===');
+      
+      const token = await this.getStoredToken();
+      if (!token) {
+        return {
+          success: false,
+          error: 'No authentication token found',
+        };
+      }
+      
+      console.log('Calling backend delete all videos endpoint...');
+      const response = await this.api.delete('/api/videos/delete-all', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      console.log('Backend delete all videos call successful');
+      
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error: any) {
+      console.error('Delete All Videos Error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+      
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message,
+      };
+    }
+  }
+
   // Forgot Password Methods
   async forgotPassword(email: string): Promise<ApiResponse<any>> {
     try {
@@ -1419,14 +1459,36 @@ class ApiService {
     try {
       const authData = await AsyncStorage.getItem('authData');
       if (!authData) {
+        console.log('ℹ️ [AUTH][VALIDATE] No authData in AsyncStorage');
         return false;
       }
-      
-      const parsed = JSON.parse(authData);
+
+      let parsed: any;
+      try {
+        parsed = JSON.parse(authData);
+      } catch (e: any) {
+        console.log('❌ [AUTH][VALIDATE] authData JSON.parse failed:', e?.message || e);
+        return false;
+      }
+
       const now = Date.now();
-      const expiresAt = parsed.expiresAt || (parsed.timestamp + this.TOKEN_EXPIRATION_MS);
-      
-      return now < expiresAt;
+      const hasExpiresAt = typeof parsed?.expiresAt === 'number';
+      const hasTimestamp = typeof parsed?.timestamp === 'number';
+
+      if (!hasExpiresAt && !hasTimestamp) {
+        console.log('❌ [AUTH][VALIDATE] Missing expiresAt and timestamp in authData. Keys:', Object.keys(parsed || {}));
+        return false;
+      }
+
+      const expiresAt = hasExpiresAt ? parsed.expiresAt : (parsed.timestamp + this.TOKEN_EXPIRATION_MS);
+      const isValid = now < expiresAt;
+
+      console.log(
+        `🔎 [AUTH][VALIDATE] isValid=${isValid} now=${new Date(now).toISOString()} expiresAt=${new Date(expiresAt).toISOString()} ` +
+          `msRemaining=${expiresAt - now}`
+      );
+
+      return isValid;
     } catch (error) {
       console.error('Error checking auth data validity:', error);
       return false;

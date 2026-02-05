@@ -65,6 +65,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         
         // Check if auth data is valid (not expired)
         const isValid = await apiService.isAuthDataValid();
+        console.log('🔎 [AUTH] isAuthDataValid() =>', isValid);
         
         if (!isValid) {
           console.log('ℹ️ [AUTH] No valid auth data found or token expired');

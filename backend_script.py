@@ -2753,6 +2753,95 @@ def clear_analysis_history():
         logging.exception("Failed to clear analysis history")
         return jsonify({'error': f'Error clearing history: {str(e)}'}), 500
 
+@app.route('/api/videos/delete-all', methods=['DELETE'])
+@require_auth
+def delete_all_videos():
+    """Delete all uploaded videos and associated files for the authenticated user"""
+    try:
+        # Get user info from authentication
+        user_id = request.user['user_id']
+        username = request.user['username']
+        logger.info(f"Deleting all videos for user: {username} (ID: {user_id})")
+        
+        # Get user's upload folder
+        user_folder = get_user_upload_folder(user_id)
+        
+        deleted_videos = 0
+        deleted_files = 0
+        files_to_delete = []
+        
+        # Video file extensions
+        video_extensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.wmv', '.m4v']
+        
+        # Find all video files and associated files for this user
+        if os.path.exists(user_folder):
+            for file in os.listdir(user_folder):
+                file_path = os.path.join(user_folder, file)
+                
+                # Check if it's a video file
+                file_ext = os.path.splitext(file)[1].lower()
+                if file_ext in video_extensions:
+                    files_to_delete.append(file_path)
+                    deleted_videos += 1
+                    
+                    # Also delete associated files for this video
+                    filename_without_ext = os.path.splitext(file)[0]
+                    
+                    # Delete annotated video if exists
+                    annotated_pattern = f"annotated_*{file}*"
+                    annotated_files = glob.glob(os.path.join(user_folder, annotated_pattern))
+                    files_to_delete.extend(annotated_files)
+                    
+                    # Delete keypoints CSV if exists
+                    keypoints_pattern = f"*{filename_without_ext}*keypoints*.csv"
+                    keypoints_files = glob.glob(os.path.join(user_folder, keypoints_pattern))
+                    files_to_delete.extend(keypoints_files)
+                    
+                    # Delete results JSON if exists
+                    results_file = os.path.join(user_folder, f"results_{file}.json")
+                    if os.path.exists(results_file):
+                        files_to_delete.append(results_file)
+                    
+                    # Delete report if exists
+                    report_pattern = f"report_*{filename_without_ext}*.txt"
+                    report_files = glob.glob(os.path.join(user_folder, report_pattern))
+                    files_to_delete.extend(report_files)
+                    
+                    # Delete training plan if exists
+                    plan_file = os.path.join(user_folder, f"training_plan_{file}.json")
+                    if os.path.exists(plan_file):
+                        files_to_delete.append(plan_file)
+                    
+                    # Delete summary stats if exists
+                    summary_pattern = f"*{filename_without_ext}*summary*.csv"
+                    summary_files = glob.glob(os.path.join(user_folder, summary_pattern))
+                    files_to_delete.extend(summary_files)
+        
+        # Remove duplicates
+        files_to_delete = list(set(files_to_delete))
+        
+        # Delete the files
+        for file_path in files_to_delete:
+            try:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                    deleted_files += 1
+                    logger.info(f"Deleted: {file_path}")
+            except Exception as e:
+                logger.warning(f"Failed to delete {file_path}: {e}")
+        
+        logger.info(f"Deleted {deleted_videos} videos and {deleted_files} total files for user {username}")
+        return jsonify({
+            'success': True,
+            'message': f'Successfully deleted {deleted_videos} videos and {deleted_files} associated files',
+            'deleted_videos': deleted_videos,
+            'deleted_files': deleted_files
+        })
+        
+    except Exception as e:
+        logger.exception("Failed to delete all videos")
+        return jsonify({'error': f'Error deleting videos: {str(e)}'}), 500
+
 @app.route('/api/training-plan', methods=['POST'])
 @require_auth
 def generate_training_plan_api():

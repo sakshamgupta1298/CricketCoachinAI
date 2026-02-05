@@ -101,6 +101,127 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleDeleteAllVideos = () => {
+    Alert.alert(
+      'Delete All Videos',
+      'Are you sure you want to delete all uploaded videos? This will permanently delete:\n\n• All uploaded videos\n• All analysis results\n• All training plans\n• All associated files\n\nThis action cannot be undone.',
+      [
+        { 
+          text: 'Cancel', 
+          style: 'cancel' 
+        },
+        { 
+          text: 'Delete All', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              Toast.show({
+                type: 'info',
+                text1: 'Deleting videos...',
+                text2: 'Please wait while we delete all your videos',
+              });
+
+              const response = await apiService.deleteAllVideos();
+              
+              if (response.success) {
+                Toast.show({
+                  type: 'success',
+                  text1: 'Success',
+                  text2: response.data?.message || `Deleted ${response.data?.deleted_videos || 0} videos successfully`,
+                });
+              } else {
+                Toast.show({
+                  type: 'error',
+                  text1: 'Error',
+                  text2: response.error || 'Failed to delete videos',
+                });
+              }
+            } catch (error) {
+              console.error('Delete videos error:', error);
+              Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: 'Failed to delete videos. Please try again.',
+              });
+            }
+          }
+        },
+      ]
+    );
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'Are you sure you want to permanently delete your account? This will:\n\n• Delete your account and all personal information\n• Delete all uploaded videos\n• Delete all analysis results\n• Delete all training plans\n• Remove all associated data\n\nThis action cannot be undone. You will need to create a new account to use the app again.',
+      [
+        { 
+          text: 'Cancel', 
+          style: 'cancel' 
+        },
+        { 
+          text: 'Delete Account', 
+          style: 'destructive',
+          onPress: async () => {
+            // Second confirmation
+            Alert.alert(
+              'Final Confirmation',
+              'This is your last chance to cancel. Your account and all data will be permanently deleted.',
+              [
+                { 
+                  text: 'Cancel', 
+                  style: 'cancel' 
+                },
+                { 
+                  text: 'Yes, Delete My Account', 
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      Toast.show({
+                        type: 'info',
+                        text1: 'Deleting account...',
+                        text2: 'Please wait while we delete your account',
+                      });
+
+                      const response = await apiService.deleteAccount();
+                      
+                      if (response.success) {
+                        Toast.show({
+                          type: 'success',
+                          text1: 'Account Deleted',
+                          text2: 'Your account has been successfully deleted',
+                        });
+                        
+                        // Logout and redirect to landing
+                        authLogout();
+                        setTimeout(() => {
+                          router.replace('/landing');
+                        }, 1500);
+                      } else {
+                        Toast.show({
+                          type: 'error',
+                          text1: 'Error',
+                          text2: response.error || 'Failed to delete account',
+                        });
+                      }
+                    } catch (error) {
+                      console.error('Delete account error:', error);
+                      Toast.show({
+                        type: 'error',
+                        text1: 'Error',
+                        text2: 'Failed to delete account. Please try again.',
+                      });
+                    }
+                  }
+                },
+              ]
+            );
+          }
+        },
+      ]
+    );
+  };
+
   const InfoRow = ({ icon, label, value, iconColor }: { icon: string; label: string; value: string; iconColor: string }) => (
       <View style={styles.infoRow}>
       <View style={[styles.iconContainer, { 
@@ -247,6 +368,34 @@ export default function ProfileScreen() {
             icon="ℹ️"
             label="About"
             onPress={() => handleAccountAction('About')}
+          />
+        </View>
+      </View>
+
+      {/* Data Management */}
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(17) }]}>
+          Data Management
+            </Text>
+        <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+          <ActionItem
+            icon="🗑️"
+            label="Delete All Videos"
+            onPress={handleDeleteAllVideos}
+          />
+        </View>
+      </View>
+
+      {/* Danger Zone */}
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.error, fontSize: getResponsiveFontSize(17) }]}>
+          Danger Zone
+            </Text>
+        <View style={[styles.card, { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.error + '40' }]}>
+          <ActionItem
+            icon="⚠️"
+            label="Delete Account"
+            onPress={handleDeleteAccount}
           />
         </View>
       </View>

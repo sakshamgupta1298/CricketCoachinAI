@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Deletion Policy - CrickCoach AI</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            color: #1976d2;
+            font-size: 32px;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .last-updated {
+            color: #666;
+            font-size: 14px;
+            font-style: italic;
+        }
+
+        h2 {
+            color: #1976d2;
+            font-size: 24px;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        h3 {
+            color: #424242;
+            font-size: 18px;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        p {
+            margin-bottom: 15px;
+            color: #424242;
+            font-size: 16px;
+            line-height: 1.8;
+        }
+
+        ul {
+            margin-left: 20px;
+            margin-bottom: 15px;
+        }
+
+        li {
+            margin-bottom: 10px;
+            color: #424242;
+            font-size: 16px;
+            line-height: 1.8;
+        }
+
+        .section {
+            margin-bottom: 30px;
+        }
+
+        .highlight-box {
+            background-color: #e3f2fd;
+            border-left: 4px solid #1976d2;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        .warning-box {
+            background-color: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        .contact-info {
+            background-color: #f5f5f5;
+            padding: 20px;
+            border-radius: 4px;
+            margin-top: 20px;
+        }
+
+        .contact-info p {
+            margin-bottom: 8px;
+        }
+
+        .contact-info strong {
+            color: #1976d2;
+        }
+
+        a {
+            color: #1976d2;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .steps-list {
+            counter-reset: step-counter;
+            list-style: none;
+            margin-left: 0;
+        }
+
+        .steps-list li {
+            counter-increment: step-counter;
+            margin-bottom: 15px;
+            padding-left: 40px;
+            position: relative;
+        }
+
+        .steps-list li::before {
+            content: counter(step-counter);
+            position: absolute;
+            left: 0;
+            top: 0;
+            background-color: #1976d2;
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+
+            h2 {
+                font-size: 20px;
+            }
+
+            h3 {
+                font-size: 16px;
+            }
+
+            p, li {
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Data Deletion Policy</h1>
+            <p class="last-updated">Last Updated: <span id="lastUpdated"></span></p>
+        </div>
+
+        <div class="section">
+            <h2>Introduction</h2>
+            <p>
+                At CrickCoach AI ("we," "our," or "us"), we respect your right to control your personal data. This Data Deletion Policy explains how you can request the deletion of your account and associated data, what information will be deleted, and what information may be retained for legal or operational purposes.
+            </p>
+            <p>
+                This policy is designed to comply with data protection regulations including GDPR, CCPA, and other applicable privacy laws. By using our Service, you acknowledge that you have read and understood this policy.
+            </p>
+        </div>
+
+        <div class="section">
+            <h2>Your Right to Delete</h2>
+            <p>
+                You have the right to request deletion of your personal data and account at any time. This includes:
+            </p>
+            <ul>
+                <li>Your account profile and registration information</li>
+                <li>All uploaded cricket technique videos</li>
+                <li>Analysis results and performance metrics</li>
+                <li>Usage data and activity history</li>
+                <li>Any other personal information associated with your account</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>How to Request Account Deletion</h2>
+            <p>You can request account deletion through the following methods:</p>
+            
+            <h3>Method 1: Through the Mobile App</h3>
+            <ol class="steps-list">
+                <li>Open the CrickCoach AI mobile application</li>
+                <li>Navigate to your Profile or Settings section</li>
+                <li>Select "Account Settings" or "Privacy Settings"</li>
+                <li>Tap on "Delete Account" or "Request Account Deletion"</li>
+                <li>Follow the on-screen instructions to confirm your deletion request</li>
+                <li>You may be asked to enter your password or verify your identity</li>
+            </ol>
+
+            <h3>Method 2: Via Email</h3>
+            <p>
+                Send an email to <strong>admin@crickcoachai.com</strong> with the subject line "Account Deletion Request" and include:
+            </p>
+            <ul>
+                <li>Your registered email address</li>
+                <li>Your full name (as registered)</li>
+                <li>A clear statement requesting account deletion</li>
+                <li>Any additional information that may help us verify your identity</li>
+            </ul>
+
+            <div class="highlight-box">
+                <p><strong>Note:</strong> For security purposes, we may require additional verification before processing your deletion request, especially if you request deletion via email.</p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>What Gets Deleted</h2>
+            <p>Upon successful account deletion, we will permanently delete the following information:</p>
+            
+            <h3>Personal Information</h3>
+            <ul>
+                <li>Name and email address</li>
+                <li>Organization or academy name (if provided)</li>
+                <li>Contact information</li>
+                <li>Account credentials and authentication tokens</li>
+            </ul>
+
+            <h3>Video Content</h3>
+            <ul>
+                <li>All uploaded cricket technique videos</li>
+                <li>Video metadata (duration, file size, format information)</li>
+                <li>Recorded videos from the app</li>
+            </ul>
+
+            <h3>Analysis Data</h3>
+            <ul>
+                <li>All AI-generated analysis results</li>
+                <li>Performance metrics and statistics</li>
+                <li>Improvement recommendations and feedback</li>
+                <li>Progress tracking data</li>
+            </ul>
+
+            <h3>Usage Data</h3>
+            <ul>
+                <li>App usage patterns and activity logs</li>
+                <li>Feature access history</li>
+                <li>Device information associated with your account</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>What May Be Retained</h2>
+            <p>
+                In certain circumstances, we may be required to retain some information even after account deletion. This includes:
+            </p>
+
+            <h3>Legal and Compliance Requirements</h3>
+            <ul>
+                <li>Information required to comply with legal obligations, court orders, or government regulations</li>
+                <li>Records necessary for resolving disputes or enforcing our Terms of Service</li>
+                <li>Financial transaction records (if applicable) as required by law</li>
+            </ul>
+
+            <h3>Anonymized and Aggregated Data</h3>
+            <ul>
+                <li>Anonymized data that cannot be linked back to you personally</li>
+                <li>Aggregated analytics data used for service improvement</li>
+                <li>Statistical information that does not identify individual users</li>
+            </ul>
+
+            <h3>Backup Systems</h3>
+            <ul>
+                <li>Data stored in backup systems may take additional time to be fully deleted (up to 90 days)</li>
+                <li>We maintain secure backups for disaster recovery purposes</li>
+            </ul>
+
+            <div class="warning-box">
+                <p><strong>Important:</strong> Once your account is deleted, this action cannot be undone. You will lose access to all your videos, analysis results, and progress data permanently. Please ensure you have downloaded or saved any information you wish to keep before requesting deletion.</p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Deletion Timeline</h2>
+            <p>We process deletion requests as follows:</p>
+            <ul>
+                <li><strong>Immediate:</strong> Your account will be deactivated immediately upon confirmation of your deletion request</li>
+                <li><strong>Within 30 days:</strong> All personal data and associated content will be permanently deleted from our active systems</li>
+                <li><strong>Within 90 days:</strong> Data will be removed from all backup systems and archives</li>
+            </ul>
+            <p>
+                You will receive a confirmation email once your account deletion has been processed. If you do not receive confirmation within 30 days, please contact us at admin@crickcoachai.com.
+            </p>
+        </div>
+
+        <div class="section">
+            <h2>Partial Data Deletion</h2>
+            <p>
+                If you do not wish to delete your entire account but want to remove specific data, you can:
+            </p>
+            <ul>
+                <li><strong>Delete Individual Videos:</strong> You can delete specific videos from your account through the app's video management features</li>
+                <li><strong>Clear Analysis History:</strong> Remove specific analysis results while keeping your account active</li>
+                <li><strong>Update Profile Information:</strong> Modify or remove specific personal information from your profile</li>
+            </ul>
+            <p>
+                For assistance with partial data deletion, please contact us at admin@crickcoachai.com.
+            </p>
+        </div>
+
+        <div class="section">
+            <h2>Data Deletion for Coaches and Academies</h2>
+            <p>
+                If you are part of a coaching program or academy:
+            </p>
+            <ul>
+                <li>Deleting your account will remove your access to the platform</li>
+                <li>Your coach or academy administrator may retain copies of analysis data if you have granted them access</li>
+                <li>You should contact your coach or academy directly if you want them to delete any shared data</li>
+                <li>We will notify your coach or academy of your account deletion if you are part of an active program</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>Third-Party Services</h2>
+            <p>
+                Please note that if you have shared content from our Service on third-party platforms (social media, cloud storage, etc.), you will need to delete that content separately. We are not responsible for data stored on third-party services.
+            </p>
+        </div>
+
+        <div class="section">
+            <h2>Children's Data</h2>
+            <p>
+                If you are a parent or guardian and wish to delete an account created by a child under 13, please contact us immediately at admin@crickcoachai.com. We will process the deletion request promptly and in accordance with applicable children's privacy laws.
+            </p>
+        </div>
+
+        <div class="section">
+            <h2>Verification Process</h2>
+            <p>
+                To protect your privacy and security, we may require verification before processing a deletion request. This may include:
+            </p>
+            <ul>
+                <li>Confirming your email address</li>
+                <li>Verifying your identity through security questions</li>
+                <li>Requesting additional documentation in certain cases</li>
+            </ul>
+            <p>
+                We will only request information necessary to verify your identity and will not use this information for any other purpose.
+            </p>
+        </div>
+
+        <div class="section">
+            <h2>Reactivation After Deletion</h2>
+            <p>
+                Once your account and data have been deleted, this action is permanent and cannot be reversed. If you wish to use CrickCoach AI again in the future, you will need to create a new account and start fresh.
+            </p>
+        </div>
+
+        <div class="section">
+            <h2>Changes to This Policy</h2>
+            <p>
+                We may update this Data Deletion Policy from time to time to reflect changes in our practices or legal requirements. We will notify you of any material changes by:
+            </p>
+            <ul>
+                <li>Posting the updated policy on this page</li>
+                <li>Updating the "Last Updated" date</li>
+                <li>Sending an email notification for significant changes (if you have an active account)</li>
+            </ul>
+            <p>
+                We encourage you to review this policy periodically to stay informed about how we handle data deletion requests.
+            </p>
+        </div>
+
+        <div class="section">
+            <h2>Contact Us</h2>
+            <p>
+                If you have any questions about this Data Deletion Policy, need assistance with deleting your account, or have concerns about your data privacy, please contact us:
+            </p>
+            <div class="contact-info">
+                <p><strong>Email:</strong> <a href="mailto:admin@crickcoachai.com">admin@crickcoachai.com</a></p>
+                <p><strong>Website:</strong> <a href="https://www.crickcoachai.com" target="_blank">www.crickcoachai.com</a></p>
+                <p><strong>Response Time:</strong> We aim to respond to all deletion requests within 48 hours and process them within 30 days.</p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Additional Resources</h2>
+            <p>
+                For more information about how we handle your data, please review:
+            </p>
+            <ul>
+                <li><a href="privacy-policy.html">Privacy Policy</a> - Learn about how we collect, use, and protect your data</li>
+                <li><a href="terms-of-service.html">Terms of Service</a> - Review our terms and conditions</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Set the last updated date
+        document.getElementById('lastUpdated').textContent = new Date().toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+        });
+    </script>
+</body>
+</html>
+
