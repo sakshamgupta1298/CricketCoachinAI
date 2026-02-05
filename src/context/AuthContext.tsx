@@ -64,10 +64,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         console.log('🔄 [AUTH] Restoring auth state from storage...');
         
         // Check if auth data is valid (not expired)
-        const isValid = await apiService.isAuthDataValid().catch((err) => {
-          console.warn('⚠️ [AUTH] Error checking auth validity:', err);
-          return false;
-        });
+        const isValid = await apiService.isAuthDataValid();
         
         if (!isValid) {
           console.log('ℹ️ [AUTH] No valid auth data found or token expired');
@@ -76,26 +73,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
 
         // Get stored auth data
-        const authData = await apiService.getStoredAuthData().catch((err) => {
-          console.warn('⚠️ [AUTH] Error getting stored auth data:', err);
-          return null;
-        });
+        const authData = await apiService.getStoredAuthData();
         
         if (authData && authData.token && authData.user) {
           console.log('✅ [AUTH] Valid auth data found, restoring session...');
           
-          // Verify token with backend (with timeout to prevent hanging)
-          const verification = await Promise.race([
-            apiService.verifyToken(),
-            new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Token verification timeout')), 5000)
-            )
-          ]).catch((err) => {
-            console.warn('⚠️ [AUTH] Token verification failed or timed out:', err);
-            return { success: false };
-          }) as any;
+          // Verify token with backend
+          const verification = await apiService.verifyToken();
           
-          if (verification && verification.success) {
+          if (verification.success) {
             console.log('✅ [AUTH] Token verified, restoring auth state');
             dispatch({ 
               type: 'LOGIN', 
@@ -105,27 +91,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               } 
             });
             
-            // Initialize auth headers (don't await, let it happen in background)
-            apiService.initializeAuth().catch((err) => {
-              console.warn('⚠️ [AUTH] Error initializing auth headers:', err);
-            });
+            // Initialize auth headers
+            await apiService.initializeAuth();
           } else {
             console.log('❌ [AUTH] Token verification failed, clearing auth data');
-            await apiService.clearAuthData().catch((err) => {
-              console.warn('⚠️ [AUTH] Error clearing auth data:', err);
-            });
+            await apiService.clearAuthData();
           }
         } else {
           console.log('ℹ️ [AUTH] No auth data found');
         }
       } catch (error) {
         console.error('❌ [AUTH] Error restoring auth state:', error);
-        // Don't crash the app, just clear auth and continue
-        try {
-          await apiService.clearAuthData();
-        } catch (clearError) {
-          console.warn('⚠️ [AUTH] Error clearing auth data in catch:', clearError);
-        }
+        await apiService.clearAuthData();
       } finally {
         setIsLoading(false);
       }

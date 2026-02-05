@@ -27,6 +27,7 @@
       <dict>
         <key>CFBundleURLSchemes</key>
         <array>
+          <string>crickcoach</string>
           <string>com.saksham5.cricketcoachmobile</string>
         </array>
       </dict>
@@ -46,6 +47,8 @@
     <key>NSAppTransportSecurity</key>
     <dict>
       <key>NSAllowsArbitraryLoads</key>
+      <true/>
+      <key>NSAllowsLocalNetworking</key>
       <true/>
       <key>NSExceptionDomains</key>
       <dict>
@@ -93,6 +96,17 @@
           <key>NSIncludesSubdomains</key>
           <true/>
         </dict>
+        <key>127.0.0.1</key>
+        <dict>
+          <key>NSExceptionAllowsInsecureHTTPLoads</key>
+          <true/>
+          <key>NSExceptionMinimumTLSVersion</key>
+          <string>1.0</string>
+          <key>NSExceptionRequiresForwardSecrecy</key>
+          <false/>
+          <key>NSIncludesSubdomains</key>
+          <true/>
+        </dict>
       </dict>
     </dict>
     <key>NSCameraUsageDescription</key>
@@ -103,12 +117,12 @@
     <string>Allow $(PRODUCT_NAME) to save photos</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>The app accesses your photos to let you select cricket videos for analysis.</string>
-    <key>NSUserNotificationsUsageDescription</key>
-    <string>This app needs notification permissions to notify you when your video analysis is complete.</string>
-    <key>UIBackgroundModes</key>
+    <key>NSUserActivityTypes</key>
     <array>
-      <string>remote-notification</string>
+      <string>$(PRODUCT_BUNDLE_IDENTIFIER).expo.index_route</string>
     </array>
+    <key>RCTNewArchEnabled</key>
+    <true/>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>
     <key>UIRequiredDeviceCapabilities</key>

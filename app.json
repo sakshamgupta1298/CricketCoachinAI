@@ -15,28 +15,23 @@
       "**/*"
     ],
     "ios": {
-      "bundleIdentifier": "com.saksham5.cricketcoachmobile",
       "supportsTablet": true,
-      "deploymentTarget": "13.4",
+      "bundleIdentifier": "com.saksham5.cricketcoachmobile",
       "infoPlist": {
         "NSCameraUsageDescription": "This app needs access to camera to record cricket videos for analysis.",
         "NSPhotoLibraryUsageDescription": "This app needs access to photo library to select cricket videos for analysis.",
         "NSMicrophoneUsageDescription": "This app needs access to microphone to record cricket videos.",
-        "NSUserNotificationsUsageDescription": "This app needs notification permissions to notify you when your video analysis is complete.",
-        "UIBackgroundModes": [
-          "remote-notification"
-        ],
         "NSAppTransportSecurity": {
-          "NSAllowsArbitraryLoads": true
+          "NSAllowsArbitraryLoads": true,
+          "NSAllowsArbitraryLoadsInWebContent": true,
+          "NSAllowsLocalNetworking": true
         }
       }
     },
+    "scheme": "crickcoach",
     "android": {
       "package": "com.saksham_5.cricketcoachmobile",
       "versionCode": 2,
-      "minSdkVersion": 21,
-      "targetSdkVersion": 34,
-      "compileSdkVersion": 34,
       "edgeToEdgeEnabled": true,
       "permissions": [
         "android.permission.CAMERA",
@@ -46,8 +41,7 @@
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE"
-      ],
-      "usesCleartextTraffic": true
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -67,7 +61,7 @@
           "cameraPermission": "Allow Cricket Coach to access your camera to record cricket videos."
         }
       ],
-      "./plugins/network-security.js"
+      "expo-router"
     ],
     "experiments": {
       "typedRoutes": true

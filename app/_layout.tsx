@@ -13,9 +13,6 @@ import { UploadProvider } from '../src/context/UploadContext';
 // Import theme
 import { darkTheme, lightTheme } from '../src/theme';
 
-// Import ErrorBoundary
-import { ErrorBoundary } from '../src/components/ErrorBoundary';
-
 function ThemedApp() {
   const colorScheme = useColorScheme();
   const theme = colorScheme === 'dark' ? darkTheme : lightTheme;
@@ -120,10 +117,8 @@ function ThemedApp() {
 
 export default function RootLayout() {
   return (
-    <ErrorBoundary>
-      <SafeAreaProvider>
-        <ThemedApp />
-      </SafeAreaProvider>
-    </ErrorBoundary>
+    <SafeAreaProvider>
+      <ThemedApp />
+    </SafeAreaProvider>
   );
 }

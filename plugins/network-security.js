@@ -63,9 +63,14 @@ const withNetworkSecurity = (config) => {
 
   // iOS configuration
   config = withInfoPlist(config, (config) => {
+    // Merge with existing NSAppTransportSecurity if it exists
+    const existingATS = config.modResults.NSAppTransportSecurity || {};
+    
     config.modResults.NSAppTransportSecurity = {
+      ...existingATS,
       NSAllowsArbitraryLoads: true,
       NSExceptionDomains: {
+        ...(existingATS.NSExceptionDomains || {}),
         '165.232.184.91': {
           NSExceptionAllowsInsecureHTTPLoads: true,
           NSExceptionMinimumTLSVersion: '1.0',
@@ -85,6 +90,12 @@ const withNetworkSecurity = (config) => {
           NSIncludesSubdomains: true
         },
         'localhost': {
+          NSExceptionAllowsInsecureHTTPLoads: true,
+          NSExceptionMinimumTLSVersion: '1.0',
+          NSExceptionRequiresForwardSecrecy: false,
+          NSIncludesSubdomains: true
+        },
+        '127.0.0.1': {
           NSExceptionAllowsInsecureHTTPLoads: true,
           NSExceptionMinimumTLSVersion: '1.0',
           NSExceptionRequiresForwardSecrecy: false,
