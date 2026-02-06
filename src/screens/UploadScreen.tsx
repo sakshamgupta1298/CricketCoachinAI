@@ -90,7 +90,7 @@ const UploadScreen: React.FC = () => {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaType.Videos,
+        mediaTypes: ['videos'],
         allowsEditing: true,
         quality: 1,
         videoMaxDuration: 60,
@@ -136,16 +136,22 @@ const UploadScreen: React.FC = () => {
 
       if (playerType === 'batsman') {
         formData.batter_side = playerSide;
-        // Only include shot_type if user selected one (not empty)
-        // If shot_type is provided, backend will skip auto-detection
-        if (shotType && shotType !== '') {
-          if (shotType === 'other' && customShotType.trim()) {
-            formData.shot_type = customShotType.trim().toLowerCase().replace(/\s+/g, '_');
-          } else if (shotType !== 'other') {
-            formData.shot_type = shotType;
+        // Backend currently requires shot_type for batsman uploads.
+        // If "Other" is selected, use the custom value; otherwise use the chosen shot.
+        // (If you later re-enable backend auto-detection, this can be made optional again.)
+        if (shotType === 'other') {
+          if (!customShotType.trim()) {
+            Alert.alert('Shot Type Required', 'Please enter a shot type.');
+            return;
           }
+          formData.shot_type = customShotType.trim().toLowerCase().replace(/\s+/g, '_');
+        } else {
+          if (!shotType) {
+            Alert.alert('Shot Type Required', 'Please select a shot type.');
+            return;
+          }
+          formData.shot_type = shotType;
         }
-        // If shotType is empty, backend will auto-detect
       } else {
         formData.bowler_side = playerSide;
         formData.bowler_type = bowlerType;
@@ -234,10 +240,7 @@ const UploadScreen: React.FC = () => {
           <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
             <Card.Content>
               <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
-                Shot Type (Optional)
-              </Text>
-              <Text style={[styles.cardSubtitle, { color: theme.colors.onSurfaceVariant }]}>
-                Select a shot type or leave empty for automatic detection
+                Shot Type
               </Text>
               
               <Menu
@@ -252,7 +255,7 @@ const UploadScreen: React.FC = () => {
                     onPress={() => setShotTypeMenuVisible(true)}
                   >
                     <Text style={[styles.dropdownText, { color: theme.colors.onSurface }]}>
-                      {shotType ? getShotDisplayName(shotType) : 'Select Shot Type (Optional)'}
+                      {shotType ? getShotDisplayName(shotType) : 'Select Shot Type'}
                     </Text>
                     <Text style={[styles.dropdownIcon, { color: theme.colors.onSurfaceVariant }]}>
                       ▼
@@ -300,7 +303,7 @@ const UploadScreen: React.FC = () => {
                   style={styles.clearButton}
                   textColor={theme.colors.error}
                 >
-                  Clear Selection (Use Auto Detection)
+                  Clear Selection
                 </Button>
               )}
             </Card.Content>
@@ -454,7 +457,7 @@ const styles = StyleSheet.create({
   },
   card: {
     marginBottom: spacing.lg,
-    ...shadows.small,
+    ...shadows.sm,
   },
   cardTitle: {
     fontSize: 18,

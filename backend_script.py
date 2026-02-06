@@ -32,6 +32,8 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import random
 import string
+import subprocess
+import shutil
 
 # ==================== LOGGING CONFIGURATION ====================
 # Create logging directory if it doesn't exist
@@ -204,6 +206,176 @@ UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'mp4', 'avi', 'mov', 'mkv'}
 JOBS_SUBFOLDER = 'jobs'
 
+def _try_open_video_with_opencv(video_path: str) -> bool:
+    """Return True if OpenCV can open the video container/codec."""
+    cap = None
+    try:
+        cap = cv2.VideoCapture(video_path)
+        return bool(cap and cap.isOpened())
+    finally:
+        try:
+            if cap:
+                cap.release()
+        except Exception:
+            pass
+
+def _transcode_to_mp4_ffmpeg(input_path: str, output_path: str) -> None:
+    """
+    Transcode video to MP4 (H.264/AAC) using ffmpeg.
+    This is primarily to handle iPhone .mov files that OpenCV can't decode on the server.
+    """
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        raise RuntimeError(
+            "Server cannot process this video format (ffmpeg not installed). "
+            "Please upload an MP4 file or install ffmpeg on the server."
+        )
+
+    # -movflags +faststart helps streaming / progressive download
+    cmd = [
+        ffmpeg,
+        "-y",
+        "-i", input_path,
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-crf", "23",
+        "-c:a", "aac",
+        "-b:a", "128k",
+        "-movflags", "+faststart",
+        output_path,
+    ]
+    logger.info(f"🎞️ [TRANSCODE] Running ffmpeg transcode: {' '.join(cmd[:6])} ... -> {output_path}")
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if proc.returncode != 0:
+        # Include last part of stderr for debugging but avoid massive logs
+        tail = (proc.stderr or "")[-2000:]
+        raise RuntimeError(f"Failed to transcode video to MP4 (ffmpeg error). Details: {tail}")
+
+def _downscale_video_for_memory_efficiency(video_path: str, job_id: str = "", user_id: str = "") -> str:
+    """
+    Downscale high-resolution videos to prevent OOM kills on low-memory servers.
+    Target: max 1920x1080 resolution, 30fps max.
+    Returns path to downscaled video (or original if no downscaling needed).
+    """
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        logger.warning(f"⚠️ [JOB {job_id}] ffmpeg not found - cannot downscale video. Proceeding with original.")
+        return video_path
+
+    # Check video properties
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        cap.release()
+        return video_path  # Will be handled by ensure_video_readable_for_analysis
+    
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    cap.release()
+
+    # Target: max 1920x1080, 30fps
+    MAX_WIDTH = 1920
+    MAX_HEIGHT = 1080
+    MAX_FPS = 30.0
+
+    # Check if downscaling is needed
+    needs_downscale = width > MAX_WIDTH or height > MAX_HEIGHT
+    needs_fps_reduce = fps > MAX_FPS
+
+    if not needs_downscale and not needs_fps_reduce:
+        logger.info(f"✅ [JOB {job_id}] Video resolution {width}x{height} @ {fps:.1f}fps is acceptable - no downscaling needed")
+        return video_path
+
+    # Calculate new dimensions (maintain aspect ratio)
+    if needs_downscale:
+        if width > height:  # Landscape
+            scale = min(MAX_WIDTH / width, MAX_HEIGHT / height)
+        else:  # Portrait
+            scale = min(MAX_WIDTH / width, MAX_HEIGHT / height)
+        new_width = int(width * scale)
+        new_height = int(height * scale)
+        # Ensure even dimensions (required by some codecs)
+        new_width = new_width - (new_width % 2)
+        new_height = new_height - (new_height % 2)
+    else:
+        new_width = width
+        new_height = height
+
+    target_fps = min(fps, MAX_FPS) if needs_fps_reduce else fps
+
+    # Create downscaled video path
+    base, ext = os.path.splitext(video_path)
+    output_path = f"{base}__downscaled.mp4"
+
+    logger.info(
+        f"📉 [JOB {job_id}] Downscaling video from {width}x{height} @ {fps:.1f}fps "
+        f"to {new_width}x{new_height} @ {target_fps:.1f}fps (user_id={user_id})"
+    )
+
+    # Build ffmpeg command
+    cmd = [
+        ffmpeg,
+        "-y",  # Overwrite output
+        "-i", video_path,
+        "-vf", f"scale={new_width}:{new_height}",
+        "-r", str(int(target_fps)),  # Set output FPS
+        "-c:v", "libx264",
+        "-preset", "veryfast",  # Fast encoding
+        "-crf", "23",  # Good quality
+        "-c:a", "aac",
+        "-b:a", "128k",
+        "-movflags", "+faststart",
+        output_path,
+    ]
+
+    try:
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=300)
+        if proc.returncode != 0:
+            logger.error(f"❌ [JOB {job_id}] ffmpeg downscale failed: {proc.stderr[-500:]}")
+            return video_path  # Fallback to original
+    except subprocess.TimeoutExpired:
+        logger.error(f"❌ [JOB {job_id}] ffmpeg downscale timed out")
+        return video_path  # Fallback to original
+    except Exception as e:
+        logger.error(f"❌ [JOB {job_id}] ffmpeg downscale error: {str(e)}")
+        return video_path  # Fallback to original
+
+    if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+        logger.info(f"✅ [JOB {job_id}] Video downscaled successfully: {output_path}")
+        return output_path
+    else:
+        logger.warning(f"⚠️ [JOB {job_id}] Downscaled video not created or empty - using original")
+        return video_path
+
+def ensure_video_readable_for_analysis(video_path: str, job_id: str = "", user_id: str = "") -> str:
+    """
+    Ensure the given video is readable by OpenCV for downstream pose extraction.
+    If not, attempt to transcode to MP4 using ffmpeg and return the new path.
+    """
+    if _try_open_video_with_opencv(video_path):
+        return video_path
+
+    ext = (os.path.splitext(video_path)[1] or "").lower().lstrip(".")
+    # Transcode known problematic containers/codecs on servers without proper OpenCV codec support
+    if ext in {"mov", "avi", "mkv"}:
+        base, _ = os.path.splitext(video_path)
+        output_path = f"{base}__transcoded.mp4"
+        logger.warning(
+            f"⚠️ [JOB {job_id}] OpenCV can't open video ({ext}). Attempting ffmpeg transcode to {output_path} "
+            f"(user_id={user_id})"
+        )
+        _transcode_to_mp4_ffmpeg(video_path, output_path)
+        if not _try_open_video_with_opencv(output_path):
+            raise RuntimeError(
+                "Video transcoded to MP4 but still not readable by the server. "
+                "Please export/upload an MP4 (H.264) file."
+            )
+        return output_path
+
+    raise RuntimeError(
+        "Server cannot read this video file for analysis. Please upload an MP4 (H.264) file."
+    )
+
 def get_user_upload_folder(user_id):
     """
     Get the upload folder path for a specific user.
@@ -294,6 +466,9 @@ def process_analysis_job(job_id, user_id, username, filepath, filename, form, ex
 
         results = None
         user_folder = get_user_upload_folder(user_id)
+        analysis_video_path = ensure_video_readable_for_analysis(filepath, job_id=job_id, user_id=str(user_id))
+        # Downscale high-resolution videos to prevent OOM kills on low-memory servers
+        analysis_video_path = _downscale_video_for_memory_efficiency(analysis_video_path, job_id=job_id, user_id=str(user_id))
 
         if player_type == "batsman":
             shot_type = (form.get("shot_type", "") or "").strip()
@@ -303,7 +478,7 @@ def process_analysis_job(job_id, user_id, username, filepath, filename, form, ex
             batter_side = form.get("batter_side", "right")
 
             logger.info(f"🎬 [JOB {job_id}] Batting analysis started for {filename}")
-            keypoints_path, annotated_video_path = extract_pose_keypoints(filepath, "batting")
+            keypoints_path, annotated_video_path = extract_pose_keypoints(analysis_video_path, "batting")
             _ = compute_features(keypoints_path, batter_side, "batting")
             try:
                 gpt_feedback = get_feedback_from_gpt(shot_type, keypoints_path)
@@ -336,7 +511,7 @@ def process_analysis_job(job_id, user_id, username, filepath, filename, form, ex
             bowler_type = form.get("bowler_type", "fast_bowler")
 
             logger.info(f"🎬 [JOB {job_id}] Bowling analysis started for {filename}")
-            keypoints_path, annotated_video_path = extract_pose_keypoints(filepath, "bowling")
+            keypoints_path, annotated_video_path = extract_pose_keypoints(analysis_video_path, "bowling")
             _ = compute_features(keypoints_path, bowler_side, "bowling")
             try:
                 gpt_feedback = get_feedback_from_gpt_for_bowling(keypoints_path, bowler_type)

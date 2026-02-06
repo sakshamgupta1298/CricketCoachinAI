@@ -84,7 +84,7 @@ export default function UploadScreen() {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaType.Videos,
+        mediaTypes: ['videos'],
         allowsEditing: true,
         quality: 1,
         videoMaxDuration: 60,
@@ -130,17 +130,22 @@ export default function UploadScreen() {
 
       if (playerType === 'batsman') {
         formData.batter_side = playerSide;
-        // Only include shot_type if user selected one (not empty)
-        // If shot_type is provided, backend will skip auto-detection
-        if (shotType && shotType !== '') {
-          if (shotType === 'other' && customShotType.trim()) {
-            formData.shot_type = customShotType.trim().toLowerCase().replace(/\s+/g, '_');
-          } else if (shotType !== 'other') {
-            formData.shot_type = shotType;
+        // Backend currently requires shot_type for batsman uploads.
+        // If "Other" is selected, use the custom value; otherwise use the chosen shot.
+        if (shotType === 'other') {
+          if (!customShotType.trim()) {
+            Alert.alert('Shot Type Required', 'Please enter a shot type.');
+            return;
           }
+          formData.shot_type = customShotType.trim().toLowerCase().replace(/\s+/g, '_');
+        } else {
+          if (!shotType) {
+            Alert.alert('Shot Type Required', 'Please select a shot type.');
+            return;
+          }
+          formData.shot_type = shotType;
         }
-        // If shotType is empty, backend will auto-detect
-        console.log('📋 [UPLOAD] Shot type being sent:', formData.shot_type || 'AUTO-DETECT');
+        console.log('📋 [UPLOAD] Shot type being sent:', formData.shot_type);
       } else {
         formData.bowler_side = playerSide;
         formData.bowler_type = bowlerType;
@@ -278,10 +283,7 @@ export default function UploadScreen() {
           <Animated.View entering={FadeInUp.delay(400).springify()}>
             <PremiumCard variant="elevated" padding="large" style={styles.card}>
               <Text style={[styles.cardTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(17) }]}>
-                Shot Type (Optional)
-              </Text>
-              <Text style={[styles.cardSubtitle, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(12) }]}>
-                Select a shot type or leave empty for automatic detection
+                Shot Type
               </Text>
               
               <Menu
@@ -297,7 +299,7 @@ export default function UploadScreen() {
                     activeOpacity={0.7}
                   >
                     <Text style={[styles.dropdownText, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>
-                      {shotType ? getShotDisplayName(shotType) : 'Select Shot Type (Optional)'}
+                      {shotType ? getShotDisplayName(shotType) : 'Select Shot Type'}
                     </Text>
                     <Text style={[styles.dropdownIcon, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(10) }]}>
                       ▼
@@ -347,7 +349,7 @@ export default function UploadScreen() {
                   activeOpacity={0.7}
                 >
                   <Text style={[styles.clearButtonText, { color: theme.colors.error, fontSize: getResponsiveFontSize(12) }]}>
-                    Clear Selection (Use Auto Detection)
+                    Clear Selection
                   </Text>
                 </TouchableOpacity>
               )}
