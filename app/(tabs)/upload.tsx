@@ -84,7 +84,7 @@ export default function UploadScreen() {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+        mediaTypes: ImagePicker.MediaType.Videos,
         allowsEditing: true,
         quality: 1,
         videoMaxDuration: 60,
