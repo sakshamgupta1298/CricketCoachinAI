@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios, { AxiosInstance } from 'axios';
-import * as FileSystem from 'expo-file-system';
+import { File } from 'expo-file-system';
 import { Platform } from 'react-native';
 import { currentConfig } from '../../config';
 import { AnalysisResult, ApiResponse, JobStatusResponse, UploadFormData, UploadJobResponse } from '../types';
@@ -628,7 +628,8 @@ class ApiService {
   // Get file info
   async getFileInfo(uri: string): Promise<{ size: number; type: string }> {
     try {
-      const fileInfo = await FileSystem.getInfoAsync(uri);
+      const file = new File(uri);
+      const fileInfo = await file.getInfo();
       if (!fileInfo.exists) {
         throw new Error('File does not exist');
       }
