@@ -9,8 +9,12 @@ import { PremiumButton } from '../src/components/ui/PremiumButton';
 import { PremiumCard } from '../src/components/ui/PremiumCard';
 import { useAuth } from '../src/context/AuthContext';
 import apiService from '../src/services/api';
+import { signInWithGoogle } from '../src/services/googleSignIn';
 import { spacing } from '../src/theme';
 import { getResponsiveFontSize, getResponsiveSize } from '../src/utils/responsive';
+
+// Check if Google Sign-In is supported (iOS and Android only)
+const isGoogleSignInSupported = Platform.OS === 'ios' || Platform.OS === 'android';
 
 export default function LoginScreen() {
   const theme = useTheme();
@@ -168,6 +172,84 @@ export default function LoginScreen() {
     setConfirmPassword('');
   };
 
+  const handleGoogleSignIn = async () => {
+    console.log('🔐 [LOGIN_SCREEN] Google Sign-In button pressed');
+    setLoading(true);
+    
+    try {
+      // Sign in with Google
+      console.log('📱 [LOGIN_SCREEN] Initiating Google Sign-In...');
+      const googleUser = await signInWithGoogle();
+      
+      console.log('✅ [LOGIN_SCREEN] Google Sign-In successful');
+      console.log('📧 [LOGIN_SCREEN] Google email:', googleUser.email);
+      
+      // Send Google token to backend
+      console.log('📡 [LOGIN_SCREEN] Sending Google token to backend...');
+      const response = await apiService.googleSignIn({
+        idToken: googleUser.idToken,
+        email: googleUser.email,
+        name: googleUser.name,
+        photo: googleUser.photo,
+      });
+
+      console.log('📊 [LOGIN_SCREEN] Backend response:', {
+        success: response.success,
+        hasError: !!response.error,
+        errorMessage: response.error
+      });
+
+      if (response.success) {
+        console.log('✅ [LOGIN_SCREEN] Google authentication successful!');
+        console.log('💾 [LOGIN_SCREEN] Storing auth data...');
+        
+        // Store token and user data
+        await apiService.storeAuthData(response.data.token, response.data.user);
+        
+        // Update AuthContext
+        loginContext(response.data.user, response.data.token);
+        
+        console.log('🎉 [LOGIN_SCREEN] Auth data stored, showing success toast');
+        
+        Toast.show({
+          type: 'success',
+          text1: 'Success',
+          text2: 'Google Sign-In successful!',
+        });
+
+        console.log('🏠 [LOGIN_SCREEN] Navigating to home page...');
+        // Navigate to home page
+        router.replace('/(tabs)/home');
+      } else {
+        console.log('❌ [LOGIN_SCREEN] Google authentication failed:', response.error);
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: response.error || 'Google Sign-In failed',
+        });
+      }
+    } catch (error: any) {
+      console.error('🚨 [LOGIN_SCREEN] Google Sign-In error:', error);
+      console.error('📡 [LOGIN_SCREEN] Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+      
+      // Don't show error toast if user cancelled
+      if (error.message && !error.message.includes('cancelled')) {
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: error.message || 'Google Sign-In failed. Please try again.',
+        });
+      }
+    } finally {
+      console.log('🏁 [LOGIN_SCREEN] Google Sign-In process completed');
+      setLoading(false);
+    }
+  };
+
   return (
     <KeyboardAvoidingView 
       style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -293,6 +375,37 @@ export default function LoginScreen() {
                   fullWidth
                 />
               </View>
+
+              {/* Google Sign-In (iOS and Android only) */}
+              {isGoogleSignInSupported && (
+                <>
+                  {/* Divider */}
+                  <View style={styles.dividerContainer}>
+                    <View style={[styles.dividerLine, { backgroundColor: theme.colors.outline }]} />
+                    <Text style={[styles.dividerText, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
+                      OR
+                    </Text>
+                    <View style={[styles.dividerLine, { backgroundColor: theme.colors.outline }]} />
+                  </View>
+
+                  {/* Google Sign-In Button */}
+                  <View style={styles.buttonContainer}>
+                    <TouchableOpacity
+                      onPress={handleGoogleSignIn}
+                      style={[styles.googleButton, { borderColor: theme.colors.outline, backgroundColor: theme.colors.surface }]}
+                      disabled={loading}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.googleIconContainer}>
+                        <Text style={styles.googleIconText}>G</Text>
+                      </View>
+                      <Text style={[styles.googleButtonText, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(16) }]}>
+                        Continue with Google
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
 
               {/* Forgot Password and Username Links (Login only) */}
               {isLogin && (
@@ -452,6 +565,47 @@ const styles = StyleSheet.create({
   },
   backText: {
     fontWeight: '500',
+    // fontSize set dynamically
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: getResponsiveSize(spacing.md),
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+  },
+  dividerText: {
+    marginHorizontal: getResponsiveSize(spacing.md),
+    fontWeight: '500',
+    // fontSize set dynamically
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: getResponsiveSize(spacing.md),
+    paddingHorizontal: getResponsiveSize(spacing.lg),
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  googleIconContainer: {
+    width: getResponsiveSize(24),
+    height: getResponsiveSize(24),
+    borderRadius: getResponsiveSize(12),
+    backgroundColor: '#4285F4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: getResponsiveSize(spacing.sm),
+  },
+  googleIconText: {
+    color: '#FFFFFF',
+    fontSize: getResponsiveFontSize(14),
+    fontWeight: '700',
+  },
+  googleButtonText: {
+    fontWeight: '600',
     // fontSize set dynamically
   },
 }); 
