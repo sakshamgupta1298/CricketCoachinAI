@@ -963,6 +963,63 @@ class ApiService {
     }
   }
 
+  async googleSignIn(googleData: { idToken: string; email: string; name: string; photo?: string }): Promise<ApiResponse<any>> {
+    try {
+      console.log('🔐 [GOOGLE_SIGNIN] Starting Google Sign-In process...');
+      console.log('📧 [GOOGLE_SIGNIN] Email:', googleData.email);
+      console.log('👤 [GOOGLE_SIGNIN] Name:', googleData.name);
+      console.log('🌐 [GOOGLE_SIGNIN] API Base URL:', this.baseURL);
+      console.log('📡 [GOOGLE_SIGNIN] Making request to:', `${this.baseURL}/api/auth/google-signin`);
+      
+      const response = await this.jsonApi.post('/api/auth/google-signin', {
+        id_token: googleData.idToken,
+        email: googleData.email,
+        name: googleData.name,
+        photo: googleData.photo,
+      });
+      
+      // Check response status - handle 401/400 errors properly
+      if (response.status === 401 || response.status === 400) {
+        console.error('❌ [GOOGLE_SIGNIN] Google Sign-In failed');
+        console.error('📊 [GOOGLE_SIGNIN] Response status:', response.status);
+        console.error('📄 [GOOGLE_SIGNIN] Response data:', response.data);
+        
+        const errorMessage = response.data?.error || 'Google Sign-In failed. Please try again.';
+        return {
+          success: false,
+          error: errorMessage,
+        };
+      }
+      
+      // Check if response has success flag and token
+      if (!response.data?.token || !response.data?.success) {
+        console.error('❌ [GOOGLE_SIGNIN] Google Sign-In failed - No token or success flag in response');
+        console.error('📄 [GOOGLE_SIGNIN] Response data:', response.data);
+        return {
+          success: false,
+          error: response.data?.error || 'Google Sign-In failed. Please try again.',
+        };
+      }
+      
+      console.log('✅ [GOOGLE_SIGNIN] Google Sign-In successful!');
+      console.log('📊 [GOOGLE_SIGNIN] Response status:', response.status);
+      console.log('🔑 [GOOGLE_SIGNIN] Token received:', response.data.token ? 'Yes' : 'No');
+      
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error: any) {
+      console.error('❌ [GOOGLE_SIGNIN] Google Sign-In error:', error);
+      console.error('📊 [GOOGLE_SIGNIN] Response status:', error.response?.status);
+      console.error('📄 [GOOGLE_SIGNIN] Response data:', error.response?.data);
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message || 'Google Sign-In failed. Please try again.',
+      };
+    }
+  }
+
   async verifyToken(): Promise<ApiResponse<any>> {
     try {
       const token = await this.getStoredToken();

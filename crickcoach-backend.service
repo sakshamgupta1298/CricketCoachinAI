@@ -7,7 +7,7 @@ Wants=network.target
 Type=simple
 User=root
 WorkingDirectory=/root/CricketCoachinAI
-Environment=PATH=/root/CricketCoachinAI/myenv/bin
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/root/CricketCoachinAI/myenv/bin
 ExecStart=/root/CricketCoachinAI/myenv/bin/python3 /root/CricketCoachinAI/backend_script.py
 Restart=always
 RestartSec=10

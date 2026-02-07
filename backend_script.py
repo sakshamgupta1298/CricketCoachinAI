@@ -2660,8 +2660,14 @@ def get_job_results(job_id):
             return jsonify({'success': False, 'error': 'Access denied'}), 403
 
         status = job.get('status', 'queued')
-        if status == 'completed' and job.get('result'):
-            return jsonify({'success': True, 'status': 'completed', 'result': job.get('result')})
+        if status == 'completed':
+            result = job.get('result')
+            logger.info(f"📋 [GET_JOB_RESULTS] Job {job_id} status: completed, has_result: {result is not None}")
+            if result:
+                return jsonify({'success': True, 'status': 'completed', 'result': result})
+            else:
+                logger.warning(f"⚠️ [GET_JOB_RESULTS] Job {job_id} marked completed but result is missing!")
+                return jsonify({'success': True, 'status': 'completed', 'result': None, 'error': 'Result not yet available'})
         if status == 'failed':
             return jsonify({'success': False, 'status': 'failed', 'error': job.get('error') or 'Analysis failed'})
 

@@ -60,10 +60,25 @@ class BackgroundUploadService {
         this.pollInterval = null;
       }
     } else if (nextAppState === 'active') {
-      // App came to foreground, resume checking if upload is in progress
+      // App came to foreground, immediately check status (job might have completed while in background)
+      this.lastAppState = nextAppState;
+      
+      if (this.uploadState.status === 'completed' && this.uploadState.result) {
+        console.log('✅ [BACKGROUND_UPLOAD] Upload completed while app was in background');
+        // Result already persisted, just resolve the promise if it exists
+        if (this.resolveUpload) {
+          this.resolveUpload(this.uploadState.result);
+          this.resolveUpload = null;
+        }
+        return;
+      }
+      
+      // Resume checking if upload is in progress
       if (this.uploadState.status === 'uploading' || this.uploadState.status === 'processing') {
-        console.log('🔄 [BACKGROUND_UPLOAD] App resumed, checking upload status...');
-        this.lastAppState = nextAppState;
+        console.log('🔄 [BACKGROUND_UPLOAD] App resumed, immediately checking upload status...');
+        // Check immediately (don't wait for polling interval)
+        this.checkUploadStatus();
+        // Then start polling
         this.startPolling();
       }
     }
@@ -282,25 +297,47 @@ class BackgroundUploadService {
       console.log('🔍 [BACKGROUND_UPLOAD] Polling for job result:', jobId);
       const jobResponse = await apiService.getJobResult(jobId);
 
+      console.log('📋 [BACKGROUND_UPLOAD] Job response:', JSON.stringify({
+        success: jobResponse.success,
+        hasData: !!jobResponse.data,
+        status: jobResponse.data?.status,
+        hasResult: !!jobResponse.data?.result,
+        error: jobResponse.error
+      }));
+
       if (jobResponse.success && jobResponse.data) {
         const status = jobResponse.data.status;
         
         // Always check backend status first, even if timeout exceeded
         // The job might have completed while app was in background
-        if (status === 'completed' && jobResponse.data.result) {
-          console.log('✅ [BACKGROUND_UPLOAD] Job completed, result received');
-          this.uploadState.status = 'completed';
-          this.uploadState.result = jobResponse.data.result;
-          await this.persistState();
+        if (status === 'completed') {
+          if (jobResponse.data.result) {
+            console.log('✅ [BACKGROUND_UPLOAD] Job completed, result received');
+            console.log('📦 [BACKGROUND_UPLOAD] Result keys:', Object.keys(jobResponse.data.result));
+            this.uploadState.status = 'completed';
+            this.uploadState.result = jobResponse.data.result;
+            await this.persistState();
 
-          if (this.resolveUpload) {
-            this.resolveUpload(jobResponse.data.result);
+            // Resolve the promise if it exists
+            if (this.resolveUpload) {
+              console.log('✅ [BACKGROUND_UPLOAD] Resolving upload promise');
+              this.resolveUpload(jobResponse.data.result);
+              this.resolveUpload = null;
+            } else {
+              console.warn('⚠️ [BACKGROUND_UPLOAD] No resolveUpload callback - upload promise may have timed out');
+            }
+
+            // Stop polling
+            this.stopPolling();
+            
+            setTimeout(() => {
+              this.cleanup();
+            }, 2000);
+            return;
+          } else {
+            console.warn('⚠️ [BACKGROUND_UPLOAD] Job status is completed but result is missing:', jobResponse.data);
+            console.warn('⚠️ [BACKGROUND_UPLOAD] Full response:', JSON.stringify(jobResponse.data, null, 2));
           }
-
-          setTimeout(() => {
-            this.cleanup();
-          }, 2000);
-          return;
         }
 
         if (status === 'failed') {
