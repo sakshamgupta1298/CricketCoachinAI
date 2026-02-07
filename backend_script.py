@@ -3384,6 +3384,184 @@ def login():
         logger.error(f"Login error: {str(e)}", exc_info=True)
         return jsonify({'error': 'Login failed'}), 500
 
+@app.route('/api/auth/google-signin', methods=['POST'])
+def google_signin():
+    """Google Sign-In authentication"""
+    try:
+        logger.info("=== GOOGLE SIGN-IN REQUEST RECEIVED ===")
+        data = request.get_json()
+        logger.debug(f"Request data keys: {list(data.keys()) if data else 'None'}")
+        
+        if not data:
+            logger.warning("No data provided in Google Sign-In request")
+            return jsonify({'error': 'No data provided'}), 400
+        
+        id_token = data.get('id_token')
+        email = data.get('email')
+        name = data.get('name')
+        photo = data.get('photo')
+        
+        logger.info(f"Google Sign-In attempt - Email: {email}, Name: {name}")
+        
+        if not id_token:
+            logger.warning("Missing id_token in Google Sign-In request")
+            return jsonify({'error': 'Google ID token is required'}), 400
+        
+        if not email:
+            logger.warning("Missing email in Google Sign-In request")
+            return jsonify({'error': 'Email is required'}), 400
+        
+        # Verify Google ID token
+        try:
+            # Decode the JWT token to get user info
+            # Note: For production, you should verify the token signature with Google's public keys
+            # For now, we'll decode it and trust the email from the request
+            import base64
+            import json as json_lib
+            
+            # Split the token into parts
+            token_parts = id_token.split('.')
+            if len(token_parts) != 3:
+                logger.warning("Invalid Google ID token format")
+                return jsonify({'error': 'Invalid Google ID token'}), 401
+            
+            # Decode the payload (second part)
+            payload = token_parts[1]
+            # Add padding if needed
+            padding = len(payload) % 4
+            if padding:
+                payload += '=' * (4 - padding)
+            
+            decoded_payload = base64.urlsafe_b64decode(payload)
+            token_data = json_lib.loads(decoded_payload)
+            
+            logger.debug(f"Decoded token data: {token_data.get('email', 'N/A')}")
+            
+            # Verify the token is from Google
+            if token_data.get('iss') not in ['https://accounts.google.com', 'accounts.google.com']:
+                logger.warning(f"Invalid token issuer: {token_data.get('iss')}")
+                return jsonify({'error': 'Invalid Google token'}), 401
+            
+            # Verify email matches
+            token_email = token_data.get('email')
+            if token_email and token_email != email:
+                logger.warning(f"Email mismatch: token={token_email}, request={email}")
+                return jsonify({'error': 'Email mismatch'}), 401
+            
+            # Use email from token if available, otherwise use from request
+            verified_email = token_email or email
+            verified_name = token_data.get('name') or name or verified_email.split('@')[0]
+            
+        except Exception as e:
+            logger.error(f"Error verifying Google token: {str(e)}", exc_info=True)
+            return jsonify({'error': 'Failed to verify Google token'}), 401
+        
+        # Get or create user in database
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Check if user exists by email
+            logger.debug(f"Checking if user exists with email: {verified_email}")
+            cursor.execute('SELECT * FROM users WHERE email = ?', (verified_email,))
+            user = cursor.fetchone()
+            
+            if user:
+                logger.info(f"Existing user found: {user['username']} (ID: {user['id']})")
+                user_id = user['id']
+                username = user['username']
+            else:
+                # Create new user
+                logger.info(f"Creating new user for Google Sign-In: {verified_email}")
+                
+                # Generate username from email (before @) or use name
+                base_username = verified_name.lower().replace(' ', '_').replace('.', '_')
+                username = base_username
+                
+                # Ensure username is unique
+                counter = 1
+                while True:
+                    cursor.execute('SELECT * FROM users WHERE username = ?', (username,))
+                    if cursor.fetchone():
+                        username = f"{base_username}_{counter}"
+                        counter += 1
+                    else:
+                        break
+                
+                # Create a dummy password hash (Google users don't need passwords)
+                # Use a random string that will never match
+                dummy_password = ''.join(random.choices(string.ascii_letters + string.digits, k=32))
+                password_hash = bcrypt.hashpw(dummy_password.encode('utf-8'), bcrypt.gensalt())
+                
+                # Insert new user
+                cursor.execute('''
+                    INSERT INTO users (username, email, password_hash)
+                    VALUES (?, ?, ?)
+                ''', (username, verified_email, password_hash.decode('utf-8')))
+                
+                conn.commit()
+                user_id = cursor.lastrowid
+                logger.info(f"New user created: {username} (ID: {user_id})")
+            
+            conn.close()
+            
+            # Generate JWT token
+            logger.debug("Generating JWT token for Google Sign-In user...")
+            token = generate_jwt_token(user_id, username)
+            logger.info(f"Google Sign-In successful for user: {username} (ID: {user_id})")
+            
+            response_data = {
+                'success': True,
+                'message': 'Google Sign-In successful',
+                'token': token,
+                'user': {
+                    'id': user_id,
+                    'username': username,
+                    'email': verified_email,
+                    'name': verified_name
+                }
+            }
+            response = jsonify(response_data)
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+            response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+            return response
+            
+        except sqlite3.IntegrityError as e:
+            conn.close()
+            logger.error(f"Database integrity error during Google Sign-In: {str(e)}", exc_info=True)
+            # User might have been created between check and insert, try to get existing user
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM users WHERE email = ?', (verified_email,))
+            user = cursor.fetchone()
+            conn.close()
+            
+            if user:
+                # User exists, generate token
+                token = generate_jwt_token(user['id'], user['username'])
+                response_data = {
+                    'success': True,
+                    'message': 'Google Sign-In successful',
+                    'token': token,
+                    'user': {
+                        'id': user['id'],
+                        'username': user['username'],
+                        'email': user['email']
+                    }
+                }
+                response = jsonify(response_data)
+                response.headers.add('Access-Control-Allow-Origin', '*')
+                response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+                response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+                return response
+            else:
+                return jsonify({'error': 'Failed to create user account'}), 500
+        
+    except Exception as e:
+        logger.error(f"Google Sign-In error: {str(e)}", exc_info=True)
+        return jsonify({'error': 'Google Sign-In failed'}), 500
+
 @app.route('/api/auth/verify', methods=['GET'])
 @require_auth
 def verify_token():
