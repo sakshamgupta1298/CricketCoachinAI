@@ -37,6 +37,12 @@
           <string>exp+cricket-coach-mobile</string>
         </array>
       </dict>
+      <dict>
+        <key>CFBundleURLSchemes</key>
+        <array>
+          <string>com.googleusercontent.apps.1002249784978-gmepmhh1mh8is050hb10be0q40j33k60</string>
+        </array>
+      </dict>
     </array>
     <key>CFBundleVersion</key>
     <string>1</string>
