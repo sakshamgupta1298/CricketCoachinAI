@@ -1,7 +1,8 @@
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
-import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Text, TextInput, useTheme } from 'react-native-paper';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import Toast from 'react-native-toast-message';
@@ -179,7 +180,33 @@ export default function LoginScreen() {
     try {
       // Sign in with Google
       console.log('📱 [LOGIN_SCREEN] Initiating Google Sign-In...');
-      const googleUser = await signInWithGoogle();
+      console.log('📱 [LOGIN_SCREEN] Platform:', Platform.OS);
+      
+      let googleUser;
+      try {
+        googleUser = await signInWithGoogle();
+      } catch (googleError: any) {
+        console.error('❌ [LOGIN_SCREEN] Google Sign-In native error:', googleError);
+        console.error('❌ [LOGIN_SCREEN] Error details:', {
+          message: googleError?.message,
+          code: googleError?.code,
+          stack: googleError?.stack,
+        });
+        
+        // Check if it's a configuration error
+        if (googleError?.message?.includes('native module not available')) {
+          Toast.show({
+            type: 'error',
+            text1: 'Setup Required',
+            text2: 'Please rebuild the app: npx expo run:ios',
+          });
+          setLoading(false);
+          return;
+        }
+        
+        // Re-throw to be handled by outer catch
+        throw googleError;
+      }
       
       console.log('✅ [LOGIN_SCREEN] Google Sign-In successful');
       console.log('📧 [LOGIN_SCREEN] Google email:', googleUser.email);
@@ -231,17 +258,28 @@ export default function LoginScreen() {
     } catch (error: any) {
       console.error('🚨 [LOGIN_SCREEN] Google Sign-In error:', error);
       console.error('📡 [LOGIN_SCREEN] Error details:', {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
+        name: error?.name,
+        message: error?.message,
+        code: error?.code,
+        stack: error?.stack,
+        platform: Platform.OS,
       });
       
       // Don't show error toast if user cancelled
-      if (error.message && !error.message.includes('cancelled')) {
+      if (error?.message && !error.message.includes('cancelled')) {
+        let errorMessage = error.message || 'Google Sign-In failed. Please try again.';
+        
+        // Provide helpful error messages
+        if (error.message.includes('native module not available')) {
+          errorMessage = 'Google Sign-In not configured. Please rebuild the app.';
+        } else if (error.message.includes('configuration')) {
+          errorMessage = 'Google Sign-In configuration error. Please check your setup.';
+        }
+        
         Toast.show({
           type: 'error',
           text1: 'Error',
-          text2: error.message || 'Google Sign-In failed. Please try again.',
+          text2: errorMessage,
         });
       }
     } finally {
@@ -397,7 +435,15 @@ export default function LoginScreen() {
                       activeOpacity={0.7}
                     >
                       <View style={styles.googleIconContainer}>
-                        <Text style={styles.googleIconText}>G</Text>
+                        <Image
+                          source={{ 
+                            uri: 'https://www.gstatic.com/images/branding/googleg/1x/googleg_standard_color_128dp.png'
+                          }}
+                          style={styles.googleIcon}
+                          contentFit="contain"
+                          cachePolicy="memory-disk"
+                          transition={200}
+                        />
                       </View>
                       <Text style={[styles.googleButtonText, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(16) }]}>
                         Continue with Google
@@ -593,16 +639,13 @@ const styles = StyleSheet.create({
   googleIconContainer: {
     width: getResponsiveSize(24),
     height: getResponsiveSize(24),
-    borderRadius: getResponsiveSize(12),
-    backgroundColor: '#4285F4',
+    marginRight: getResponsiveSize(spacing.sm),
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: getResponsiveSize(spacing.sm),
   },
-  googleIconText: {
-    color: '#FFFFFF',
-    fontSize: getResponsiveFontSize(14),
-    fontWeight: '700',
+  googleIcon: {
+    width: getResponsiveSize(24),
+    height: getResponsiveSize(24),
   },
   googleButtonText: {
     fontWeight: '600',
