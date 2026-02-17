@@ -3228,6 +3228,175 @@ def get_training_plan(filename):
         print(f"Error retrieving training plan for {filename}: {str(e)}")
         return jsonify({'error': f'Error retrieving training plan: {str(e)}'}), 500
 
+@app.route('/api/compare', methods=['POST'])
+@require_auth
+def compare_videos():
+    """Compare two video analyses using Gemini"""
+    try:
+        user_id = request.user['user_id']
+        username = request.user['username']
+        
+        data = request.get_json()
+        filename1 = data.get('filename1')
+        filename2 = data.get('filename2')
+        
+        if not filename1 or not filename2:
+            return jsonify({'error': 'Both filenames are required'}), 400
+        
+        logger.info(f"Comparing videos {filename1} vs {filename2} for user {username} (ID: {user_id})")
+        
+        # Get user's upload folder
+        user_folder = get_user_upload_folder(user_id)
+        
+        # Load both analysis results
+        results_file1 = os.path.join(user_folder, f"results_{filename1}.json")
+        results_file2 = os.path.join(user_folder, f"results_{filename2}.json")
+        
+        if not os.path.exists(results_file1):
+            return jsonify({'error': f'Analysis results not found for {filename1}'}), 404
+        if not os.path.exists(results_file2):
+            return jsonify({'error': f'Analysis results not found for {filename2}'}), 404
+        
+        with open(results_file1, 'r') as f:
+            results1 = json.load(f)
+        with open(results_file2, 'r') as f:
+            results2 = json.load(f)
+        
+        # Verify both results belong to the authenticated user
+        if results1.get('user_id') != user_id or results2.get('user_id') != user_id:
+            return jsonify({'error': 'Access denied'}), 403
+        
+        # Verify videos can be compared (same shot type, bowling type, and playing side)
+        if results1.get('player_type') != results2.get('player_type'):
+            return jsonify({'error': 'Videos must have the same player type'}), 400
+        
+        if results1.get('player_type') == 'batsman':
+            if results1.get('shot_type') != results2.get('shot_type'):
+                return jsonify({'error': 'Videos must have the same shot type'}), 400
+            if results1.get('batter_side') != results2.get('batter_side'):
+                return jsonify({'error': 'Videos must have the same playing side'}), 400
+        else:  # bowler
+            if results1.get('bowler_type') != results2.get('bowler_type'):
+                return jsonify({'error': 'Videos must have the same bowling type'}), 400
+            if results1.get('bowler_side') != results2.get('bowler_side'):
+                return jsonify({'error': 'Videos must have the same playing side'}), 400
+        
+        # Prepare comparison prompt for Gemini
+        player_type = results1.get('player_type', 'batsman')
+        comparison_context = ""
+        if player_type == 'batsman':
+            comparison_context = f"Shot Type: {results1.get('shot_type', 'unknown')}, Playing Side: {results1.get('batter_side', 'right')}"
+        else:
+            comparison_context = f"Bowling Type: {results1.get('bowler_type', 'unknown')}, Playing Side: {results1.get('bowler_side', 'right')}"
+        
+        prompt = f"""
+You are an **Expert Cricket Performance Analyst** specializing in comparative analysis of cricket techniques.
+
+Your task is to compare two cricket performance analyses and provide accurate, percentage-based insights for all relevant performance metrics.
+
+────────────────────────
+CONTEXT
+────────────────────────
+{comparison_context}
+Player Type: {player_type}
+
+Video 1: {filename1}
+Video 2: {filename2}
+
+────────────────────────
+ANALYSIS DATA
+────────────────────────
+VIDEO 1 ANALYSIS:
+{json.dumps(results1, indent=2)}
+
+VIDEO 2 ANALYSIS:
+{json.dumps(results2, indent=2)}
+
+────────────────────────
+YOUR TASK
+────────────────────────
+1. Compare both analyses across all relevant performance metrics
+2. Calculate percentage differences for each metric
+3. Identify which performance is better for each metric
+4. Provide overall performance comparison with percentage scores
+5. Highlight key areas of improvement and strengths
+
+────────────────────────
+REQUIRED OUTPUT FORMAT (JSON)
+────────────────────────
+{{
+    "overall_comparison": {{
+        "video1_score": 0-100,
+        "video2_score": 0-100,
+        "winner": "video1" | "video2" | "tie",
+        "overall_summary": "Brief summary of overall comparison"
+    }},
+    "metric_comparisons": [
+        {{
+            "metric_name": "Metric name",
+            "video1_value": "Value or description",
+            "video2_value": "Value or description",
+            "difference_percentage": 0-100,
+            "better_performance": "video1" | "video2" | "similar",
+            "analysis": "Detailed comparison analysis"
+        }}
+    ],
+    "key_insights": [
+        "Key insight 1",
+        "Key insight 2"
+    ],
+    "improvement_areas": {{
+        "video1": ["Area 1", "Area 2"],
+        "video2": ["Area 1", "Area 2"]
+    }},
+    "strengths": {{
+        "video1": ["Strength 1", "Strength 2"],
+        "video2": ["Strength 1", "Strength 2"]
+    }}
+}}
+
+────────────────────────
+RULES
+────────────────────────
+- Provide accurate percentage-based comparisons
+- Be objective and data-driven
+- Focus on measurable metrics
+- Highlight both strengths and areas for improvement
+- Respond ONLY in valid JSON format
+"""
+        
+        logger.info("Sending comparison request to Gemini...")
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[prompt]
+        )
+        
+        raw_content = response.text
+        try:
+            json_text = re.search(r"\{.*\}", raw_content, re.DOTALL).group()
+            comparison_result = json.loads(json_text)
+            
+            # Add metadata
+            comparison_result['video1_filename'] = filename1
+            comparison_result['video2_filename'] = filename2
+            comparison_result['comparison_date'] = datetime.utcnow().isoformat() + "Z"
+            
+            logger.info("Comparison completed successfully")
+            return jsonify({
+                'success': True,
+                'comparison': comparison_result
+            })
+        except Exception as e:
+            logger.error(f"Failed to parse comparison response: {e}", exc_info=True)
+            return jsonify({
+                'error': 'Failed to parse comparison response',
+                'raw_content': raw_content
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Error comparing videos: {str(e)}", exc_info=True)
+        return jsonify({'error': f'Error comparing videos: {str(e)}'}), 500
+
 # Authentication Endpoints
 @app.route('/api/auth/register', methods=['POST'])
 def register():

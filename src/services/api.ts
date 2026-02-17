@@ -805,6 +805,27 @@ class ApiService {
     }
   }
 
+  // Compare two videos
+  async compareVideos(filename1: string, filename2: string): Promise<ApiResponse<any>> {
+    try {
+      console.log('🔍 [COMPARE] Comparing videos:', filename1, 'vs', filename2);
+      const response = await this.jsonApi.post('/api/compare', {
+        filename1,
+        filename2,
+      });
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error: any) {
+      console.error('Compare Videos Error:', error);
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message || 'Failed to compare videos',
+      };
+    }
+  }
+
   // Authentication Methods
   async login(credentials: { username: string; password: string }): Promise<ApiResponse<any>> {
     try {
