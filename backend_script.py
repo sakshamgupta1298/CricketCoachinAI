@@ -3397,11 +3397,17 @@ VIDEO 2 ANALYSIS:
 ────────────────────────
 YOUR TASK
 ────────────────────────
+Video 1 is the OLDER/LAST video (baseline).
+Video 2 is the NEWER/CURRENT video (being compared).
+
 1. Compare both analyses across all relevant performance metrics
-2. Calculate percentage differences for each metric
-3. Identify which performance is better for each metric
-4. Provide overall performance comparison with percentage scores
-5. Highlight key areas of improvement and strengths
+2. Calculate IMPROVEMENT PERCENTAGE from Video 1 to Video 2 for each metric
+   - If Video 2 is better: show positive improvement percentage (e.g., +15%)
+   - If Video 2 is worse: show negative improvement percentage (e.g., -10%)
+   - If similar: show 0% or minimal change
+3. Calculate overall improvement percentage from Video 1 to Video 2
+4. Identify which performance is better for each metric
+5. Highlight key areas where Video 2 improved compared to Video 1
 
 ────────────────────────
 REQUIRED OUTPUT FORMAT (JSON)
@@ -3410,6 +3416,8 @@ REQUIRED OUTPUT FORMAT (JSON)
     "overall_comparison": {{
         "video1_score": 0-100,
         "video2_score": 0-100,
+        "improvement_percentage": -100 to +100,
+        "improvement_summary": "Overall improvement from Video 1 to Video 2",
         "winner": "video1" | "video2" | "tie",
         "overall_summary": "Brief summary of overall comparison"
     }},
@@ -3418,15 +3426,21 @@ REQUIRED OUTPUT FORMAT (JSON)
             "metric_name": "Metric name",
             "video1_value": "Value or description",
             "video2_value": "Value or description",
-            "difference_percentage": 0-100,
+            "improvement_percentage": -100 to +100,
+            "improvement_direction": "improved" | "declined" | "similar",
             "better_performance": "video1" | "video2" | "similar",
-            "analysis": "Detailed comparison analysis"
+            "analysis": "Detailed comparison analysis focusing on improvement"
         }}
     ],
     "key_insights": [
-        "Key insight 1",
+        "Key insight 1 focusing on improvement",
         "Key insight 2"
     ],
+    "improvement_summary": {{
+        "overall_improvement": "Overall improvement summary from Video 1 to Video 2",
+        "top_improvements": ["Improvement 1", "Improvement 2", "Improvement 3"],
+        "areas_still_needing_work": ["Area 1", "Area 2"]
+    }},
     "improvement_areas": {{
         "video1": ["Area 1", "Area 2"],
         "video2": ["Area 1", "Area 2"]
@@ -3440,10 +3454,13 @@ REQUIRED OUTPUT FORMAT (JSON)
 ────────────────────────
 RULES
 ────────────────────────
+- Calculate improvement percentage as: ((video2_score - video1_score) / video1_score) * 100
+- For metrics where higher is better: positive percentage = improvement
+- For metrics where lower is better (e.g., errors): positive percentage = improvement (less errors)
 - Provide accurate percentage-based comparisons
 - Be objective and data-driven
-- Focus on measurable metrics
-- Highlight both strengths and areas for improvement
+- Focus on measurable metrics and improvement from Video 1 to Video 2
+- Highlight areas where Video 2 shows improvement compared to Video 1
 - Respond ONLY in valid JSON format
 """
         
