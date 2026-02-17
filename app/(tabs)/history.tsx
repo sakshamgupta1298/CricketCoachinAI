@@ -276,16 +276,29 @@ export default function HistoryScreen() {
 
       {/* History List */}
       {filteredHistory.length > 0 ? (
-        <FlatList
-          data={filteredHistory}
-          renderItem={renderHistoryItem}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContainer}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-          showsVerticalScrollIndicator={false}
-        />
+        <>
+          <FlatList
+            data={filteredHistory}
+            renderItem={renderHistoryItem}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContainer}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+            showsVerticalScrollIndicator={false}
+          />
+          {/* Compare Button */}
+          <View style={styles.compareButtonContainer}>
+            <TouchableOpacity
+              style={[styles.compareButton, { backgroundColor: theme.colors.primary }]}
+              onPress={() => router.push('/compare')}
+            >
+              <Text style={[styles.compareButtonText, { fontSize: getResponsiveFontSize(16) }]}>
+                Compare Videos
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </>
       ) : (
         <ScrollView 
           contentContainerStyle={styles.emptyContainer}
@@ -462,6 +475,24 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
   },
   uploadButtonText: {
+    color: 'white',
+    fontWeight: '600',
+    // fontSize set dynamically
+  },
+  compareButtonContainer: {
+    padding: getResponsiveSize(spacing.lg),
+    paddingTop: getResponsiveSize(spacing.md),
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+  },
+  compareButton: {
+    paddingVertical: getResponsiveSize(spacing.md),
+    paddingHorizontal: getResponsiveSize(spacing.lg),
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compareButtonText: {
     color: 'white',
     fontWeight: '600',
     // fontSize set dynamically
