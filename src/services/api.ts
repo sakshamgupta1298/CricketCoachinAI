@@ -813,9 +813,12 @@ class ApiService {
         filename1,
         filename2,
       });
+      // Backend returns { success: true, comparison: {...} }
+      // Extract the comparison object directly
+      const comparisonData = response.data?.comparison || response.data;
       return {
         success: true,
-        data: response.data,
+        data: comparisonData,
       };
     } catch (error: any) {
       console.error('Compare Videos Error:', error);

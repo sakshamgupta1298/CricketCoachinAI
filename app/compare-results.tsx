@@ -9,6 +9,8 @@ interface ComparisonResult {
   overall_comparison: {
     video1_score: number;
     video2_score: number;
+    improvement_percentage?: number;
+    improvement_summary?: string;
     winner: 'video1' | 'video2' | 'tie';
     overall_summary: string;
   };
@@ -16,10 +18,17 @@ interface ComparisonResult {
     metric_name: string;
     video1_value: string;
     video2_value: string;
-    difference_percentage: number;
+    improvement_percentage?: number;
+    difference_percentage?: number; // Keep for backward compatibility
+    improvement_direction?: 'improved' | 'declined' | 'similar';
     better_performance: 'video1' | 'video2' | 'similar';
     analysis: string;
   }>;
+  improvement_summary?: {
+    overall_improvement: string;
+    top_improvements: string[];
+    areas_still_needing_work: string[];
+  };
   key_insights: string[];
   improvement_areas: {
     video1: string[];
@@ -39,17 +48,37 @@ export default function CompareResultsScreen() {
   
   let comparison: ComparisonResult | null = null;
   try {
-    comparison = params.comparison ? JSON.parse(params.comparison as string) : null;
+    if (params.comparison) {
+      const parsed = JSON.parse(params.comparison as string);
+      // Handle nested structure: { comparison: {...} } or direct {...}
+      comparison = parsed.comparison || parsed;
+    }
   } catch (error) {
     console.error('Error parsing comparison data:', error);
+    console.error('Raw comparison data:', params.comparison);
   }
 
-  if (!comparison) {
+  if (!comparison || !comparison.overall_comparison) {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        <Text style={[styles.errorText, { color: theme.colors.error }]}>
-          No comparison data available
-        </Text>
+        <Surface style={[styles.header, { backgroundColor: theme.colors.surface }]}>
+          <Text style={[styles.title, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(24) }]}>
+            Comparison Results
+          </Text>
+        </Surface>
+        <View style={styles.errorContainer}>
+          <Text style={[styles.errorText, { color: theme.colors.error }]}>
+            No comparison data available
+          </Text>
+          <Text style={[styles.errorSubtext, { color: theme.colors.onSurfaceVariant }]}>
+            {comparison ? 'Invalid comparison data structure' : 'Please try comparing again'}
+          </Text>
+          {params.comparison && (
+            <Text style={[styles.debugText, { color: theme.colors.onSurfaceVariant }]}>
+              Debug: {JSON.stringify(comparison, null, 2).substring(0, 200)}
+            </Text>
+          )}
+        </View>
       </View>
     );
   }
@@ -96,7 +125,7 @@ export default function CompareResultsScreen() {
             <View style={styles.scoreContainer}>
               <View style={styles.scoreItem}>
                 <Text style={[styles.scoreLabel, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
-                  {video1Name}
+                  {video1Name} (Previous)
                 </Text>
                 <Text style={[styles.scoreValue, { color: colors.cricket.green, fontSize: getResponsiveFontSize(32) }]}>
                   {comparison.overall_comparison.video1_score}%
@@ -110,7 +139,7 @@ export default function CompareResultsScreen() {
               
               <View style={styles.scoreItem}>
                 <Text style={[styles.scoreLabel, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
-                  {video2Name}
+                  {video2Name} (Current)
                 </Text>
                 <Text style={[styles.scoreValue, { color: colors.cricket.blue, fontSize: getResponsiveFontSize(32) }]}>
                   {comparison.overall_comparison.video2_score}%
@@ -122,6 +151,33 @@ export default function CompareResultsScreen() {
                 />
               </View>
             </View>
+
+            {/* Improvement Percentage */}
+            {comparison.overall_comparison.improvement_percentage !== undefined && (
+              <View style={styles.improvementContainer}>
+                <Text style={[styles.improvementLabel, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
+                  Improvement from Previous to Current:
+                </Text>
+                <View style={styles.improvementValueContainer}>
+                  <Text style={[
+                    styles.improvementValue, 
+                    { 
+                      color: comparison.overall_comparison.improvement_percentage >= 0 ? colors.cricket.green : colors.cricket.orange,
+                      fontSize: getResponsiveFontSize(36),
+                      fontWeight: 'bold'
+                    }
+                  ]}>
+                    {comparison.overall_comparison.improvement_percentage >= 0 ? '+' : ''}
+                    {comparison.overall_comparison.improvement_percentage.toFixed(1)}%
+                  </Text>
+                </View>
+                {comparison.overall_comparison.improvement_summary && (
+                  <Text style={[styles.improvementSummary, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>
+                    {comparison.overall_comparison.improvement_summary}
+                  </Text>
+                )}
+              </View>
+            )}
 
             <View style={styles.winnerContainer}>
               <Chip
@@ -142,6 +198,55 @@ export default function CompareResultsScreen() {
             </Text>
           </Card.Content>
         </Card>
+
+        {/* Improvement Summary */}
+        {comparison.improvement_summary && (
+          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+            <Card.Content>
+              <Text style={[styles.sectionTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(20) }]}>
+                Improvement Summary
+              </Text>
+              
+              {comparison.improvement_summary.overall_improvement && (
+                <Text style={[styles.improvementText, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(15) }]}>
+                  {comparison.improvement_summary.overall_improvement}
+                </Text>
+              )}
+
+              {comparison.improvement_summary.top_improvements && comparison.improvement_summary.top_improvements.length > 0 && (
+                <View style={styles.improvementsList}>
+                  <Text style={[styles.improvementsTitle, { color: colors.cricket.green, fontSize: getResponsiveFontSize(16), fontWeight: '600' }]}>
+                    Top Improvements:
+                  </Text>
+                  {comparison.improvement_summary.top_improvements.map((improvement, index) => (
+                    <View key={index} style={styles.improvementItem}>
+                      <Text style={[styles.improvementBullet, { color: colors.cricket.green }]}>✓</Text>
+                      <Text style={[styles.improvementText, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>
+                        {improvement}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {comparison.improvement_summary.areas_still_needing_work && comparison.improvement_summary.areas_still_needing_work.length > 0 && (
+                <View style={styles.improvementsList}>
+                  <Text style={[styles.improvementsTitle, { color: colors.cricket.orange, fontSize: getResponsiveFontSize(16), fontWeight: '600' }]}>
+                    Areas Still Needing Work:
+                  </Text>
+                  {comparison.improvement_summary.areas_still_needing_work.map((area, index) => (
+                    <View key={index} style={styles.improvementItem}>
+                      <Text style={[styles.improvementBullet, { color: colors.cricket.orange }]}>→</Text>
+                      <Text style={[styles.improvementText, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>
+                        {area}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </Card.Content>
+          </Card>
+        )}
 
         {/* Metric Comparisons */}
         <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
@@ -177,13 +282,37 @@ export default function CompareResultsScreen() {
                 </View>
 
                 <View style={styles.metricAnalysis}>
-                  <Chip
-                    mode="outlined"
-                    style={[styles.performanceChip, { borderColor: getPerformanceColor(metric.better_performance) }]}
-                    textStyle={{ color: getPerformanceColor(metric.better_performance), fontSize: getResponsiveFontSize(12) }}
-                  >
-                    Difference: {Math.abs(metric.difference_percentage).toFixed(1)}%
-                  </Chip>
+                  {(metric.improvement_percentage !== undefined || metric.difference_percentage !== undefined) && (
+                    <Chip
+                      mode="flat"
+                      style={[
+                        styles.improvementChip, 
+                        { 
+                          backgroundColor: (metric.improvement_percentage ?? metric.difference_percentage ?? 0) >= 0 
+                            ? colors.cricket.green + '20' 
+                            : colors.cricket.orange + '20'
+                        }
+                      ]}
+                      textStyle={{ 
+                        color: (metric.improvement_percentage ?? metric.difference_percentage ?? 0) >= 0 
+                          ? colors.cricket.green 
+                          : colors.cricket.orange,
+                        fontSize: getResponsiveFontSize(13),
+                        fontWeight: '600'
+                      }}
+                    >
+                      {metric.improvement_percentage !== undefined ? (
+                        <>
+                          {metric.improvement_direction === 'improved' ? '↑' : metric.improvement_direction === 'declined' ? '↓' : '→'} 
+                          {' '}
+                          {metric.improvement_percentage >= 0 ? '+' : ''}
+                          {metric.improvement_percentage.toFixed(1)}% Improvement
+                        </>
+                      ) : (
+                        `Difference: ${Math.abs(metric.difference_percentage ?? 0).toFixed(1)}%`
+                      )}
+                    </Chip>
+                  )}
                   <Text style={[styles.metricAnalysisText, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(13) }]}>
                     {metric.analysis}
                   </Text>
@@ -389,6 +518,53 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     marginBottom: getResponsiveSize(spacing.xs),
   },
+  improvementContainer: {
+    marginTop: getResponsiveSize(spacing.md),
+    marginBottom: getResponsiveSize(spacing.md),
+    padding: getResponsiveSize(spacing.md),
+    backgroundColor: '#F5F5F5',
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+  },
+  improvementLabel: {
+    marginBottom: getResponsiveSize(spacing.sm),
+    textAlign: 'center',
+  },
+  improvementValueContainer: {
+    marginVertical: getResponsiveSize(spacing.sm),
+  },
+  improvementValue: {
+    textAlign: 'center',
+  },
+  improvementSummary: {
+    marginTop: getResponsiveSize(spacing.sm),
+    textAlign: 'center',
+    lineHeight: getResponsiveSize(20),
+  },
+  improvementsList: {
+    marginTop: getResponsiveSize(spacing.md),
+  },
+  improvementsTitle: {
+    marginBottom: getResponsiveSize(spacing.sm),
+  },
+  improvementItem: {
+    flexDirection: 'row',
+    marginBottom: getResponsiveSize(spacing.xs),
+    alignItems: 'flex-start',
+  },
+  improvementBullet: {
+    fontSize: getResponsiveFontSize(16),
+    marginRight: getResponsiveSize(spacing.xs),
+    marginTop: getResponsiveSize(2),
+  },
+  improvementText: {
+    flex: 1,
+    lineHeight: getResponsiveSize(18),
+  },
+  improvementChip: {
+    alignSelf: 'flex-start',
+    marginBottom: getResponsiveSize(spacing.xs),
+  },
   metricAnalysisText: {
     lineHeight: getResponsiveSize(18),
   },
@@ -458,10 +634,28 @@ const styles = StyleSheet.create({
     flex: 1,
     lineHeight: getResponsiveSize(18),
   },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: getResponsiveSize(spacing.xl),
+  },
   errorText: {
     textAlign: 'center',
     marginTop: getResponsiveSize(spacing.xl),
     fontSize: getResponsiveFontSize(16),
+    fontWeight: '600',
+  },
+  errorSubtext: {
+    textAlign: 'center',
+    marginTop: getResponsiveSize(spacing.md),
+    fontSize: getResponsiveFontSize(14),
+  },
+  debugText: {
+    textAlign: 'center',
+    marginTop: getResponsiveSize(spacing.md),
+    fontSize: getResponsiveFontSize(10),
+    fontFamily: 'monospace',
   },
 });
 
