@@ -599,6 +599,88 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 # Gemini client
 client = genai.Client(api_key="AIzaSyCNmpg89-pwOyrimMEmgyt4aT9d07MzYYc")
 
+def extract_json_from_response(text: str) -> str:
+    """
+    Extract JSON from Gemini response text, handling various formats:
+    - Plain JSON
+    - JSON wrapped in markdown code blocks
+    - Multiple JSON objects (returns first valid one)
+    - Extra text before/after JSON
+    
+    Uses a robust brace-matching algorithm to find the first complete JSON object.
+    """
+    if not text:
+        raise ValueError("Empty text provided")
+    
+    # Try to find JSON in markdown code blocks first (most reliable)
+    json_block_pattern = r"```(?:json)?\s*(\{.*?\})\s*```"
+    match = re.search(json_block_pattern, text, re.DOTALL)
+    if match:
+        candidate = match.group(1)
+        # Validate it's valid JSON
+        try:
+            json.loads(candidate)
+            return candidate
+        except json.JSONDecodeError:
+            pass  # Continue to other methods
+    
+    # Find the first opening brace
+    start_idx = text.find('{')
+    if start_idx == -1:
+        raise ValueError("No JSON object found in response")
+    
+    # Use brace matching to find the complete JSON object
+    # This handles nested objects and strings correctly
+    brace_count = 0
+    in_string = False
+    escape_next = False
+    json_start = start_idx
+    
+    for i in range(start_idx, len(text)):
+        char = text[i]
+        
+        if escape_next:
+            escape_next = False
+            continue
+        
+        if char == '\\':
+            escape_next = True
+            continue
+        
+        if char == '"' and not escape_next:
+            in_string = not in_string
+            continue
+        
+        if not in_string:
+            if char == '{':
+                brace_count += 1
+            elif char == '}':
+                brace_count -= 1
+                if brace_count == 0:
+                    # Found matching closing brace - extract JSON
+                    json_text = text[json_start:i+1]
+                    # Validate it's valid JSON before returning
+                    try:
+                        # Try parsing to ensure it's valid
+                        parsed = json.loads(json_text)
+                        # Return the JSON string (not the parsed object)
+                        # This ensures we only return the first complete JSON object
+                        return json_text
+                    except json.JSONDecodeError as e:
+                        # If invalid, log and try to find next JSON object
+                        logger.warning(f"Invalid JSON found at position {json_start}-{i+1}, trying next: {e}")
+                        # Look for next opening brace
+                        next_start = text.find('{', i + 1)
+                        if next_start == -1:
+                            raise ValueError(f"Could not extract valid JSON from response. Last error: {e}")
+                        json_start = next_start
+                        brace_count = 0
+                        continue
+    
+    # If we get here, we didn't find a complete JSON object with proper matching
+    # This shouldn't happen if the response is well-formed, but handle gracefully
+    raise ValueError("Could not find complete JSON object with matching braces")
+
 # Transform for video frames
 transform = T.Compose([
     T.ToPILImage(),
@@ -971,7 +1053,7 @@ def get_feedback_from_gpt_for_bowling(keypoint_csv_path, bowler_type='fast_bowle
 
         raw_content_A = response_A.text
         try:
-            json_text_A = re.search(r"\{.*\}", raw_content_A, re.DOTALL).group()
+            json_text_A = extract_json_from_response(raw_content_A)
             biomechanics_report = json.loads(json_text_A)
             logger.info("Stage 1 completed: Biomechanical analysis received")
         except Exception as e:
@@ -1117,7 +1199,7 @@ REQUIRED JSON OUTPUT
 
         raw_content_B = response_B.text
         try:
-            json_text_B = re.search(r"\{.*\}", raw_content_B, re.DOTALL).group()
+            json_text_B = extract_json_from_response(raw_content_B)
             coaching_feedback = json.loads(json_text_B)
             logger.info("Stage 2 completed: Coaching feedback received")
         except Exception as e:
@@ -1882,7 +1964,7 @@ def get_feedback_from_gpt(action_type, keypoint_csv_path, player_level='intermed
 
         raw_content_A = response_A.text
         try:
-            json_text_A = re.search(r"\{.*\}", raw_content_A, re.DOTALL).group()
+            json_text_A = extract_json_from_response(raw_content_A)
             biomechanics_report = json.loads(json_text_A)
             logger.info("Stage 1 completed: Biomechanical analysis received")
         except Exception as e:
@@ -2016,7 +2098,7 @@ REQUIRED JSON OUTPUT
 
         raw_content_B = response_B.text
         try:
-            json_text_B = re.search(r"\{.*\}", raw_content_B, re.DOTALL).group()
+            json_text_B = extract_json_from_response(raw_content_B)
             coaching_feedback = json.loads(json_text_B)
             logger.info("Stage 2 completed: Coaching feedback received")
         except Exception as e:
@@ -2280,7 +2362,7 @@ Example JSON structure:
             contents=[prompt]
         )
         raw = response.text
-        json_text = re.search(r"\{.*\}", raw, re.DOTALL).group()
+        json_text = extract_json_from_response(raw)
         plan_json = json.loads(json_text)
         return plan_json
     except Exception as e:
@@ -3373,7 +3455,7 @@ RULES
         
         raw_content = response.text
         try:
-            json_text = re.search(r"\{.*\}", raw_content, re.DOTALL).group()
+            json_text = extract_json_from_response(raw_content)
             comparison_result = json.loads(json_text)
             
             # Add metadata
