@@ -1544,11 +1544,16 @@ def get_feedback_from_gpt_for_keeping(keypoint_csv_path, keeping_type='standing_
     ────────────────────────
     RULES (STRICT)
     ────────────────────────
-    - Respond ONLY in valid JSON
+    - Respond ONLY in valid JSON format
+    - Your entire response must be a single, valid JSON object
+    - Do NOT include any text before or after the JSON
+    - Do NOT use markdown code blocks (no ```json or ```)
+    - Start your response with {{ and end with }}
     - No coaching language
     - No drills or recommendations
     - No null, NaN, or empty objects
     - Use realistic cricket wicket-keeping biomechanics values only
+    - CRITICAL: Output ONLY the JSON object, nothing else
 
     ────────────────────────
     REQUIRED JSON OUTPUT
@@ -1611,17 +1616,40 @@ def get_feedback_from_gpt_for_keeping(keypoint_csv_path, keeping_type='standing_
         )
 
         raw_content_A = response_A.text
+        logger.debug(f"Raw response from Gemini (keeping Stage 1, first 500 chars): {raw_content_A[:500]}...")
         try:
             json_text_A = extract_json_from_response(raw_content_A)
             biomechanics_report = json.loads(json_text_A)
             logger.info("Stage 1 completed: Biomechanical analysis received")
         except Exception as e:
-            logger.error(f"Failed to parse Stage 1 (biomechanics) response: {e}", exc_info=True)
-            return {
-                "error": "Failed to parse biomechanics response", 
-                "raw_content": raw_content_A,
-                "stage": "biomechanics_analysis"
-            }
+            logger.error(f"Failed to parse Stage 1 (biomechanics) response for keeping: {e}", exc_info=True)
+            logger.error(f"Full raw response length: {len(raw_content_A)} characters")
+            logger.error(f"First 1000 chars of raw response: {raw_content_A[:1000]}")
+            # Try fallback: look for JSON in markdown code blocks more aggressively
+            try:
+                # Try multiple patterns
+                patterns = [
+                    r'```json\s*(\{.*?\})\s*```',
+                    r'```\s*(\{.*?\})\s*```',
+                    r'(\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})',  # Simple nested braces
+                ]
+                for pattern in patterns:
+                    match = re.search(pattern, raw_content_A, re.DOTALL)
+                    if match:
+                        potential_json = match.group(1)
+                        logger.warning(f"Found potential JSON with pattern {pattern[:30]}...")
+                        biomechanics_report = json.loads(potential_json)
+                        logger.info("Successfully parsed JSON after fallback attempt")
+                        break
+                else:
+                    raise ValueError("No valid JSON found in response")
+            except Exception as fallback_error:
+                logger.error(f"Fallback JSON parsing also failed: {fallback_error}")
+                return {
+                    "error": "Failed to parse biomechanics response", 
+                    "raw_content": raw_content_A[:2000] if len(raw_content_A) > 2000 else raw_content_A,  # Limit size for logging
+                    "stage": "biomechanics_analysis"
+                }
     except Exception as e:
         logger.error(f"Failed to get Stage 1 (biomechanics) response: {e}", exc_info=True)
         return {
