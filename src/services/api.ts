@@ -812,6 +812,8 @@ class ApiService {
       const response = await this.jsonApi.post('/api/compare', {
         filename1,
         filename2,
+      }, {
+        timeout: 180000, // 3 minutes timeout for comparison
       });
       // Backend returns { success: true, comparison: {...} }
       // Extract the comparison object directly
@@ -822,9 +824,32 @@ class ApiService {
       };
     } catch (error: any) {
       console.error('Compare Videos Error:', error);
+      
+      // Handle specific error cases
+      if (error.response?.status === 502) {
+        return {
+          success: false,
+          error: 'Server error: The comparison service is temporarily unavailable. Please try again in a few moments.',
+        };
+      }
+      
+      if (error.response?.status === 504 || error.code === 'ECONNABORTED') {
+        return {
+          success: false,
+          error: 'Comparison request timed out. This may happen with complex analyses. Please try again.',
+        };
+      }
+      
+      if (error.response?.status === 500) {
+        return {
+          success: false,
+          error: error.response?.data?.error || 'Server error during comparison. Please try again.',
+        };
+      }
+      
       return {
         success: false,
-        error: error.response?.data?.error || error.message || 'Failed to compare videos',
+        error: error.response?.data?.error || error.message || 'Failed to compare videos. Please check your connection and try again.',
       };
     }
   }

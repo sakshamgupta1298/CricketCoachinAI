@@ -1048,7 +1048,12 @@ def get_feedback_from_gpt_for_bowling(keypoint_csv_path, bowler_type='fast_bowle
     try:
         response_A = client.models.generate_content(
             model="gemini-2.5-flash",
-            contents=[prompt_A]
+            contents=[prompt_A],
+            config={
+            "temperature": 0,
+            "top_p": 1,
+            "top_k": 1
+        }
         )
 
         raw_content_A = response_A.text
@@ -1194,7 +1199,12 @@ REQUIRED JSON OUTPUT
     try:
         response_B = client.models.generate_content(
             model="gemini-2.5-pro",
-            contents=[prompt_B]
+            contents=[prompt_B],
+            config={
+            "temperature": 0,
+            "top_p": 1,
+            "top_k": 1
+        }
         )
 
         raw_content_B = response_B.text
@@ -1959,7 +1969,12 @@ def get_feedback_from_gpt(action_type, keypoint_csv_path, player_level='intermed
     try:
         response_A = client.models.generate_content(
             model="gemini-2.5-flash",
-            contents=[prompt_A]
+            contents=[prompt_A],
+            config={
+            "temperature": 0,
+            "top_p": 1,
+            "top_k": 1
+        }
         )
 
         raw_content_A = response_A.text
@@ -2093,7 +2108,12 @@ REQUIRED JSON OUTPUT
     try:
         response_B = client.models.generate_content(
             model="gemini-2.5-pro",
-            contents=[prompt_B]
+            contents=[prompt_B],
+            config={
+            "temperature": 0,
+            "top_p": 1,
+            "top_k": 1
+        }
         )
 
         raw_content_B = response_B.text
@@ -3465,13 +3485,50 @@ RULES
 """
         
         logger.info("Sending comparison request to Gemini...")
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=[prompt]
-        )
-        
-        raw_content = response.text
         try:
+            # Use threading timeout for Gemini API call (more reliable for Flask)
+            import threading
+            
+            response = None
+            error_occurred = [False]
+            exception_holder = [None]
+            
+            def make_api_call():
+                nonlocal response
+                try:
+                    response = client.models.generate_content(
+                        model="gemini-2.5-flash",
+                        contents=[prompt]
+                    )
+                except Exception as e:
+                    error_occurred[0] = True
+                    exception_holder[0] = e
+            
+            # Start API call in a thread with timeout
+            api_thread = threading.Thread(target=make_api_call)
+            api_thread.daemon = True
+            api_thread.start()
+            api_thread.join(timeout=120)  # 2 minute timeout
+            
+            if api_thread.is_alive():
+                logger.error("Gemini API call timed out after 120 seconds")
+                return jsonify({
+                    'error': 'Comparison request timed out. Please try again with shorter videos or fewer metrics.',
+                    'timeout': True
+                }), 504
+            
+            if error_occurred[0]:
+                raise exception_holder[0] or Exception("Unknown error in Gemini API call")
+            
+            if not response:
+                raise Exception("No response received from Gemini API")
+            
+            raw_content = response.text
+            if not raw_content:
+                raise Exception("Empty response from Gemini API")
+            
+            logger.info(f"Received response from Gemini (length: {len(raw_content)} chars)")
+            
             json_text = extract_json_from_response(raw_content)
             comparison_result = json.loads(json_text)
             
@@ -3485,11 +3542,21 @@ RULES
                 'success': True,
                 'comparison': comparison_result
             })
-        except Exception as e:
-            logger.error(f"Failed to parse comparison response: {e}", exc_info=True)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse comparison JSON response: {e}", exc_info=True)
+            raw_preview = raw_content[:500] if 'raw_content' in locals() else 'N/A'
+            logger.error(f"Raw content preview: {raw_preview}")
             return jsonify({
-                'error': 'Failed to parse comparison response',
-                'raw_content': raw_content
+                'error': 'Failed to parse comparison response from AI. Please try again.',
+                'details': str(e)
+            }), 500
+        except Exception as e:
+            logger.error(f"Error during comparison: {e}", exc_info=True)
+            error_type = type(e).__name__
+            error_msg = str(e)
+            return jsonify({
+                'error': f'Error during comparison: {error_msg}',
+                'type': error_type
             }), 500
             
     except Exception as e:
