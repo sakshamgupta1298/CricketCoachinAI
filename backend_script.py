@@ -506,7 +506,7 @@ def process_analysis_job(job_id, user_id, username, filepath, filename, form, ex
                 logger.error(f"❌ [JOB {job_id}] Error generating report: {str(e)}", exc_info=True)
                 results["report_path"] = None
 
-        else:
+        elif player_type == "bowler":
             bowler_side = form.get("bowler_side", "right")
             bowler_type = form.get("bowler_type", "fast_bowler")
 
@@ -538,6 +538,43 @@ def process_analysis_job(job_id, user_id, username, filepath, filename, form, ex
             except Exception as e:
                 logger.error(f"❌ [JOB {job_id}] Error generating report: {str(e)}", exc_info=True)
                 results["report_path"] = None
+
+        elif player_type == "keeper":
+            keeping_type = form.get("keeping_type", "standing_up")
+            keeper_side = form.get("keeper_side", "right")
+
+            logger.info(f"🎬 [JOB {job_id}] Keeping analysis started for {filename}")
+            keypoints_path, annotated_video_path = extract_pose_keypoints(analysis_video_path, "keeping")
+            _ = compute_features(keypoints_path, keeper_side, "keeping")
+            try:
+                gpt_feedback = get_feedback_from_gpt_for_keeping(keypoints_path, keeping_type)
+            except Exception as e:
+                logger.error(f"❌ [JOB {job_id}] Error in Gemini feedback: {str(e)}", exc_info=True)
+                gpt_feedback = "Unable to generate feedback at this time."
+
+            results = {
+                "success": True,
+                "job_id": job_id,
+                "user_id": user_id,
+                "username": username,
+                "player_type": "keeper",
+                "keeper_side": keeper_side,
+                "keeping_type": keeping_type,
+                "gpt_feedback": gpt_feedback,
+                "filename": filename,
+                "annotated_video_path": annotated_video_path,
+            }
+
+            try:
+                # For keeper, we pass keeping_type in place of bowler_type parameter
+                report_path = generate_report(results, "keeper", None, None, keeper_side, keeping_type, filename, user_id=user_id)
+                results["report_path"] = report_path
+            except Exception as e:
+                logger.error(f"❌ [JOB {job_id}] Error generating report: {str(e)}", exc_info=True)
+                results["report_path"] = None
+
+        else:
+            raise ValueError(f"Unsupported player type: {player_type}. Supported types: batsman, bowler, keeper")
 
         # Save results by filename for history/backwards compatibility
         results_file = os.path.join(user_folder, f"results_{filename}.json")
@@ -1327,6 +1364,499 @@ REQUIRED JSON OUTPUT
     logger.info("Two-stage bowling analysis completed successfully")
     logger.info("=" * 80)
     logger.info("COMBINED RESULT (BOWLING) - BEFORE RETURNING:")
+    logger.info("=" * 80)
+    logger.info(f"Number of flaws: {len(combined_result.get('flaws', []))}")
+    for i, flaw in enumerate(combined_result.get("flaws", [])):
+        logger.info(f"Flaw {i+1}: {json.dumps(flaw, indent=2, default=str)}")
+    logger.info("=" * 80)
+    logger.info(f"Full combined result: {json.dumps(combined_result, indent=2, default=str)}")
+    logger.info("=" * 80)
+    return combined_result
+
+
+def get_feedback_from_gpt_for_keeping(keypoint_csv_path, keeping_type='standing_up', player_level='intermediate'):
+    logger.info(f"Getting Gemini feedback for keeping type: {keeping_type}, player level: {player_level}")
+
+    # Read CSV and convert to JSON
+    data = []
+    try:
+        with open(keypoint_csv_path, newline='') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                # Convert numeric fields to float
+                processed_row = {}
+                for k, v in row.items():
+                    try:
+                        # Try to convert to float if it's numeric
+                        processed_row[k] = float(v)
+                    except ValueError:
+                        # Keep as string if not numeric
+                        processed_row[k] = v
+                data.append(processed_row)
+    except Exception as e:
+        logger.error(f"Failed to read CSV file: {e}", exc_info=True)
+        return {"error": "Failed to read CSV file", "raw_content": str(e)}
+    
+    csv_json = json.dumps(data)
+    logger.debug(f"Keeping type: {keeping_type}")
+
+# ================================
+# PROMPT A — BIOMECHANICAL ANALYST (KEEPING)
+# ================================
+
+    prompt_A = f"""
+    You are a **Cricket Biomechanics Analyst** specializing in wicket-keeping mechanics.
+
+    Your responsibility is STRICTLY LIMITED to:
+    - analyzing pose keypoint time-series data
+    - computing biomechanical features specific to wicket-keeping
+    - comparing them against established cricket keeping norms
+    - reporting deviations and data confidence
+    - assessing injury risk based on biomechanical deviations
+
+    You are NOT a coach.
+    You must NOT provide drills, cues, training advice, or subjective coaching opinions.
+
+            ────────────────────────
+            CONTEXT
+            ────────────────────────
+            Keeping Type: {keeping_type}   # standing_up | standing_back | diving_catch | stumping
+
+            Each row of the input represents one video frame containing
+            body joint coordinates.
+
+            ────────────────────────
+            INPUT DATA
+            ────────────────────────
+            {csv_json}
+
+            ────────────────────────
+            CRICKET NORM CONSTRAINT (CRITICAL)
+            ────────────────────────
+            All "ideal_range" values MUST be derived from **established cricket wicket-keeping norms**
+            as defined in:
+            - ICC wicket-keeping coaching manuals
+            - elite cricket academies
+            - published wicket-keeping biomechanics research
+
+            Do NOT invent generic athletic ranges.
+            Do NOT use single ideal values — ALWAYS use ranges.
+            Adjust ranges based on keeping type (standing up vs standing back).
+
+            ────────────────────────
+            AUTO-FEATURE SELECTION LOGIC
+            ────────────────────────
+            1. Always compute CORE features supported by pose keypoints.
+            2. Compute CONDITIONAL features only when motion clarity supports them.
+            3. Infer ADVANCED features conservatively and mark them as "estimated".
+            4. Do NOT fabricate metrics that require sensors not present
+            (force plates, EMG, ball tracking, glove sensors).
+
+            ────────────────────────
+            FEATURE TIERS
+
+            ### TIER 1 — CORE (MANDATORY)
+            - Stance width (distance between feet)
+            - Stance depth (knee flexion angle)
+            - Head position (vertical and lateral stability)
+            - Shoulder alignment and posture
+            - Hip height and position
+            - Weight distribution (center of mass position)
+            - Hand position relative to body
+            - Base of support stability
+            - Trunk lean angle
+
+    TIER 2 — CONDITIONAL
+    - Lateral movement speed and efficiency
+    - Forward movement (sprint) mechanics
+    - Reaction time indicators (movement initiation)
+    - Glove positioning consistency
+    - Footwork patterns and efficiency
+    - Body rotation during diving movements
+    - Landing mechanics (for diving catches)
+
+    Mark all Tier 2 features with "confidence": "medium"
+
+    TIER 3 — INFERRED
+    - Hand-eye coordination efficiency
+    - Anticipation timing
+    - Glove work quality
+    - Balance recovery after movement
+    - Kinetic chain sequencing quality
+    - Energy transfer efficiency
+
+    Mark all Tier 3 features with "estimated": true
+
+    ────────────────────────
+    KEEPING-TYPE NORM ADJUSTMENT
+    ────────────────────────
+    Adjust interpretation based on keeping type:
+
+    STANDING UP (to spinners) →
+    - Narrower stance width norms
+    - Lower hip height norms
+    - Closer hand positioning norms
+    - Quicker reaction time requirements
+
+    STANDING BACK (to fast bowlers) →
+    - Wider stance width norms
+    - Higher hip height norms
+    - More dynamic movement readiness
+    - Longer reaction time windows
+
+    DIVING CATCH →
+    - Focus on take-off mechanics
+    - Landing position and safety
+    - Body rotation efficiency
+    - Hand extension and positioning
+
+    STUMPING →
+    - Quick hand movement
+    - Balance during forward movement
+    - Hand-eye coordination timing
+
+    A deviation exists ONLY if values clearly fall outside
+    acceptable norms for the given keeping type.
+
+    ────────────────────────
+    INJURY RISK ASSESSMENT
+    ────────────────────────
+    When flagging injury risk, relate it biomechanically to:
+    - Lower back (repeated flexion/extension, diving landings)
+    - Shoulder complex (overhead catches, diving)
+    - Wrist and fingers (glove work, catching impact)
+    - Knee and ankle (landing forces, lateral movements)
+    - Hip (repeated squatting, lateral movements)
+
+    Avoid over-alarmist language unless deviation is severe.
+    Only flag injury risk if biomechanical deviation is significant.
+
+    ────────────────────────
+    ANALYSIS TASKS
+    ────────────────────────
+    1. Select valid biomechanical features using tier rules
+    2. Compute or estimate realistic numeric values
+    3. Compare against cricket wicket-keeping norm ranges
+    4. Classify deviations without coaching interpretation
+    5. Assess injury risk based on biomechanical deviations
+    6. Report data quality and limitations
+
+    ────────────────────────
+    RULES (STRICT)
+    ────────────────────────
+    - Respond ONLY in valid JSON
+    - No coaching language
+    - No drills or recommendations
+    - No null, NaN, or empty objects
+    - Use realistic cricket wicket-keeping biomechanics values only
+
+    ────────────────────────
+    REQUIRED JSON OUTPUT
+    ────────────────────────
+    {{
+    "analysis_summary": "Neutral biomechanical assessment based on cricket wicket-keeping norms",
+
+    "data_quality": {{
+        "frame_coverage": "percentage",
+        "motion_clarity": "low | medium | high",
+        "analysis_limitations": "explicit limitations based on data"
+    }},
+
+    "selected_features": {{
+        "core": [],
+        "conditional": [],
+        "inferred": []
+    }},
+
+    "biomechanics": {{
+        "core": {{}},
+        "conditional": {{}},
+        "inferred": {{}}
+    }},
+
+    "deviations": [
+        {{
+        "feature": "feature_name",
+        "observed": 0.0,
+        "ideal_range": "cricket-norm range",
+        "deviation_type": "within_range | mild | significant",
+        "biomechanical_note": "Mechanical difference only",
+        "confidence": "high | medium"
+        }}
+    ],
+
+    "injury_risk_assessment": [
+        {{
+        "body_part": "Lower back | Shoulder | Wrist | Knee | Ankle | Hip",
+        "risk_level": "Low | Moderate | High",
+        "reason": "Biomechanical cause linked to norm deviation"
+        }}
+    ]
+    }}
+    """
+
+# ================================
+# STAGE 1: BIOMECHANICAL ANALYSIS
+# ================================
+    logger.info("Stage 1: Running biomechanical analysis for keeping (Prompt A)...")
+    try:
+        response_A = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[prompt_A],
+            config={
+            "temperature": 0,
+            "top_p": 1,
+            "top_k": 1
+        }
+        )
+
+        raw_content_A = response_A.text
+        try:
+            json_text_A = extract_json_from_response(raw_content_A)
+            biomechanics_report = json.loads(json_text_A)
+            logger.info("Stage 1 completed: Biomechanical analysis received")
+        except Exception as e:
+            logger.error(f"Failed to parse Stage 1 (biomechanics) response: {e}", exc_info=True)
+            return {
+                "error": "Failed to parse biomechanics response", 
+                "raw_content": raw_content_A,
+                "stage": "biomechanics_analysis"
+            }
+    except Exception as e:
+        logger.error(f"Failed to get Stage 1 (biomechanics) response: {e}", exc_info=True)
+        return {
+            "error": "Failed to get biomechanics response", 
+            "raw_content": str(e),
+            "stage": "biomechanics_analysis"
+        }
+
+# ================================
+# STAGE 2: COACH INTERPRETATION (KEEPING)
+# ================================
+    logger.info("Stage 2: Running coach interpretation for keeping (Prompt B)...")
+
+    
+    
+    # Convert biomechanics report to JSON string for prompt_B
+    biomechanics_report_json = json.dumps(biomechanics_report, indent=2)
+    logger.info(f"Biomechanics report: {biomechanics_report_json}")
+    
+    prompt_B = f"""
+You are an **elite Cricket Wicket-Keeping Coach** interpreting a biomechanics report.
+
+Your role is to convert biomechanical deviations into
+clear, practical, keeping-type-specific coaching guidance.
+
+You do NOT recompute biomechanics.
+You rely ONLY on the provided analysis.
+
+────────────────────────
+COACHING PHILOSOPHY
+────────────────────────
+- Coach like an elite academy instructor
+- Prioritize fundamentals over micro-details
+- Ignore deviations that do not affect keeping performance
+- Be concise, actionable, and player-appropriate
+- Consider keeping type (standing up vs standing back) in all recommendations
+
+────────────────────────
+INPUTS
+────────────────────────
+Keeping Type: {keeping_type}   # standing_up | standing_back | diving_catch | stumping
+Player Level: {player_level}   # beginner | intermediate | advanced | elite
+
+Biomechanics Report (JSON):
+{biomechanics_report_json}
+
+────────────────────────
+INTERPRETATION RULES (STRICT)
+────────────────────────
+- Only "significant and mild" deviations may become confirmed faults
+- "Mild" deviations may be monitored, not corrected
+- Inferred features may NOT be the primary reason for a fault
+- Limit confirmed faults to a maximum of 10
+- Injury risks should be addressed but not cause alarm unless High risk
+- CRITICAL: For each flaw, you MUST include both "observed" (numeric value) and "ideal_range" (string range) from the Biomechanics Report
+- Data Mapping: Carry over the 'observed' and 'ideal_range' values EXACTLY as they appear in the Biomechanics Report for the chosen faults
+
+────────────────────────
+SKILL-LEVEL ADAPTATION
+────────────────────────
+- Beginner → simple language, stance & basic positioning focus
+- Intermediate → standard technical cues
+- Advanced / Elite → advanced footwork, anticipation, and efficiency
+
+────────────────────────
+KEEPING-TYPE ADAPTATION
+────────────────────────
+- Standing Up → focus on quick reactions, narrow stance, low position
+- Standing Back → focus on movement readiness, wider base, dynamic positioning
+- Diving Catch → focus on take-off, landing safety, hand positioning
+- Stumping → focus on quick hand movement, balance, timing
+
+────────────────────────
+COACHING TASKS
+────────────────────────
+1. Review deviations and data quality
+2. Decide which deviations are true technical faults
+3. Rank faults by impact on keeping performance
+4. Provide ONE drill per fault using standardized format
+5. Address injury risks with appropriate caution level
+6. Reinforce strengths that should not be overcorrected
+
+────────────────────────
+DRILL FORMAT (MANDATORY)
+────────────────────────
+"Drill name — setup — execution cue — reps"
+
+────────────────────────
+RULES (STRICT)
+────────────────────────
+- Respond ONLY in valid JSON
+- No biomechanics recalculation
+- No contradiction of analysis confidence
+- Use professional coaching language
+- Keeping-type appropriate recommendations
+
+────────────────────────
+REQUIRED JSON OUTPUT
+────────────────────────
+{{
+  "analysis_summary": "Comprehensive summary of the biomechanical analysis and coaching focus for this session. Include key findings, primary technical themes, and overall assessment.",
+
+  "flaws": [
+    {{
+      "feature": "feature_name",
+      "observed": <numeric_value_from_biomechanics_report>,  # REQUIRED: Must be a number from the deviations array
+      "ideal_range": "<string_range_from_biomechanics_report>",  # REQUIRED: Must be the exact ideal_range string from the deviations array
+      "issue": "Keeping-type-specific explanation of why this deviation matters",
+      "recommendation": "Drill name — setup — execution cue — reps",
+      "deviation": "Brief description of the deviation (optional, can be derived from observed vs ideal_range)"
+    }}
+  ],
+
+  "injury_risk_assessment": [
+    {{
+      "body_part": "Lower back | Shoulder | Wrist | Knee | Ankle | Hip",
+      "risk_level": "Low | Moderate | High",
+      "reason": "Biomechanical explanation of why this body part is at risk"
+    }}
+  ],
+
+  "general_tips": [
+    "What to keep doing well",
+    "What not to overcorrect",
+    "Additional coaching tips and reminders"
+  ]
+}}
+"""
+
+    try:
+        response_B = client.models.generate_content(
+            model="gemini-2.5-pro",
+            contents=[prompt_B],
+            config={
+            "temperature": 0,
+            "top_p": 1,
+            "top_k": 1
+        }
+        )
+
+        raw_content_B = response_B.text
+        try:
+            json_text_B = extract_json_from_response(raw_content_B)
+            coaching_feedback = json.loads(json_text_B)
+            logger.info("Stage 2 completed: Coaching feedback received")
+        except Exception as e:
+            logger.error(f"Failed to parse Stage 2 (coaching) response: {e}", exc_info=True)
+            # Return biomechanics report even if coaching fails
+            return {
+                "biomechanics_report": biomechanics_report,
+                "coaching_feedback": {"error": "Failed to parse coaching response", "raw_content": raw_content_B},
+                "stage": "coaching_interpretation"
+            }
+    except Exception as e:
+        logger.error(f"Failed to get Stage 2 (coaching) response: {e}", exc_info=True)
+        # Return biomechanics report even if coaching fails
+        return {
+            "biomechanics_report": biomechanics_report,
+            "coaching_feedback": {"error": "Failed to get coaching response", "raw_content": str(e)},
+            "stage": "coaching_interpretation"
+        }
+
+    # Enrich flaws with missing ideal_range and observed from biomechanics report
+    flaws = coaching_feedback.get("flaws", [])
+    deviations = biomechanics_report.get("deviations", [])
+    
+    # Create a lookup map from feature name to deviation data
+    deviation_map = {
+        normalize_feature(dev.get("feature", "")): dev
+        for dev in deviations
+    }
+    
+    # ALWAYS overwrite ideal_range and observed from biomechanics report to ensure data consistency
+    for flaw in flaws:
+        feature_name = normalize_feature(flaw.get("feature", ""))
+
+        if feature_name not in deviation_map:
+            continue
+
+        dev = deviation_map[feature_name]
+
+        # ✅ Only enforce biomechanics values if this is a real deviation
+        if dev.get("deviation_type") in ("mild", "significant"):
+
+            # Overwrite ideal_range ONLY for real deviations
+            if dev.get("ideal_range"):
+                flaw["ideal_range"] = dev["ideal_range"]
+                logger.info(
+                    f"Enforced ideal_range for {feature_name} from biomechanics: {dev['ideal_range']}"
+                )
+
+            # Overwrite observed ONLY for real deviations
+            if dev.get("observed") is not None:
+                flaw["observed"] = dev["observed"]
+                logger.info(
+                    f"Enforced observed for {feature_name} from biomechanics: {dev['observed']}"
+                )
+
+
+    # Simplified result - only fields that frontend actually uses
+    analysis_text = coaching_feedback.get("analysis_summary",biomechanics_report.get("analysis_summary", ""))
+    combined_result = {
+        # Analysis summary - from Prompt B (coaching), fallback to Prompt A (biomechanics)
+        "analysis_summary": analysis_text,
+        "analysis": analysis_text,  # Backward compatibility
+        
+        # Flaws - from Prompt B (coaching feedback), enriched with biomechanics data
+        # Each flaw includes: feature, observed (numeric), ideal_range (string), issue, recommendation, deviation
+        "flaws": flaws,
+        "technical_flaws": flaws,  # Backward compatibility alias
+        
+        # General tips - from Prompt B (coaching feedback)
+        "general_tips": coaching_feedback.get("general_tips", []),
+        
+        # Injury risks - combine from both reports (coaching_feedback takes priority)
+        "injury_risk_assessment": (
+            coaching_feedback.get("injury_risk_assessment", [])
+        ),
+        "injury_risks": [
+            f"{risk.get('body_part', 'Unknown')} - {risk.get('risk_level', 'Unknown')}: {risk.get('reason', '')}"
+            for risk in (coaching_feedback.get("injury_risk_assessment", []))
+        ],
+        
+        # Biomechanics data from Prompt A (for collapsible section in frontend)
+        "biomechanics": biomechanics_report.get("biomechanics", {})
+    }
+    
+    # Verify that flaws include observed and ideal_range
+    for flaw in combined_result.get("flaws", []):
+        if "observed" not in flaw or "ideal_range" not in flaw:
+            logger.warning(f"Flaw missing observed or ideal_range: {flaw.get('feature', 'unknown')}")
+    
+    logger.info("Two-stage keeping analysis completed successfully")
+    logger.info("=" * 80)
+    logger.info("COMBINED RESULT (KEEPING) - BEFORE RETURNING:")
     logger.info("=" * 80)
     logger.info(f"Number of flaws: {len(combined_result.get('flaws', []))}")
     for i, flaw in enumerate(combined_result.get("flaws", [])):
@@ -2413,11 +2943,11 @@ def generate_report(results, player_type, shot_type=None, batter_side=None, bowl
     
     Args:
         results: Analysis results dictionary
-        player_type: Type of player (batsman/bowler)
+        player_type: Type of player (batsman/bowler/keeper)
         shot_type: Type of shot (for batsman)
         batter_side: Side of batter
-        bowler_side: Side of bowler
-        bowler_type: Type of bowler
+        bowler_side: Side of bowler (or keeper_side for keeper)
+        bowler_type: Type of bowler (or keeping_type for keeper)
         filename: Original filename
         user_id: User ID to organize files in user folder
     
@@ -2487,7 +3017,75 @@ The biomechanical assessment reveals potential issues with backlift angle, strid
 3. **Stance Work:** Work on maintaining a stable stance throughout the shot.
 4. **Timing Drills:** Practice timing with different ball speeds.
 """
-    else:
+    elif player_type == 'keeper':
+        keeping_type = bowler_type  # Reusing bowler_type parameter for keeping_type
+        keeper_side = bowler_side   # Reusing bowler_side parameter for keeper_side
+        report_content = f"""
+Cricket Wicket-Keeping Analysis Report
+=====================================
+
+**Player Type:** {player_type}
+**Keeping Type:** {keeping_type.replace('_', ' ').title() if keeping_type else 'Not specified'}
+**Keeper Side:** {keeper_side}
+**Filename:** {filename}
+**Date:** {timestamp}
+
+---
+
+**Biomechanical Analysis:**
+
+```json
+{json.dumps(results['gpt_feedback'], indent=4)}
+```
+
+---
+
+**Technical Flaws:**
+
+```json
+{json.dumps(results['gpt_feedback'].get('flaws', []), indent=4)}
+```
+
+---
+
+**Injury Risks:**
+
+```json
+{json.dumps(results['gpt_feedback'].get('injury_risks', []), indent=4)}
+```
+
+---
+
+**General Tips:**
+
+```json
+{json.dumps(results['gpt_feedback'].get('general_tips', []), indent=4)}
+```
+
+---
+
+**Conclusion:**
+
+Based on the analysis, the wicket-keeper's technique could be improved in several areas. 
+The biomechanical assessment reveals potential issues with stance, positioning, movement patterns, and glove work.
+
+**Recommendations:**
+
+1. **Stance:** The keeper's stance is crucial for quick reactions and movement readiness.
+2. **Positioning:** Proper positioning relative to the stumps affects catching and stumping success.
+3. **Footwork:** Efficient footwork enables quick lateral and forward movements.
+4. **Hand Position:** Consistent glove positioning improves catching success rate.
+5. **Balance:** Maintaining balance during movements is essential for effective keeping.
+
+**Drills to Improve:**
+
+1. **Stance Drills:** Practice maintaining proper stance position.
+2. **Footwork Drills:** Improve lateral and forward movement efficiency.
+3. **Catching Drills:** Enhance glove work and hand positioning.
+4. **Reaction Drills:** Improve reaction time and anticipation.
+5. **Balance Drills:** Enhance stability during movements.
+"""
+    else:  # Default to bowler for backward compatibility
         report_content = f"""
 Cricket Bowling Analysis Report
 ===============================

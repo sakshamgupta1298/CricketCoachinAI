@@ -11,7 +11,7 @@ import { PremiumCard } from '../../src/components/ui/PremiumCard';
 import { useUpload } from '../../src/context/UploadContext';
 import apiService from '../../src/services/api';
 import { borderRadius, colors, spacing } from '../../src/theme';
-import { BowlerType, PlayerSide, PlayerType, UploadFormData } from '../../src/types';
+import { BowlerType, KeepingType, PlayerSide, PlayerType, UploadFormData } from '../../src/types';
 import { getResponsiveFontSize, getResponsiveSize } from '../../src/utils/responsive';
 
 export default function UploadScreen() {
@@ -21,6 +21,7 @@ export default function UploadScreen() {
   const [playerType, setPlayerType] = useState<PlayerType>('batsman');
   const [playerSide, setPlayerSide] = useState<PlayerSide>('right');
   const [bowlerType, setBowlerType] = useState<BowlerType>('fast_bowler');
+  const [keepingType, setKeepingType] = useState<KeepingType>('standing_up');
   const [shotType, setShotType] = useState<string>('');
   const [customShotType, setCustomShotType] = useState<string>('');
   const [shotTypeMenuVisible, setShotTypeMenuVisible] = useState(false);
@@ -146,9 +147,12 @@ export default function UploadScreen() {
           formData.shot_type = shotType;
         }
         console.log('📋 [UPLOAD] Shot type being sent:', formData.shot_type);
-      } else {
+      } else if (playerType === 'bowler') {
         formData.bowler_side = playerSide;
         formData.bowler_type = bowlerType;
+      } else if (playerType === 'keeper') {
+        formData.keeper_side = playerSide;
+        formData.keeping_type = keepingType;
       }
 
       // Start background upload - this will continue even if app goes to background
@@ -238,6 +242,17 @@ export default function UploadScreen() {
                   <RadioButton value="bowler" />
                   <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>Bowler</Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.radioOption,
+                    playerType === 'keeper' && { backgroundColor: theme.colors.primaryContainer }
+                  ]}
+                  onPress={() => setPlayerType('keeper')}
+                  activeOpacity={0.7}
+                >
+                  <RadioButton value="keeper" />
+                  <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>Keeper</Text>
+                </TouchableOpacity>
               </View>
             </RadioButton.Group>
           </PremiumCard>
@@ -247,7 +262,7 @@ export default function UploadScreen() {
         <Animated.View entering={FadeInUp.delay(300).springify()}>
           <PremiumCard variant="elevated" padding="large" style={styles.card}>
             <Text style={[styles.cardTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(17) }]}>
-              {playerType === 'batsman' ? 'Batting Side' : 'Bowling Side'}
+              {playerType === 'batsman' ? 'Batting Side' : playerType === 'bowler' ? 'Bowling Side' : 'Keeping Side'}
             </Text>
             <RadioButton.Group onValueChange={value => setPlayerSide(value as PlayerSide)} value={playerSide}>
               <View style={styles.radioGroup}>
@@ -387,6 +402,65 @@ export default function UploadScreen() {
                   >
                     <RadioButton value="spin_bowler" />
                     <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>Spin Bowler</Text>
+                  </TouchableOpacity>
+                </View>
+              </RadioButton.Group>
+            </PremiumCard>
+          </Animated.View>
+        )}
+
+        {/* Keeping Type Selection */}
+        {playerType === 'keeper' && (
+          <Animated.View entering={FadeInUp.delay(400).springify()}>
+            <PremiumCard variant="elevated" padding="large" style={styles.card}>
+            <Text style={[styles.cardTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(17) }]}>
+              Keeping Type
+            </Text>
+              <RadioButton.Group onValueChange={value => setKeepingType(value as KeepingType)} value={keepingType}>
+                <View style={styles.radioGroup}>
+                  <TouchableOpacity
+                    style={[
+                      styles.radioOption,
+                      keepingType === 'standing_up' && { backgroundColor: theme.colors.primaryContainer }
+                    ]}
+                    onPress={() => setKeepingType('standing_up')}
+                    activeOpacity={0.7}
+                  >
+                    <RadioButton value="standing_up" />
+                    <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>Standing Up</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.radioOption,
+                      keepingType === 'standing_back' && { backgroundColor: theme.colors.primaryContainer }
+                    ]}
+                    onPress={() => setKeepingType('standing_back')}
+                    activeOpacity={0.7}
+                  >
+                    <RadioButton value="standing_back" />
+                    <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>Standing Back</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.radioOption,
+                      keepingType === 'diving_catch' && { backgroundColor: theme.colors.primaryContainer }
+                    ]}
+                    onPress={() => setKeepingType('diving_catch')}
+                    activeOpacity={0.7}
+                  >
+                    <RadioButton value="diving_catch" />
+                    <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>Diving Catch</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.radioOption,
+                      keepingType === 'stumping' && { backgroundColor: theme.colors.primaryContainer }
+                    ]}
+                    onPress={() => setKeepingType('stumping')}
+                    activeOpacity={0.7}
+                  >
+                    <RadioButton value="stumping" />
+                    <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>Stumping</Text>
                   </TouchableOpacity>
                 </View>
               </RadioButton.Group>
