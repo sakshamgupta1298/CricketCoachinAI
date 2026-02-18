@@ -22,6 +22,7 @@ export default function UploadScreen() {
   const [playerSide, setPlayerSide] = useState<PlayerSide>('right');
   const [bowlerType, setBowlerType] = useState<BowlerType>('fast_bowler');
   const [keepingType, setKeepingType] = useState<KeepingType>('standing_up');
+  const [keepingTypeMenuVisible, setKeepingTypeMenuVisible] = useState(false);
   const [shotType, setShotType] = useState<string>('');
   const [customShotType, setCustomShotType] = useState<string>('');
   const [shotTypeMenuVisible, setShotTypeMenuVisible] = useState(false);
@@ -67,6 +68,18 @@ export default function UploadScreen() {
     };
     return displayNames[shot] || shot.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   };
+
+  const getKeepingTypeDisplayName = (type: string) => {
+    const displayNames: Record<string, string> = {
+      'standing_up': 'Standing Up',
+      'standing_back': 'Standing Back',
+      'diving_catch': 'Diving Catch',
+      'stumping': 'Stumping'
+    };
+    return displayNames[type] || type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  };
+
+  const keepingTypes: KeepingType[] = ['standing_up', 'standing_back', 'diving_catch', 'stumping'];
 
   // Reset shot type when player type changes
   React.useEffect(() => {
@@ -219,40 +232,74 @@ export default function UploadScreen() {
               Player Type
             </Text>
             <RadioButton.Group onValueChange={value => setPlayerType(value as PlayerType)} value={playerType}>
-              <View style={styles.radioGroup}>
-                <TouchableOpacity
-                  style={[
-                    styles.radioOption,
-                    playerType === 'batsman' && { backgroundColor: theme.colors.primaryContainer }
-                  ]}
-                  onPress={() => setPlayerType('batsman')}
-                  activeOpacity={0.7}
-                >
-                  <RadioButton value="batsman" />
-                  <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>Batsman</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.radioOption,
-                    playerType === 'bowler' && { backgroundColor: theme.colors.primaryContainer }
-                  ]}
-                  onPress={() => setPlayerType('bowler')}
-                  activeOpacity={0.7}
-                >
-                  <RadioButton value="bowler" />
-                  <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>Bowler</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.radioOption,
-                    playerType === 'keeper' && { backgroundColor: theme.colors.primaryContainer }
-                  ]}
-                  onPress={() => setPlayerType('keeper')}
-                  activeOpacity={0.7}
-                >
-                  <RadioButton value="keeper" />
-                  <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>Keeper</Text>
-                </TouchableOpacity>
+              <View style={styles.playerTypeRadioGroup}>
+                <View style={styles.playerTypeRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.radioOption,
+                      styles.playerTypeRadioOption,
+                      playerType === 'batsman' && { backgroundColor: theme.colors.primaryContainer }
+                    ]}
+                    onPress={() => setPlayerType('batsman')}
+                    activeOpacity={0.7}
+                  >
+                    <RadioButton value="batsman" />
+                    <Text 
+                      style={[
+                        styles.radioLabel, 
+                        styles.playerTypeRadioLabel,
+                        { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }
+                      ]}
+                      numberOfLines={1}
+                    >
+                      Batsman
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.radioOption,
+                      styles.playerTypeRadioOption,
+                      playerType === 'bowler' && { backgroundColor: theme.colors.primaryContainer }
+                    ]}
+                    onPress={() => setPlayerType('bowler')}
+                    activeOpacity={0.7}
+                  >
+                    <RadioButton value="bowler" />
+                    <Text 
+                      style={[
+                        styles.radioLabel, 
+                        styles.playerTypeRadioLabel,
+                        { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }
+                      ]}
+                      numberOfLines={1}
+                    >
+                      Bowler
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.playerTypeRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.radioOption,
+                      styles.playerTypeRadioOption,
+                      playerType === 'keeper' && { backgroundColor: theme.colors.primaryContainer }
+                    ]}
+                    onPress={() => setPlayerType('keeper')}
+                    activeOpacity={0.7}
+                  >
+                    <RadioButton value="keeper" />
+                    <Text 
+                      style={[
+                        styles.radioLabel, 
+                        styles.playerTypeRadioLabel,
+                        { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }
+                      ]}
+                      numberOfLines={1}
+                    >
+                      Keeper
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </RadioButton.Group>
           </PremiumCard>
@@ -413,57 +460,57 @@ export default function UploadScreen() {
         {playerType === 'keeper' && (
           <Animated.View entering={FadeInUp.delay(400).springify()}>
             <PremiumCard variant="elevated" padding="large" style={styles.card}>
-            <Text style={[styles.cardTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(17) }]}>
-              Keeping Type
-            </Text>
-              <RadioButton.Group onValueChange={value => setKeepingType(value as KeepingType)} value={keepingType}>
-                <View style={styles.radioGroup}>
+              <Text style={[styles.cardTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(17) }]}>
+                Keeping Type
+              </Text>
+              
+              <Menu
+                visible={keepingTypeMenuVisible}
+                onDismiss={() => setKeepingTypeMenuVisible(false)}
+                anchor={
                   <TouchableOpacity
-                    style={[
-                      styles.radioOption,
-                      keepingType === 'standing_up' && { backgroundColor: theme.colors.primaryContainer }
-                    ]}
-                    onPress={() => setKeepingType('standing_up')}
+                    style={[styles.dropdownButton, { 
+                      backgroundColor: theme.colors.surfaceVariant,
+                      borderColor: theme.colors.outline 
+                    }]}
+                    onPress={() => setKeepingTypeMenuVisible(true)}
                     activeOpacity={0.7}
                   >
-                    <RadioButton value="standing_up" />
-                    <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>Standing Up</Text>
+                    <Text style={[styles.dropdownText, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>
+                      {keepingType ? getKeepingTypeDisplayName(keepingType) : 'Select Keeping Type'}
+                    </Text>
+                    <Text style={[styles.dropdownIcon, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(10) }]}>
+                      ▼
+                    </Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.radioOption,
-                      keepingType === 'standing_back' && { backgroundColor: theme.colors.primaryContainer }
-                    ]}
-                    onPress={() => setKeepingType('standing_back')}
-                    activeOpacity={0.7}
-                  >
-                    <RadioButton value="standing_back" />
-                    <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>Standing Back</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.radioOption,
-                      keepingType === 'diving_catch' && { backgroundColor: theme.colors.primaryContainer }
-                    ]}
-                    onPress={() => setKeepingType('diving_catch')}
-                    activeOpacity={0.7}
-                  >
-                    <RadioButton value="diving_catch" />
-                    <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>Diving Catch</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.radioOption,
-                      keepingType === 'stumping' && { backgroundColor: theme.colors.primaryContainer }
-                    ]}
-                    onPress={() => setKeepingType('stumping')}
-                    activeOpacity={0.7}
-                  >
-                    <RadioButton value="stumping" />
-                    <Text style={[styles.radioLabel, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>Stumping</Text>
-                  </TouchableOpacity>
-                </View>
-              </RadioButton.Group>
+                }
+              >
+                {keepingTypes.map((type) => (
+                  <Menu.Item
+                    key={type}
+                    onPress={() => {
+                      setKeepingType(type);
+                      setKeepingTypeMenuVisible(false);
+                    }}
+                    title={getKeepingTypeDisplayName(type)}
+                  />
+                ))}
+              </Menu>
+
+              {/* Clear Selection Button */}
+              {keepingType && (
+                <TouchableOpacity
+                  onPress={() => {
+                    setKeepingType('standing_up');
+                  }}
+                  style={styles.clearButtonContainer}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.clearButtonText, { color: theme.colors.error, fontSize: getResponsiveFontSize(12) }]}>
+                    Clear Selection
+                  </Text>
+                </TouchableOpacity>
+              )}
             </PremiumCard>
           </Animated.View>
         )}
@@ -603,6 +650,43 @@ const styles = StyleSheet.create({
   radioLabel: {
     marginLeft: getResponsiveSize(spacing.xs),
     // fontSize set dynamically
+  },
+  playerTypeRadioGroup: {
+    flexDirection: 'column',
+    gap: getResponsiveSize(spacing.sm),
+    margin: 0,
+    padding: 0,
+  },
+  playerTypeRow: {
+    flexDirection: 'row',
+    gap: getResponsiveSize(spacing.sm),
+    margin: 0,
+    padding: 0,
+  },
+  playerTypeRadioOption: {
+    flex: 1,
+    paddingVertical: getResponsiveSize(spacing.sm),
+    paddingHorizontal: getResponsiveSize(spacing.sm),
+    margin: 0,
+  },
+  playerTypeRadioLabel: {
+    flexShrink: 1,
+  },
+  wrappedRadioGroup: {
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  wrappedRadioOption: {
+    // 2 columns layout
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: '48%',
+    justifyContent: 'center',
+  },
+  centeredRadioLabel: {
+    flexShrink: 1,
+    flexWrap: 'wrap',
+    textAlign: 'center',
   },
   uploadButton: {
     borderWidth: 2,
