@@ -1084,7 +1084,7 @@ def get_feedback_from_gpt_for_bowling(keypoint_csv_path, bowler_type='fast_bowle
     logger.info("Stage 1: Running biomechanical analysis for bowling (Prompt A)...")
     try:
         response_A = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-2.5-pro",
             contents=[prompt_A],
             config={
             "temperature": 0,
@@ -1606,7 +1606,7 @@ def get_feedback_from_gpt_for_keeping(keypoint_csv_path, keeping_type='standing_
     logger.info("Stage 1: Running biomechanical analysis for keeping (Prompt A)...")
     try:
         response_A = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-2.5-pro",
             contents=[prompt_A],
             config={
             "temperature": 0,
@@ -2526,7 +2526,7 @@ def get_feedback_from_gpt(action_type, keypoint_csv_path, player_level='intermed
     logger.info("Stage 1: Running biomechanical analysis (Prompt A)...")
     try:
         response_A = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-2.5-pro",
             contents=[prompt_A],
             config={
             "temperature": 0,
@@ -2936,7 +2936,7 @@ Example JSON structure:
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-2.5-pro",
             contents=[prompt]
         )
         raw = response.text
@@ -4123,7 +4123,7 @@ RULES
                 nonlocal response
                 try:
                     response = client.models.generate_content(
-                        model="gemini-2.5-flash",
+                        model="gemini-2.5-pro",
                         contents=[prompt]
                     )
                 except Exception as e:
