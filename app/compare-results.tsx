@@ -83,8 +83,8 @@ export default function CompareResultsScreen() {
     );
   }
 
-  const video1Name = params.video1 as string || comparison.video1_filename || 'Video 1';
-  const video2Name = params.video2 as string || comparison.video2_filename || 'Video 2';
+  const video1Name = 'Previous';
+  const video2Name = 'Current';
 
   const getWinnerColor = (winner: string) => {
     if (winner === 'video1') return colors.cricket.green;
@@ -106,7 +106,7 @@ export default function CompareResultsScreen() {
           Comparison Results
         </Text>
         <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
-          {video1Name} vs {video2Name}
+          Previous vs Current Performance
         </Text>
       </Surface>
 
@@ -125,7 +125,7 @@ export default function CompareResultsScreen() {
             <View style={styles.scoreContainer}>
               <View style={styles.scoreItem}>
                 <Text style={[styles.scoreLabel, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
-                  {video1Name} (Previous)
+                  Previous
                 </Text>
                 <Text style={[styles.scoreValue, { color: colors.cricket.green, fontSize: getResponsiveFontSize(32) }]}>
                   {comparison.overall_comparison.video1_score}%
@@ -139,7 +139,7 @@ export default function CompareResultsScreen() {
               
               <View style={styles.scoreItem}>
                 <Text style={[styles.scoreLabel, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
-                  {video2Name} (Current)
+                  Current
                 </Text>
                 <Text style={[styles.scoreValue, { color: colors.cricket.blue, fontSize: getResponsiveFontSize(32) }]}>
                   {comparison.overall_comparison.video2_score}%
@@ -153,31 +153,43 @@ export default function CompareResultsScreen() {
             </View>
 
             {/* Improvement Percentage */}
-            {comparison.overall_comparison.improvement_percentage !== undefined && (
-              <View style={styles.improvementContainer}>
-                <Text style={[styles.improvementLabel, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
-                  Improvement from Previous to Current:
-                </Text>
-                <View style={styles.improvementValueContainer}>
-                  <Text style={[
+            <View style={styles.improvementContainer}>
+              <Text style={[styles.improvementLabel, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(13) }]}>
+                Improvement from Previous to Current:
+              </Text>
+              <View style={styles.improvementValueWrapper}>
+                <Text 
+                  style={[
                     styles.improvementValue, 
                     { 
-                      color: comparison.overall_comparison.improvement_percentage >= 0 ? colors.cricket.green : colors.cricket.orange,
-                      fontSize: getResponsiveFontSize(36),
-                      fontWeight: 'bold'
+                      color: (comparison.overall_comparison.improvement_percentage ?? 
+                        ((comparison.overall_comparison.video2_score - comparison.overall_comparison.video1_score) / Math.max(comparison.overall_comparison.video1_score, 1)) * 100) >= 0 
+                        ? colors.cricket.green 
+                        : colors.cricket.orange,
+                      fontSize: getResponsiveFontSize(32),
+                      fontWeight: 'bold',
                     }
-                  ]}>
-                    {comparison.overall_comparison.improvement_percentage >= 0 ? '+' : ''}
-                    {comparison.overall_comparison.improvement_percentage.toFixed(1)}%
-                  </Text>
-                </View>
-                {comparison.overall_comparison.improvement_summary && (
-                  <Text style={[styles.improvementSummary, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>
-                    {comparison.overall_comparison.improvement_summary}
-                  </Text>
-                )}
+                  ]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit={true}
+                  minimumFontScale={0.7}
+                >
+                  {(() => {
+                    const improvementPercentage = comparison.overall_comparison.improvement_percentage !== undefined
+                      ? comparison.overall_comparison.improvement_percentage
+                      : comparison.overall_comparison.video1_score > 0
+                        ? ((comparison.overall_comparison.video2_score - comparison.overall_comparison.video1_score) / comparison.overall_comparison.video1_score) * 100
+                        : comparison.overall_comparison.video2_score - comparison.overall_comparison.video1_score;
+                    return `${improvementPercentage >= 0 ? '+' : ''}${improvementPercentage.toFixed(1)}%`;
+                  })()}
+                </Text>
               </View>
-            )}
+              {comparison.overall_comparison.improvement_summary && (
+                <Text style={[styles.improvementSummary, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>
+                  {comparison.overall_comparison.improvement_summary}
+                </Text>
+              )}
+            </View>
 
             <View style={styles.winnerContainer}>
               <Chip
@@ -186,9 +198,9 @@ export default function CompareResultsScreen() {
                 textStyle={{ color: 'white', fontWeight: 'bold' }}
               >
                 {comparison.overall_comparison.winner === 'video1' 
-                  ? `${video1Name} performs better`
+                  ? 'Previous performs better'
                   : comparison.overall_comparison.winner === 'video2'
-                  ? `${video2Name} performs better`
+                  ? 'Current performs better'
                   : 'Similar Performance'}
               </Chip>
             </View>
@@ -521,20 +533,29 @@ const styles = StyleSheet.create({
   improvementContainer: {
     marginTop: getResponsiveSize(spacing.md),
     marginBottom: getResponsiveSize(spacing.md),
-    padding: getResponsiveSize(spacing.md),
+    paddingVertical: getResponsiveSize(spacing.md),
+    paddingHorizontal: getResponsiveSize(spacing.md),
     backgroundColor: '#F5F5F5',
     borderRadius: borderRadius.md,
     alignItems: 'center',
+    alignSelf: 'stretch',
   },
   improvementLabel: {
     marginBottom: getResponsiveSize(spacing.sm),
     textAlign: 'center',
+    width: '100%',
+    paddingHorizontal: getResponsiveSize(spacing.xs),
   },
-  improvementValueContainer: {
+  improvementValueWrapper: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginVertical: getResponsiveSize(spacing.sm),
+    paddingHorizontal: getResponsiveSize(spacing.md),
   },
   improvementValue: {
     textAlign: 'center',
+    includeFontPadding: false,
   },
   improvementSummary: {
     marginTop: getResponsiveSize(spacing.sm),

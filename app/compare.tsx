@@ -126,11 +126,29 @@ export default function CompareScreen() {
           }
         });
       } else {
-        Alert.alert('Error', response.error || 'Failed to compare videos');
+        const errorMessage = response.error || 'Failed to compare videos';
+        Alert.alert(
+          'Comparison Error',
+          errorMessage,
+          [
+            { text: 'OK', style: 'default' },
+            ...(errorMessage.includes('timeout') || errorMessage.includes('unavailable') 
+              ? [{ text: 'Retry', onPress: () => handleCompare() }]
+              : [])
+          ]
+        );
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error comparing videos:', error);
-      Alert.alert('Error', 'Failed to compare videos. Please try again.');
+      const errorMessage = error?.message || 'Failed to compare videos. Please check your connection and try again.';
+      Alert.alert(
+        'Network Error',
+        errorMessage,
+        [
+          { text: 'OK', style: 'default' },
+          { text: 'Retry', onPress: () => handleCompare() }
+        ]
+      );
     } finally {
       setComparing(false);
     }
