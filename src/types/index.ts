@@ -84,10 +84,12 @@ export interface BiomechanicalFeature {
 }
 
 export interface UploadFormData {
-  player_type: 'batsman' | 'bowler';
+  player_type: 'batsman' | 'bowler' | 'keeper';
   batter_side?: 'left' | 'right';
   bowler_side?: 'left' | 'right';
+  keeper_side?: 'left' | 'right';
   bowler_type?: 'fast_bowler' | 'spin_bowler';
+  keeping_type?: 'standing_up' | 'standing_back' | 'diving_catch' | 'stumping';
   shot_type?: string; // Optional: if provided, backend will skip shot detection
   video_uri: string;
   video_name: string;
@@ -155,9 +157,10 @@ export interface UploadState {
   uploadHistory: HistoryItem[];
 }
 
-export type PlayerType = 'batsman' | 'bowler';
+export type PlayerType = 'batsman' | 'bowler' | 'keeper';
 export type PlayerSide = 'left' | 'right';
 export type BowlerType = 'fast_bowler' | 'spin_bowler';
+export type KeepingType = 'standing_up' | 'standing_back' | 'diving_catch' | 'stumping';
 
 export interface VideoInfo {
   uri: string;
