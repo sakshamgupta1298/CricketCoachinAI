@@ -150,11 +150,21 @@ def generate_jwt_token(user_id, username):
 def verify_jwt_token(token):
     """Verify JWT token and return user data"""
     try:
+        if not token:
+            logger.warning("❌ [AUTH] Empty token provided to verify_jwt_token")
+            return None
+        
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        logger.debug(f"✅ [AUTH] Token verified successfully for user: {payload.get('username', 'unknown')}")
         return payload
     except jwt.ExpiredSignatureError:
+        logger.warning("❌ [AUTH] Token has expired")
         return None
-    except jwt.InvalidTokenError:
+    except jwt.InvalidTokenError as e:
+        logger.warning(f"❌ [AUTH] Invalid token: {str(e)}")
+        return None
+    except Exception as e:
+        logger.error(f"❌ [AUTH] Unexpected error verifying token: {str(e)}", exc_info=True)
         return None
 
 # Authentication Decorator
@@ -164,23 +174,39 @@ def require_auth(f):
         auth_header = request.headers.get('Authorization')
         
         if not auth_header:
+            logger.warning(f"❌ [AUTH] Authorization header missing for {request.path}")
             return jsonify({'error': 'Authorization header missing'}), 401
         
         try:
-            token = auth_header.split(' ')[1]  # Bearer <token>
+            # Extract token from "Bearer <token>" format
+            parts = auth_header.split(' ')
+            if len(parts) != 2 or parts[0].lower() != 'bearer':
+                logger.warning(f"❌ [AUTH] Invalid authorization header format for {request.path}")
+                return jsonify({'error': 'Invalid authorization header format. Expected: Bearer <token>'}), 401
+            
+            token = parts[1]
+            if not token:
+                logger.warning(f"❌ [AUTH] Empty token provided for {request.path}")
+                return jsonify({'error': 'Token is required'}), 401
+            
             payload = verify_jwt_token(token)
             
             if not payload:
-                return jsonify({'error': 'Invalid or expired token'}), 401
+                logger.warning(f"❌ [AUTH] Invalid or expired token for {request.path}")
+                return jsonify({'error': 'Invalid or expired token. Please login again.'}), 401
             
             # Add user info to request
             request.user = payload
+            logger.debug(f"✅ [AUTH] Authenticated user {payload.get('username', 'unknown')} for {request.path}")
             return f(*args, **kwargs)
             
         except IndexError:
+            logger.error(f"❌ [AUTH] IndexError parsing authorization header for {request.path}: {auth_header[:20] if auth_header else 'None'}...")
             return jsonify({'error': 'Invalid authorization header format'}), 401
         except Exception as e:
-            return jsonify({'error': 'Authentication failed'}), 401
+            logger.error(f"❌ [AUTH] Unexpected error during authentication for {request.path}: {str(e)}", exc_info=True)
+            # Don't expose internal error details to client for security
+            return jsonify({'error': 'Authentication failed. Please try logging in again.'}), 401
     
     return decorated_function
 
