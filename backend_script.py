@@ -59,20 +59,6 @@ logger.info("CrickCoach Backend Application Starting")
 logger.info(f"Log file: {log_filename}")
 logger.info("=" * 80)
 
-# Try to import YOLO - make it optional to prevent server crashes if not installed
-try:
-    from ultralytics import YOLO
-    YOLO_AVAILABLE = True
-    logger.info("✅ YOLO imported successfully - ball detection enabled")
-except ImportError as e:
-    logger.warning(f"⚠️ YOLO not available: {e}. Ball detection will be skipped.")
-    YOLO_AVAILABLE = False
-    YOLO = None
-except Exception as e:
-    logger.warning(f"⚠️ YOLO import error: {e}. Ball detection will be skipped.")
-    YOLO_AVAILABLE = False
-    YOLO = None
-
 app = Flask(__name__)
 app.secret_key = 'cricket_shot_prediction_secret_key'
 
@@ -150,21 +136,11 @@ def generate_jwt_token(user_id, username):
 def verify_jwt_token(token):
     """Verify JWT token and return user data"""
     try:
-        if not token:
-            logger.warning("❌ [AUTH] Empty token provided to verify_jwt_token")
-            return None
-        
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
-        logger.debug(f"✅ [AUTH] Token verified successfully for user: {payload.get('username', 'unknown')}")
         return payload
     except jwt.ExpiredSignatureError:
-        logger.warning("❌ [AUTH] Token has expired")
         return None
-    except jwt.InvalidTokenError as e:
-        logger.warning(f"❌ [AUTH] Invalid token: {str(e)}")
-        return None
-    except Exception as e:
-        logger.error(f"❌ [AUTH] Unexpected error verifying token: {str(e)}", exc_info=True)
+    except jwt.InvalidTokenError:
         return None
 
 # Authentication Decorator
@@ -174,39 +150,23 @@ def require_auth(f):
         auth_header = request.headers.get('Authorization')
         
         if not auth_header:
-            logger.warning(f"❌ [AUTH] Authorization header missing for {request.path}")
             return jsonify({'error': 'Authorization header missing'}), 401
         
         try:
-            # Extract token from "Bearer <token>" format
-            parts = auth_header.split(' ')
-            if len(parts) != 2 or parts[0].lower() != 'bearer':
-                logger.warning(f"❌ [AUTH] Invalid authorization header format for {request.path}")
-                return jsonify({'error': 'Invalid authorization header format. Expected: Bearer <token>'}), 401
-            
-            token = parts[1]
-            if not token:
-                logger.warning(f"❌ [AUTH] Empty token provided for {request.path}")
-                return jsonify({'error': 'Token is required'}), 401
-            
+            token = auth_header.split(' ')[1]  # Bearer <token>
             payload = verify_jwt_token(token)
             
             if not payload:
-                logger.warning(f"❌ [AUTH] Invalid or expired token for {request.path}")
-                return jsonify({'error': 'Invalid or expired token. Please login again.'}), 401
+                return jsonify({'error': 'Invalid or expired token'}), 401
             
             # Add user info to request
             request.user = payload
-            logger.debug(f"✅ [AUTH] Authenticated user {payload.get('username', 'unknown')} for {request.path}")
             return f(*args, **kwargs)
             
         except IndexError:
-            logger.error(f"❌ [AUTH] IndexError parsing authorization header for {request.path}: {auth_header[:20] if auth_header else 'None'}...")
             return jsonify({'error': 'Invalid authorization header format'}), 401
         except Exception as e:
-            logger.error(f"❌ [AUTH] Unexpected error during authentication for {request.path}: {str(e)}", exc_info=True)
-            # Don't expose internal error details to client for security
-            return jsonify({'error': 'Authentication failed. Please try logging in again.'}), 401
+            return jsonify({'error': 'Authentication failed'}), 401
     
     return decorated_function
 
@@ -510,12 +470,6 @@ def process_analysis_job(job_id, user_id, username, filepath, filename, form, ex
         # Downscale high-resolution videos to prevent OOM kills on low-memory servers
         analysis_video_path = _downscale_video_for_memory_efficiency(analysis_video_path, job_id=job_id, user_id=str(user_id))
 
-        # Check for ball in video before proceeding with analysis
-        ball_detected = detect_ball_in_video(analysis_video_path, job_id=job_id)
-        if not ball_detected:
-            error_message = "No ball detected in the video. This does not appear to be a cricket video. Please upload a video that contains a cricket ball."
-            raise ValueError(error_message)
-
         if player_type == "batsman":
             shot_type = (form.get("shot_type", "") or "").strip()
             if not shot_type:
@@ -799,115 +753,6 @@ def get_pose_detection_model():
         pose_detection_model = hub.load("https://tfhub.dev/google/movenet/singlepose/thunder/4")
         logger.info("Pose detection model loaded")
     return pose_detection_model
-
-def detect_ball_in_video(video_path, job_id=""):
-    """
-    Use YOLO to detect baseball or sports ball in video.
-    Returns True if ball is found, False otherwise.
-    If YOLO is not available, returns True to allow processing to continue.
-    """
-    # Check if YOLO is available
-    if not YOLO_AVAILABLE or YOLO is None or not callable(YOLO):
-        logger.warning(f"⚠️ [JOB {job_id}] YOLO not available - skipping ball detection and proceeding with analysis")
-        return True  # Allow processing to continue if YOLO is not available
-    
-    try:
-        logger.info(f"🔍 [JOB {job_id}] Checking for ball in video: {video_path}")
-        
-        # Load YOLO model (auto-downloads if not present)
-        try:
-            model = YOLO("yolov8n.pt")
-        except Exception as model_error:
-            logger.error(f"❌ [JOB {job_id}] Failed to load YOLO model: {str(model_error)}", exc_info=True)
-            logger.warning(f"⚠️ [JOB {job_id}] Proceeding with analysis despite YOLO model load failure")
-            return True  # Allow processing to continue
-        
-        # Run detection on video
-        # We'll sample frames to speed up detection
-        cap = None
-        try:
-            cap = cv2.VideoCapture(video_path)
-            if not cap.isOpened():
-                logger.error(f"❌ [JOB {job_id}] Failed to open video file: {video_path}")
-                return True  # Allow processing to continue
-            
-            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            fps = cap.get(cv2.CAP_PROP_FPS) or 30
-            
-            # Sample frames: check every 30 frames (approximately 1 second intervals)
-            frame_skip = max(1, int(fps))
-            frames_to_check = min(30, total_frames // frame_skip)  # Check up to 30 frames
-            
-            ball_detected = False
-            frames_checked = 0
-            frame_idx = 0
-            
-            while frames_checked < frames_to_check:
-                ret, frame = cap.read()
-                if not ret:
-                    break
-                
-                # Only check every Nth frame
-                if frame_idx % frame_skip == 0:
-                    try:
-                        # Run YOLO detection on this frame
-                        results = model(frame, conf=0.25, verbose=False)
-                        
-                        # Check if sports ball (class 32) or baseball is detected
-                        for result in results:
-                            boxes = result.boxes
-                            if boxes is not None:
-                                for box in boxes:
-                                    try:
-                                        # Get class ID
-                                        cls = int(box.cls[0])
-                                        # Class 32 is "sports ball" in COCO dataset
-                                        # This includes cricket ball, baseball, tennis ball, etc.
-                                        if cls == 32:  # sports ball
-                                            confidence = float(box.conf[0])
-                                            if confidence >= 0.25:
-                                                logger.info(f"✅ [JOB {job_id}] Ball detected in frame {frame_idx} with confidence {confidence:.2f}")
-                                                ball_detected = True
-                                                break
-                                    except Exception as box_error:
-                                        logger.debug(f"⚠️ [JOB {job_id}] Error processing box in frame {frame_idx}: {str(box_error)}")
-                                        continue
-                            
-                            if ball_detected:
-                                break
-                    except Exception as frame_error:
-                        logger.debug(f"⚠️ [JOB {job_id}] Error processing frame {frame_idx}: {str(frame_error)}")
-                        # Continue to next frame
-                    
-                    frames_checked += 1
-                
-                if ball_detected:
-                    break
-                
-                frame_idx += 1
-        finally:
-            if cap is not None:
-                cap.release()
-        
-        if ball_detected:
-            logger.info(f"✅ [JOB {job_id}] Ball detected in video - proceeding with analysis")
-            return True
-        else:
-            logger.warning(f"⚠️ [JOB {job_id}] No ball detected in video - this may not be a cricket video")
-            return False
-            
-    except Exception as e:
-        logger.error(f"❌ [JOB {job_id}] Error during ball detection: {str(e)}", exc_info=True)
-        # If detection fails, we'll proceed anyway to avoid blocking legitimate videos
-        # (ball might be too small, occluded, or detection model might have issues)
-        logger.warning(f"⚠️ [JOB {job_id}] Ball detection failed, proceeding with analysis anyway")
-        return True  # Return True to allow processing to continue
-    except KeyboardInterrupt:
-        logger.warning(f"⚠️ [JOB {job_id}] Ball detection interrupted")
-        return True  # Allow processing to continue
-    except SystemExit:
-        logger.warning(f"⚠️ [JOB {job_id}] Ball detection system exit")
-        return True  # Allow processing to continue
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
