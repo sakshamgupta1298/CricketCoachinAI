@@ -34,7 +34,6 @@ import random
 import string
 import subprocess
 import shutil
-from ultralytics import YOLO
 
 # ==================== LOGGING CONFIGURATION ====================
 # Create logging directory if it doesn't exist
@@ -59,6 +58,20 @@ logger.info("=" * 80)
 logger.info("CrickCoach Backend Application Starting")
 logger.info(f"Log file: {log_filename}")
 logger.info("=" * 80)
+
+# Try to import YOLO - make it optional to prevent server crashes if not installed
+try:
+    from ultralytics import YOLO
+    YOLO_AVAILABLE = True
+    logger.info("✅ YOLO imported successfully - ball detection enabled")
+except ImportError as e:
+    logger.warning(f"⚠️ YOLO not available: {e}. Ball detection will be skipped.")
+    YOLO_AVAILABLE = False
+    YOLO = None
+except Exception as e:
+    logger.warning(f"⚠️ YOLO import error: {e}. Ball detection will be skipped.")
+    YOLO_AVAILABLE = False
+    YOLO = None
 
 app = Flask(__name__)
 app.secret_key = 'cricket_shot_prediction_secret_key'
@@ -765,67 +778,90 @@ def detect_ball_in_video(video_path, job_id=""):
     """
     Use YOLO to detect baseball or sports ball in video.
     Returns True if ball is found, False otherwise.
+    If YOLO is not available, returns True to allow processing to continue.
     """
+    # Check if YOLO is available
+    if not YOLO_AVAILABLE or YOLO is None or not callable(YOLO):
+        logger.warning(f"⚠️ [JOB {job_id}] YOLO not available - skipping ball detection and proceeding with analysis")
+        return True  # Allow processing to continue if YOLO is not available
+    
     try:
         logger.info(f"🔍 [JOB {job_id}] Checking for ball in video: {video_path}")
         
         # Load YOLO model (auto-downloads if not present)
-        model = YOLO("yolov8n.pt")
+        try:
+            model = YOLO("yolov8n.pt")
+        except Exception as model_error:
+            logger.error(f"❌ [JOB {job_id}] Failed to load YOLO model: {str(model_error)}", exc_info=True)
+            logger.warning(f"⚠️ [JOB {job_id}] Proceeding with analysis despite YOLO model load failure")
+            return True  # Allow processing to continue
         
         # Run detection on video
         # We'll sample frames to speed up detection
-        cap = cv2.VideoCapture(video_path)
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        fps = cap.get(cv2.CAP_PROP_FPS) or 30
-        cap.release()
-        
-        # Sample frames: check every 30 frames (approximately 1 second intervals)
-        frame_skip = max(1, int(fps))
-        frames_to_check = min(30, total_frames // frame_skip)  # Check up to 30 frames
-        
-        ball_detected = False
-        frames_checked = 0
-        
-        cap = cv2.VideoCapture(video_path)
-        frame_idx = 0
-        
-        while frames_checked < frames_to_check:
-            ret, frame = cap.read()
-            if not ret:
-                break
+        cap = None
+        try:
+            cap = cv2.VideoCapture(video_path)
+            if not cap.isOpened():
+                logger.error(f"❌ [JOB {job_id}] Failed to open video file: {video_path}")
+                return True  # Allow processing to continue
             
-            # Only check every Nth frame
-            if frame_idx % frame_skip == 0:
-                # Run YOLO detection on this frame
-                results = model(frame, conf=0.25, verbose=False)
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            fps = cap.get(cv2.CAP_PROP_FPS) or 30
+            
+            # Sample frames: check every 30 frames (approximately 1 second intervals)
+            frame_skip = max(1, int(fps))
+            frames_to_check = min(30, total_frames // frame_skip)  # Check up to 30 frames
+            
+            ball_detected = False
+            frames_checked = 0
+            frame_idx = 0
+            
+            while frames_checked < frames_to_check:
+                ret, frame = cap.read()
+                if not ret:
+                    break
                 
-                # Check if sports ball (class 32) or baseball is detected
-                for result in results:
-                    boxes = result.boxes
-                    if boxes is not None:
-                        for box in boxes:
-                            # Get class ID
-                            cls = int(box.cls[0])
-                            # Class 32 is "sports ball" in COCO dataset
-                            # This includes cricket ball, baseball, tennis ball, etc.
-                            if cls == 32:  # sports ball
-                                confidence = float(box.conf[0])
-                                if confidence >= 0.25:
-                                    logger.info(f"✅ [JOB {job_id}] Ball detected in frame {frame_idx} with confidence {confidence:.2f}")
-                                    ball_detected = True
-                                    break
+                # Only check every Nth frame
+                if frame_idx % frame_skip == 0:
+                    try:
+                        # Run YOLO detection on this frame
+                        results = model(frame, conf=0.25, verbose=False)
+                        
+                        # Check if sports ball (class 32) or baseball is detected
+                        for result in results:
+                            boxes = result.boxes
+                            if boxes is not None:
+                                for box in boxes:
+                                    try:
+                                        # Get class ID
+                                        cls = int(box.cls[0])
+                                        # Class 32 is "sports ball" in COCO dataset
+                                        # This includes cricket ball, baseball, tennis ball, etc.
+                                        if cls == 32:  # sports ball
+                                            confidence = float(box.conf[0])
+                                            if confidence >= 0.25:
+                                                logger.info(f"✅ [JOB {job_id}] Ball detected in frame {frame_idx} with confidence {confidence:.2f}")
+                                                ball_detected = True
+                                                break
+                                    except Exception as box_error:
+                                        logger.debug(f"⚠️ [JOB {job_id}] Error processing box in frame {frame_idx}: {str(box_error)}")
+                                        continue
+                            
+                            if ball_detected:
+                                break
+                    except Exception as frame_error:
+                        logger.debug(f"⚠️ [JOB {job_id}] Error processing frame {frame_idx}: {str(frame_error)}")
+                        # Continue to next frame
                     
-                    if ball_detected:
-                        break
+                    frames_checked += 1
                 
-                frames_checked += 1
-            
-            if ball_detected:
-                break
-            
-            frame_idx += 1
-        
-        cap.release()
+                if ball_detected:
+                    break
+                
+                frame_idx += 1
+        finally:
+            if cap is not None:
+                cap.release()
         
         if ball_detected:
             logger.info(f"✅ [JOB {job_id}] Ball detected in video - proceeding with analysis")
@@ -840,6 +876,12 @@ def detect_ball_in_video(video_path, job_id=""):
         # (ball might be too small, occluded, or detection model might have issues)
         logger.warning(f"⚠️ [JOB {job_id}] Ball detection failed, proceeding with analysis anyway")
         return True  # Return True to allow processing to continue
+    except KeyboardInterrupt:
+        logger.warning(f"⚠️ [JOB {job_id}] Ball detection interrupted")
+        return True  # Allow processing to continue
+    except SystemExit:
+        logger.warning(f"⚠️ [JOB {job_id}] Ball detection system exit")
+        return True  # Allow processing to continue
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
