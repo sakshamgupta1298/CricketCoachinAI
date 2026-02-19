@@ -34,6 +34,7 @@ import random
 import string
 import subprocess
 import shutil
+from ultralytics import YOLO
 
 # ==================== LOGGING CONFIGURATION ====================
 # Create logging directory if it doesn't exist
@@ -470,6 +471,12 @@ def process_analysis_job(job_id, user_id, username, filepath, filename, form, ex
         # Downscale high-resolution videos to prevent OOM kills on low-memory servers
         analysis_video_path = _downscale_video_for_memory_efficiency(analysis_video_path, job_id=job_id, user_id=str(user_id))
 
+        # Check for ball in video before proceeding with analysis
+        ball_detected = detect_ball_in_video(analysis_video_path, job_id=job_id)
+        if not ball_detected:
+            error_message = "No ball detected in the video. This does not appear to be a cricket video. Please upload a video that contains a cricket ball."
+            raise ValueError(error_message)
+
         if player_type == "batsman":
             shot_type = (form.get("shot_type", "") or "").strip()
             if not shot_type:
@@ -753,6 +760,86 @@ def get_pose_detection_model():
         pose_detection_model = hub.load("https://tfhub.dev/google/movenet/singlepose/thunder/4")
         logger.info("Pose detection model loaded")
     return pose_detection_model
+
+def detect_ball_in_video(video_path, job_id=""):
+    """
+    Use YOLO to detect baseball or sports ball in video.
+    Returns True if ball is found, False otherwise.
+    """
+    try:
+        logger.info(f"🔍 [JOB {job_id}] Checking for ball in video: {video_path}")
+        
+        # Load YOLO model (auto-downloads if not present)
+        model = YOLO("yolov8n.pt")
+        
+        # Run detection on video
+        # We'll sample frames to speed up detection
+        cap = cv2.VideoCapture(video_path)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30
+        cap.release()
+        
+        # Sample frames: check every 30 frames (approximately 1 second intervals)
+        frame_skip = max(1, int(fps))
+        frames_to_check = min(30, total_frames // frame_skip)  # Check up to 30 frames
+        
+        ball_detected = False
+        frames_checked = 0
+        
+        cap = cv2.VideoCapture(video_path)
+        frame_idx = 0
+        
+        while frames_checked < frames_to_check:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            
+            # Only check every Nth frame
+            if frame_idx % frame_skip == 0:
+                # Run YOLO detection on this frame
+                results = model(frame, conf=0.25, verbose=False)
+                
+                # Check if sports ball (class 32) or baseball is detected
+                for result in results:
+                    boxes = result.boxes
+                    if boxes is not None:
+                        for box in boxes:
+                            # Get class ID
+                            cls = int(box.cls[0])
+                            # Class 32 is "sports ball" in COCO dataset
+                            # This includes cricket ball, baseball, tennis ball, etc.
+                            if cls == 32:  # sports ball
+                                confidence = float(box.conf[0])
+                                if confidence >= 0.25:
+                                    logger.info(f"✅ [JOB {job_id}] Ball detected in frame {frame_idx} with confidence {confidence:.2f}")
+                                    ball_detected = True
+                                    break
+                    
+                    if ball_detected:
+                        break
+                
+                frames_checked += 1
+            
+            if ball_detected:
+                break
+            
+            frame_idx += 1
+        
+        cap.release()
+        
+        if ball_detected:
+            logger.info(f"✅ [JOB {job_id}] Ball detected in video - proceeding with analysis")
+            return True
+        else:
+            logger.warning(f"⚠️ [JOB {job_id}] No ball detected in video - this may not be a cricket video")
+            return False
+            
+    except Exception as e:
+        logger.error(f"❌ [JOB {job_id}] Error during ball detection: {str(e)}", exc_info=True)
+        # If detection fails, we'll proceed anyway to avoid blocking legitimate videos
+        # (ball might be too small, occluded, or detection model might have issues)
+        logger.warning(f"⚠️ [JOB {job_id}] Ball detection failed, proceeding with analysis anyway")
+        return True  # Return True to allow processing to continue
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
