@@ -34,6 +34,7 @@ import random
 import string
 import subprocess
 import shutil
+from ultralytics import YOLO
 
 # ==================== LOGGING CONFIGURATION ====================
 # Create logging directory if it doesn't exist
@@ -2080,7 +2081,99 @@ def create_annotated_video(video_path, keypoints_path, player_type):
             out.release()
         return None
 
+def detect_ball_in_video(video_path, conf_threshold=0.25, max_frames_to_check=100):
+    """
+    Detect if a ball (sports ball or baseball) is present in the video using YOLO.
+    
+    Args:
+        video_path: Path to the video file
+        conf_threshold: Confidence threshold for YOLO detection (default: 0.25)
+        max_frames_to_check: Maximum number of frames to check (default: 100)
+    
+    Returns:
+        bool: True if ball is detected in at least one frame, False otherwise
+    """
+    try:
+        logger.info(f"🔍 [BALL_DETECTION] Starting ball detection for video: {video_path}")
+        
+        # Load YOLO model (auto-downloads if not present)
+        model = YOLO("yolov8n.pt")
+        
+        # Open video
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            logger.error(f"❌ [BALL_DETECTION] Failed to open video: {video_path}")
+            return False
+        
+        frame_count = 0
+        frames_checked = 0
+        ball_detected = False
+        
+        # YOLO class IDs: 32 = sports ball, 0 = person (we'll check for sports ball)
+        # Note: YOLO doesn't have a specific "cricket ball" class, but "sports ball" (class 32) should work
+        sports_ball_class_id = 32
+        
+        while frames_checked < max_frames_to_check:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            
+            frame_count += 1
+            
+            # Check every 5th frame for efficiency
+            if frame_count % 5 == 0:
+                frames_checked += 1
+                
+                # Run YOLO detection on frame
+                results = model(frame, conf=conf_threshold, verbose=False)
+                
+                # Check if any detection contains a sports ball
+                for result in results:
+                    boxes = result.boxes
+                    if boxes is not None:
+                        for box in boxes:
+                            class_id = int(box.cls[0])
+                            confidence = float(box.conf[0])
+                            
+                            # Check for sports ball (class 32)
+                            if class_id == sports_ball_class_id:
+                                logger.info(f"✅ [BALL_DETECTION] Ball detected! Frame: {frame_count}, Confidence: {confidence:.2f}")
+                                ball_detected = True
+                                break
+                    
+                    if ball_detected:
+                        break
+            
+            if ball_detected:
+                break
+        
+        cap.release()
+        
+        if ball_detected:
+            logger.info(f"✅ [BALL_DETECTION] Ball detected in video. Proceeding with pose detection.")
+        else:
+            logger.warning(f"⚠️ [BALL_DETECTION] No ball detected in first {frames_checked} frames checked. This may not be a cricket video.")
+        
+        return ball_detected
+        
+    except Exception as e:
+        logger.error(f"❌ [BALL_DETECTION] Error during ball detection: {str(e)}", exc_info=True)
+        # If detection fails, we'll proceed anyway (fail-safe)
+        logger.warning(f"⚠️ [BALL_DETECTION] Proceeding with pose detection despite detection error.")
+        return True  # Return True to allow processing to continue if detection fails
+
 def extract_pose_keypoints(video_path, player_type):
+    # First, check if ball is detected in the video
+    logger.info(f"🔍 [EXTRACT_KEYPOINTS] Checking for ball in video before pose detection...")
+    ball_detected = detect_ball_in_video(video_path)
+    
+    if not ball_detected:
+        error_message = "No ball detected in the video. This does not appear to be a cricket video. Please upload a video containing cricket gameplay."
+        logger.error(f"❌ [EXTRACT_KEYPOINTS] {error_message}")
+        raise ValueError(error_message)
+    
+    logger.info(f"✅ [EXTRACT_KEYPOINTS] Ball detected. Proceeding with pose detection...")
+    
     cap = cv2.VideoCapture(video_path)
     all_keypoints, frame_idx = [], 0
 
