@@ -35,7 +35,7 @@ const SimpleNetworkTest: React.FC = () => {
     // Test 2: Backend health check
     try {
       addResult('🏥 Testing backend health endpoint...');
-      const response = await fetch('http://165.232.184.91:3000/api/health', {
+      const response = await fetch('http://139.59.1.59:3000/api/health', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -58,7 +58,7 @@ const SimpleNetworkTest: React.FC = () => {
     // Test 3: Try with different headers
     try {
       addResult('🔧 Testing with mobile-like headers...');
-      const response = await fetch('http://165.232.184.91:3000/api/health', {
+      const response = await fetch('http://139.59.1.59:3000/api/health', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -79,7 +79,7 @@ const SimpleNetworkTest: React.FC = () => {
     // Test 4: Try POST request
     try {
       addResult('📝 Testing POST request...');
-      const response = await fetch('http://165.232.184.91:3000/api/auth/register', {
+      const response = await fetch('http://139.59.1.59:3000/api/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

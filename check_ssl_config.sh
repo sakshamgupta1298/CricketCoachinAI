@@ -7,7 +7,7 @@ echo "🔒 SSL/TLS Configuration Checker"
 echo "================================="
 echo ""
 
-SERVER_IP="165.232.184.91"
+SERVER_IP="139.59.1.59"
 
 # Colors for output
 GREEN='\033[0;32m'

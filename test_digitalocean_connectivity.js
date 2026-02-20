@@ -1,6 +1,6 @@
 // Test connectivity to Digital Ocean droplet
 const testDigitalOceanConnectivity = async () => {
-  const baseURL = 'http://165.232.184.91:3000';
+  const baseURL = 'http://139.59.1.59:3000';
   
   console.log('🔍 Testing Digital Ocean Droplet Connectivity...\n');
   console.log('🌐 Base URL:', baseURL);
@@ -43,7 +43,7 @@ const testDigitalOceanConnectivity = async () => {
   
   console.log('🏁 Digital Ocean connectivity test completed!');
   console.log('\n📱 For your mobile app:');
-  console.log('   - Use the Digital Ocean URL: http://165.232.184.91:3000');
+  console.log('   - Use the Digital Ocean URL: http://139.59.1.59:3000');
   console.log('   - No more ngrok dependency!');
   console.log('   - Works from any network');
   console.log('   - More stable and reliable');

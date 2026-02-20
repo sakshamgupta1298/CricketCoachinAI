@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Deploy CrickCoach Production Setup to Digital Ocean Server
+# Deploy CrickCoach Production Setup to New Server (139.59.1.59)
 # This script uploads the configuration files and runs the setup
 
 set -e
@@ -33,16 +33,26 @@ print_info() {
     echo -e "${BLUE}ℹ️  $1${NC}"
 }
 
-echo "🚀 Deploying CrickCoach Production Setup to Digital Ocean"
-echo "========================================================"
+echo "🚀 Deploying CrickCoach Production Setup to New Server"
+echo "======================================================"
 echo "Server: $SERVER_USER@$SERVER_IP"
 echo ""
 
 # Check if required files exist
 print_info "Checking required files..."
-required_files=("nginx_config.conf" "crickcoach-backend.service" "setup_production_server.sh")
+required_files=("nginx_config.conf" "crickcoach-backend-new-server.service" "setup_new_server.sh")
 for file in "${required_files[@]}"; do
     if [ ! -f "$file" ]; then
+        print_warning "File not found: $file, trying alternative..."
+        # Try alternative names
+        if [ "$file" == "crickcoach-backend-new-server.service" ] && [ -f "crickcoach-backend.service" ]; then
+            print_info "Using crickcoach-backend.service instead"
+            continue
+        fi
+        if [ "$file" == "setup_new_server.sh" ] && [ -f "setup_production_server.sh" ]; then
+            print_info "Using setup_production_server.sh instead"
+            continue
+        fi
         print_error "Required file not found: $file"
         exit 1
     fi
@@ -64,8 +74,21 @@ fi
 # Upload configuration files
 print_info "Uploading configuration files to server..."
 scp nginx_config.conf $SERVER_USER@$SERVER_IP:/root/
-scp crickcoach-backend.service $SERVER_USER@$SERVER_IP:/root/
-scp setup_production_server.sh $SERVER_USER@$SERVER_IP:/root/
+
+# Upload systemd service file (prefer new one, fallback to old)
+if [ -f "crickcoach-backend-new-server.service" ]; then
+    scp crickcoach-backend-new-server.service $SERVER_USER@$SERVER_IP:/root/crickcoach-backend.service
+else
+    scp crickcoach-backend.service $SERVER_USER@$SERVER_IP:/root/
+fi
+
+# Upload setup script (prefer new one, fallback to old)
+if [ -f "setup_new_server.sh" ]; then
+    scp setup_new_server.sh $SERVER_USER@$SERVER_IP:/root/setup_production_server.sh
+else
+    scp setup_production_server.sh $SERVER_USER@$SERVER_IP:/root/
+fi
+
 print_status "Configuration files uploaded"
 
 # Make setup script executable
@@ -139,3 +162,4 @@ echo "  2. Test the mobile app connection"
 echo "  3. Monitor the logs for any issues"
 echo ""
 print_status "Deployment completed successfully! 🚀"
+
