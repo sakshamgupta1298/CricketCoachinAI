@@ -44,7 +44,7 @@ sudo ufw reload
 curl http://localhost:3000/api/health
 
 # Test from external IP
-curl http://165.232.184.91:3000/api/health
+curl http://139.59.1.59:3000/api/health
 ```
 
 ## 🔧 Complete Setup Instructions
@@ -206,7 +206,7 @@ sudo systemctl enable crickcoach-backend.service
 ### From your local machine
 ```bash
 # Test basic connectivity
-curl http://165.232.184.91:3000/api/health
+curl http://139.59.1.59:3000/api/health
 
 # Run the test script
 python3 test_backend_connectivity.py
@@ -218,7 +218,7 @@ python3 test_backend_connectivity.py
 curl http://localhost:3000/api/health
 
 # Test from external IP
-curl http://165.232.184.91:3000/api/health
+curl http://139.59.1.59:3000/api/health
 ```
 
 ## 📱 Mobile App Configuration
@@ -227,11 +227,11 @@ Make sure your mobile app's `config.js` has the correct URL:
 ```javascript
 const config = {
   development: {
-    API_BASE_URL: 'http://165.232.184.91:3000',
+    API_BASE_URL: 'http://139.59.1.59:3000',
     API_TIMEOUT: 600000,
   },
   production: {
-    API_BASE_URL: 'http://165.232.184.91:3000',
+    API_BASE_URL: 'http://139.59.1.59:3000',
     API_TIMEOUT: 600000,
   }
 };

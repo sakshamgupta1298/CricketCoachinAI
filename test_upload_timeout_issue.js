@@ -1,6 +1,6 @@
 // Test to identify the upload timeout issue
 const testUploadTimeoutIssue = async () => {
-  const baseURL = 'http://165.232.184.91:3000';
+  const baseURL = 'http://139.59.1.59:3000';
   
   console.log('🔍 Testing upload timeout issue...\n');
   console.log('🌐 Base URL:', baseURL);

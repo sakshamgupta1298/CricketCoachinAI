@@ -2,7 +2,7 @@
 // This script helps verify that the ngrok tunnel is working properly
 
 const testEndpoints = [
-  'http://165.232.184.91:3000/api/health', // Digital Ocean droplet
+  'http://139.59.1.59:3000/api/health', // Digital Ocean droplet
   'http://192.168.1.11:3000/api/health', // Current system IP
   'http://192.168.1.3:3000/api/health',  // Old IP (for reference)
   'http://localhost:3000/api/health'     // Localhost
@@ -40,7 +40,7 @@ async function testConnectivity() {
   
   console.log('🏁 Connectivity test completed!');
   console.log('\n📱 For your mobile app:');
-  console.log('   - Use the Digital Ocean droplet: http://165.232.184.91:3000');
+  console.log('   - Use the Digital Ocean droplet: http://139.59.1.59:3000');
   console.log('   - No more cleartext traffic issues!');
   console.log('   - Works from any network');
   console.log('\n💡 System Information:');

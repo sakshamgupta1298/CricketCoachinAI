@@ -61,7 +61,7 @@ Added React Native-specific settings:
 
 ```bash
 # On your server
-curl http://165.232.184.91/api/health
+curl http://139.59.1.59/api/health
 ```
 
 Should return a successful response.
@@ -80,7 +80,7 @@ Should return a successful response.
 
 If uploads still fail, verify:
 - Device has internet connection
-- Device can reach the server IP (165.232.184.91)
+- Device can reach the server IP (139.59.1.59)
 - Backend server is running and accessible
 - Firewall allows connections on port 80
 
@@ -91,7 +91,7 @@ If uploads still fail, verify:
 - Check if backend is running: `ps aux | grep python`
 - Check if nginx is running: `sudo systemctl status nginx`
 - Verify server IP is correct in `config.js`
-- Test connectivity: `ping 165.232.184.91`
+- Test connectivity: `ping 139.59.1.59`
 
 ### Issue: "Network connection failed" after retries
 **Solution:**
@@ -141,7 +141,7 @@ If issues persist, enable more detailed logging:
 3. Use network monitoring tools to see if requests are reaching the server
 4. Test with a simple curl command:
    ```bash
-   curl -X POST http://165.232.184.91/api/health \
+   curl -X POST http://139.59.1.59/api/health \
      -H "Authorization: Bearer YOUR_TOKEN"
    ```
 

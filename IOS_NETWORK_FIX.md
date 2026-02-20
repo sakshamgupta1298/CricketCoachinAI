@@ -1,13 +1,13 @@
 # iOS Network Connection Fix Guide
 
 ## 🚨 Issue
-iOS app cannot connect to HTTP backend (`http://165.232.184.91`) even though Android works fine.
+iOS app cannot connect to HTTP backend (`http://139.59.1.59`) even though Android works fine.
 
 ## ✅ Configuration Status
 
 ### Current Configuration (Verified)
 - ✅ `Info.plist` has `NSAllowsArbitraryLoads: true`
-- ✅ `Info.plist` has exception domain for `165.232.184.91`
+- ✅ `Info.plist` has exception domain for `139.59.1.59`
 - ✅ Network security plugin is configured correctly
 - ✅ `app.json` has proper scheme configuration
 
@@ -66,7 +66,7 @@ grep -A 5 "NSAppTransportSecurity" ios/CrickCoachAI/Info.plist
 
 You should see:
 - `NSAllowsArbitraryLoads` = `true`
-- `165.232.184.91` in exception domains
+- `139.59.1.59` in exception domains
 
 ## 🔍 Troubleshooting
 
@@ -119,7 +119,7 @@ If HTTP still doesn't work after all steps, consider:
 - [ ] Clean rebuild completed (`npx expo prebuild --clean`)
 - [ ] Using development build (NOT Expo Go)
 - [ ] Info.plist has `NSAllowsArbitraryLoads: true`
-- [ ] Info.plist has `165.232.184.91` in exception domains
+- [ ] Info.plist has `139.59.1.59` in exception domains
 - [ ] App rebuilt and reinstalled
 - [ ] Checked device logs for ATS errors
 

@@ -1,14 +1,14 @@
 #!/bin/bash
 
 # CrickCoach Backend Deployment Script for Digital Ocean Droplet
-# IP: 206.189.141.194
+# IP: 139.59.1.59
 
 echo "🚀 Deploying CrickCoach Backend to Digital Ocean Droplet..."
-echo "📍 Target: 206.189.141.194"
+echo "📍 Target: 139.59.1.59"
 echo ""
 
 # Configuration
-DROPLET_IP="206.189.141.194"
+DROPLET_IP="139.59.1.59"
 DROPLET_USER="root"
 APP_NAME="crickcoach-backend"
 APP_DIR="/opt/crickcoach-backend"

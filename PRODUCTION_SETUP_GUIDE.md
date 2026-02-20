@@ -48,10 +48,10 @@ This script will:
 ### Step 2: Verify Setup
 ```bash
 # Test backend health
-curl http://165.232.184.91/health
+curl http://139.59.1.59/health
 
 # Test direct backend
-curl http://165.232.184.91:3000/api/health
+curl http://139.59.1.59:3000/api/health
 ```
 
 ## 🔧 Manual Setup (Alternative)
@@ -60,14 +60,14 @@ If you prefer to set up manually:
 
 ### 1. Upload Files to Server
 ```bash
-scp nginx_config.conf root@165.232.184.91:/root/
-scp crickcoach-backend.service root@165.232.184.91:/root/
-scp setup_production_server.sh root@165.232.184.91:/root/
+scp nginx_config.conf root@139.59.1.59:/root/
+scp crickcoach-backend.service root@139.59.1.59:/root/
+scp setup_production_server.sh root@139.59.1.59:/root/
 ```
 
 ### 2. Run Setup on Server
 ```bash
-ssh root@165.232.184.91
+ssh root@139.59.1.59
 chmod +x /root/setup_production_server.sh
 /root/setup_production_server.sh
 ```
@@ -80,15 +80,15 @@ After setup, update your mobile app to use the new URL:
 ```javascript
 const config = {
   development: {
-    API_BASE_URL: 'http://165.232.184.91',  // Remove :3000
+    API_BASE_URL: 'http://139.59.1.59',  // Remove :3000
     API_TIMEOUT: 600000,
   },
   production: {
-    API_BASE_URL: 'http://165.232.184.91',  // Remove :3000
+    API_BASE_URL: 'http://139.59.1.59',  // Remove :3000
     API_TIMEOUT: 600000,
   },
   test: {
-    API_BASE_URL: 'http://165.232.184.91',  // Remove :3000
+    API_BASE_URL: 'http://139.59.1.59',  // Remove :3000
     API_TIMEOUT: 600000,
   }
 };
@@ -258,7 +258,7 @@ tar -czf crickcoach-backup-$(date +%Y%m%d).tar.gz /root/CricketCoachinAI/
 After successful setup, you should see:
 - ✅ Backend service running: `systemctl status crickcoach-backend`
 - ✅ Nginx service running: `systemctl status nginx`
-- ✅ Health check passing: `curl http://165.232.184.91/health`
+- ✅ Health check passing: `curl http://139.59.1.59/health`
 - ✅ Mobile app can connect to backend
 - ✅ Video uploads working
 - ✅ Authentication working
@@ -268,7 +268,7 @@ After successful setup, you should see:
 If you encounter issues:
 1. Check the logs: `journalctl -u crickcoach-backend -f`
 2. Verify nginx: `systemctl status nginx`
-3. Test connectivity: `curl http://165.232.184.91/health`
+3. Test connectivity: `curl http://139.59.1.59/health`
 4. Check firewall: `ufw status`
 
 Your CrickCoach backend is now production-ready! 🚀

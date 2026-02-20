@@ -40,7 +40,7 @@ const withNetworkSecurity = (config) => {
     <!-- Specific domain configurations -->
     <domain-config cleartextTrafficPermitted="true">
         <!-- Digital Ocean production backend -->
-        <domain includeSubdomains="true">165.232.184.91</domain>
+        <domain includeSubdomains="true">139.59.1.59</domain>
         
         <!-- Local development IPs -->
         <domain includeSubdomains="true">192.168.1.3</domain>
@@ -71,7 +71,7 @@ const withNetworkSecurity = (config) => {
       NSAllowsArbitraryLoads: true,
       NSExceptionDomains: {
         ...(existingATS.NSExceptionDomains || {}),
-        '165.232.184.91': {
+        '139.59.1.59': {
           NSExceptionAllowsInsecureHTTPLoads: true,
           NSExceptionMinimumTLSVersion: '1.0',
           NSExceptionRequiresForwardSecrecy: false,
