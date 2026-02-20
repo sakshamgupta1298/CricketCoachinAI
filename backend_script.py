@@ -5302,31 +5302,31 @@ def verify_username_otp():
 
 if __name__ == '__main__':
     try:
-    # Initialize database
-    logger.info("Initializing database...")
+        # Initialize database
+        logger.info("Initializing database...")
         sys.stdout.flush()  # Ensure output is visible
-    init_database()
+        init_database()
         logger.info("Database initialized successfully")
         sys.stdout.flush()
     
-    # Initialize models before starting the server
+        # Initialize models before starting the server
         logger.info("Initializing AI models...")
         sys.stdout.flush()
-    initialize_models()
+        initialize_models()
         logger.info("Models initialized successfully")
         sys.stdout.flush()
     
-    # Start the Flask server
-    port = int(os.environ.get('FLASK_PORT', 3000))
-    logger.info(f"Starting Flask server on port {port}")
-    logger.info("=" * 80)
+        # Start the Flask server
+        port = int(os.environ.get('FLASK_PORT', 3000))
+        logger.info(f"Starting Flask server on port {port}")
+        logger.info("=" * 80)
         logger.info("Server is ready to accept connections")
         logger.info(f"Access the API at: http://0.0.0.0:{port}")
         logger.info("=" * 80)
         sys.stdout.flush()
-    
-    # Server environment - disable debug mode and reloader
-    app.run(debug=False, host='0.0.0.0', port=port, use_reloader=False)
+        
+        # Server environment - disable debug mode and reloader
+        app.run(debug=False, host='0.0.0.0', port=port, use_reloader=False)
     except KeyboardInterrupt:
         logger.info("Server shutdown requested by user")
         sys.stdout.flush()
