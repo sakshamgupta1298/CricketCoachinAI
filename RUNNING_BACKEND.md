@@ -128,3 +128,36 @@ timeout 10 python -u backend_script.py || echo "Script started (timeout expected
 
 If you see the startup logs, the script is working correctly!
 
+---
+
+## Network Issue: Login Not Working
+
+If you're getting network errors when trying to login from the mobile app:
+
+### Quick Fix
+1. **Update config.js** - Already updated to use `http://139.59.1.59:3000` ✅
+2. **Rebuild the mobile app** after config changes
+3. **Verify backend is accessible**:
+   ```bash
+   # Test from command line
+   curl http://139.59.1.59:3000/api/health
+   
+   # Or run the test script
+   python test_login_connectivity.py
+   ```
+
+### Common Issues
+
+**Issue**: "Network Error" when trying to login
+- **Cause**: Mobile app can't reach the backend
+- **Fix**: 
+  - If running locally, use your local IP in `config.js`
+  - If on server, ensure backend is running: `systemctl status crickcoach-backend`
+  - Check firewall: `ufw allow 3000/tcp`
+
+**Issue**: Backend running but not accessible
+- **Cause**: Backend might be listening only on localhost
+- **Fix**: Ensure backend runs with `host='0.0.0.0'` (already configured in backend_script.py)
+
+See `NETWORK_ISSUE_FIX.md` for detailed troubleshooting steps.
+
