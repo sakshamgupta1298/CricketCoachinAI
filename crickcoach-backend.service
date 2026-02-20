@@ -8,7 +8,7 @@ Type=simple
 User=root
 WorkingDirectory=/root/CricketCoachinAI
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/root/CricketCoachinAI/myenv/bin
-ExecStart=/root/CricketCoachinAI/myenv/bin/python3 /root/CricketCoachinAI/backend_script.py
+ExecStart=/root/CricketCoachinAI/myenv/bin/python3 -u /root/CricketCoachinAI/backend_script.py
 Restart=always
 RestartSec=10
 StandardOutput=journal

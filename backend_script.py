@@ -3285,79 +3285,115 @@ def upload_file():
 @app.route('/api/upload', methods=['POST'])
 @require_auth
 def api_upload_file():
-    logger.info(f"Received upload request from {request.remote_addr}")
-    logger.debug(f"Request headers: {dict(request.headers)}")
-    logger.debug(f"Request files: {list(request.files.keys())}")
-    logger.debug(f"Request form: {dict(request.form)}")
-    logger.info(f"Shot type from form: {request.form.get('shot_type', 'NOT PROVIDED')}")
-    
-    # Get user info from authentication
-    user_id = request.user['user_id']
-    username = request.user['username']
-    logger.info(f"Authenticated user: {username} (ID: {user_id})")
-    
-    if 'video' not in request.files:
-        logger.warning("No video file in request")
-        return jsonify({'error': 'No video file selected'}), 400
-    
-    file = request.files['video']
-    player_type = request.form.get('player_type', 'batsman')
-    bowler_type = request.form.get('bowler_type', 'fast_bowler')  # Default to fast bowler
-    
-    logger.info(f"File received: {file.filename}, Player type: {player_type}, Bowler type: {bowler_type}")
-    
-    if file.filename == '':
-        logger.warning("Empty filename")
-        return jsonify({'error': 'No video file selected'}), 400
-    
-    if file and allowed_file(file.filename):
+    try:
+        logger.info(f"Received upload request from {request.remote_addr}")
+        logger.debug(f"Request headers: {dict(request.headers)}")
+        logger.debug(f"Request files: {list(request.files.keys())}")
+        logger.debug(f"Request form: {dict(request.form)}")
+        logger.info(f"Shot type from form: {request.form.get('shot_type', 'NOT PROVIDED')}")
+        
+        # Get user info from authentication
+        user_id = request.user['user_id']
+        username = request.user['username']
+        logger.info(f"Authenticated user: {username} (ID: {user_id})")
+        
+        if 'video' not in request.files:
+            logger.warning("No video file in request")
+            return jsonify({'error': 'No video file selected'}), 400
+        
+        file = request.files['video']
+        player_type = request.form.get('player_type', 'batsman')
+        bowler_type = request.form.get('bowler_type', 'fast_bowler')  # Default to fast bowler
+        
+        logger.info(f"File received: {file.filename}, Player type: {player_type}, Bowler type: {bowler_type}")
+        
+        if file.filename == '':
+            logger.warning("Empty filename")
+            return jsonify({'error': 'No video file selected'}), 400
+        
+        if not file or not allowed_file(file.filename):
+            logger.warning(f"Invalid file type: {file.filename if file else 'No file'}")
+            return jsonify({'error': 'Invalid file type. Please upload a video file (mp4, avi, mov, mkv).'}), 400
+        
         filename = secure_filename(file.filename)
+        logger.info(f"Processing file: {filename}")
         
         # Get user's upload folder and save file there
-        user_folder = get_user_upload_folder(user_id)
-        filepath = os.path.join(user_folder, filename)
-        file.save(filepath)
+        try:
+            user_folder = get_user_upload_folder(user_id)
+            filepath = os.path.join(user_folder, filename)
+            logger.info(f"Saving file to: {filepath}")
+            file.save(filepath)
+            
+            # Verify file was saved
+            if not os.path.exists(filepath):
+                logger.error(f"File was not saved successfully: {filepath}")
+                return jsonify({'error': 'Failed to save uploaded file'}), 500
+            
+            file_size = os.path.getsize(filepath)
+            logger.info(f"File saved successfully: {filepath} (size: {file_size} bytes)")
+        except Exception as e:
+            logger.error(f"Error saving file: {str(e)}", exc_info=True)
+            return jsonify({'error': f'Failed to save uploaded file: {str(e)}'}), 500
         
         # Validate required form fields before enqueueing (so we can fail fast)
         if player_type == 'batsman':
             shot_type = request.form.get('shot_type', '').strip()
             if not shot_type:
                 logger.warning("Shot type not provided by user")
+                # Clean up the uploaded file
+                try:
+                    if os.path.exists(filepath):
+                        os.remove(filepath)
+                except:
+                    pass
                 return jsonify({'error': 'Shot type is required. Please select a shot type.'}), 400
-                
-        expo_push_token = request.form.get('expo_push_token') or request.form.get('push_token')
-        job_id = uuid.uuid4().hex
-        now = datetime.utcnow().isoformat() + "Z"
+        
+        try:
+            expo_push_token = request.form.get('expo_push_token') or request.form.get('push_token')
+            job_id = uuid.uuid4().hex
+            now = datetime.utcnow().isoformat() + "Z"
 
-        job = {
-            "job_id": job_id,
-            "status": "queued",
-            "created_at": now,
-            "updated_at": now,
-            "user_id": user_id,
-            "username": username,
-            "filename": filename,
-            "player_type": player_type,
-        }
-        save_job(user_id, job)
+            job = {
+                "job_id": job_id,
+                "status": "queued",
+                "created_at": now,
+                "updated_at": now,
+                "user_id": user_id,
+                "username": username,
+                "filename": filename,
+                "player_type": player_type,
+            }
+            save_job(user_id, job)
+            logger.info(f"Job saved: {job_id}")
 
-        worker = threading.Thread(
-            target=process_analysis_job,
-            args=(job_id, user_id, username, filepath, filename, dict(request.form), expo_push_token),
-            daemon=True,
-        )
-        worker.start()
+            worker = threading.Thread(
+                target=process_analysis_job,
+                args=(job_id, user_id, username, filepath, filename, dict(request.form), expo_push_token),
+                daemon=True,
+            )
+            worker.start()
 
-        logger.info(f"🧵 [JOB {job_id}] Enqueued analysis for {username} file {filename}")
-        return jsonify({
-            "success": True,
-            "job_id": job_id,
-            "filename": filename,
-            "status": "queued",
-        })
-    
-    logger.warning("Invalid file type")
-    return jsonify({'error': 'Invalid file type. Please upload a video file.'}), 400
+            logger.info(f"🧵 [JOB {job_id}] Enqueued analysis for {username} file {filename}")
+            return jsonify({
+                "success": True,
+                "job_id": job_id,
+                "filename": filename,
+                "status": "queued",
+            })
+        except Exception as e:
+            logger.error(f"Error creating job or starting worker: {str(e)}", exc_info=True)
+            # Clean up the uploaded file if job creation failed
+            try:
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+            except:
+                pass
+            return jsonify({'error': f'Failed to process upload: {str(e)}'}), 500
+        
+    except Exception as e:
+        logger.error(f"Unexpected error in api_upload_file: {str(e)}", exc_info=True)
+        return jsonify({'error': f'Upload failed: {str(e)}'}), 500
 
 @app.route('/api/test-upload', methods=['POST'])
 def test_upload():
