@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import torch
 import torch.nn as nn
@@ -36,20 +37,32 @@ import subprocess
 import shutil
 
 # ==================== LOGGING CONFIGURATION ====================
+# Force unbuffered output for immediate log visibility
+sys.stdout.reconfigure(line_buffering=True) if hasattr(sys.stdout, 'reconfigure') else None
+sys.stderr.reconfigure(line_buffering=True) if hasattr(sys.stderr, 'reconfigure') else None
+
 # Create logging directory if it doesn't exist
 LOG_DIR = 'logging'
 os.makedirs(LOG_DIR, exist_ok=True)
 
 # Configure logging with date and time
 log_filename = os.path.join(LOG_DIR, f'backend_{datetime.now().strftime("%Y%m%d")}.log')
+
+# Create a custom StreamHandler that flushes immediately
+class UnbufferedStreamHandler(logging.StreamHandler):
+    def emit(self, record):
+        super().emit(record)
+        self.flush()
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S',
     handlers=[
         logging.FileHandler(log_filename, encoding='utf-8'),
-        logging.StreamHandler()  # Also log to console
-    ]
+        UnbufferedStreamHandler(sys.stdout)  # Unbuffered console output
+    ],
+    force=True  # Override any existing configuration
 )
 
 # Get logger for this module
@@ -5288,18 +5301,39 @@ def verify_username_otp():
         return jsonify({'error': 'Failed to verify OTP'}), 500
 
 if __name__ == '__main__':
-    # Initialize database
-    logger.info("Initializing database...")
-    init_database()
-    
-    # Initialize models before starting the server
-    initialize_models()
-    
-    # Start the Flask server
-    port = int(os.environ.get('FLASK_PORT', 3000))
-    logger.info(f"Starting Flask server on port {port}")
-    logger.info("=" * 80)
-    
-    # Server environment - disable debug mode and reloader
-    app.run(debug=False, host='0.0.0.0', port=port, use_reloader=False)
+    try:
+        # Initialize database
+        logger.info("Initializing database...")
+        sys.stdout.flush()  # Ensure output is visible
+        init_database()
+        logger.info("Database initialized successfully")
+        sys.stdout.flush()
+        
+        # Initialize models before starting the server
+        logger.info("Initializing AI models...")
+        sys.stdout.flush()
+        initialize_models()
+        logger.info("Models initialized successfully")
+        sys.stdout.flush()
+        
+        # Start the Flask server
+        port = int(os.environ.get('FLASK_PORT', 3000))
+        logger.info(f"Starting Flask server on port {port}")
+        logger.info("=" * 80)
+        logger.info("Server is ready to accept connections")
+        logger.info(f"Access the API at: http://0.0.0.0:{port}")
+        logger.info("=" * 80)
+        sys.stdout.flush()
+        
+        # Server environment - disable debug mode and reloader
+        app.run(debug=False, host='0.0.0.0', port=port, use_reloader=False)
+    except KeyboardInterrupt:
+        logger.info("Server shutdown requested by user")
+        sys.stdout.flush()
+        sys.exit(0)
+    except Exception as e:
+        logger.error(f"Fatal error starting server: {str(e)}", exc_info=True)
+        sys.stdout.flush()
+        sys.stderr.flush()
+        sys.exit(1)
     
