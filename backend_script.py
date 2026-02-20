@@ -619,13 +619,13 @@ def process_analysis_job(job_id, user_id, username, filepath, filename, form, ex
 # Model configuration
 MODEL_PATH = "slowfast_cricket.pth"
 FILE_ID = "1SRsNEUv4a4FLisMZGM0-BH1J4RlqT0HN"
-DOWNLOAD_URL = f"https://drive.google.com/uc?id={FILE_ID}"
+# DOWNLOAD_URL = f"https://drive.google.com/uc?id={FILE_ID}"
 
 # Automatically download the model if it's missing
-if not os.path.exists(MODEL_PATH):
-    logger.info("Model not found locally. Downloading from Google Drive...")
-    gdown.download(DOWNLOAD_URL, MODEL_PATH, quiet=False)
-    logger.info(f"Model downloaded successfully to {MODEL_PATH}")
+# if not os.path.exists(MODEL_PATH):
+#     logger.info("Model not found locally. Downloading from Google Drive...")
+#     gdown.download(DOWNLOAD_URL, MODEL_PATH, quiet=False)
+#     logger.info(f"Model downloaded successfully to {MODEL_PATH}")
 
 CHECKPOINT_PATH = MODEL_PATH
 # BATTER_SIDE = "right"
