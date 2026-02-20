@@ -28,8 +28,7 @@ Even if console logs don't show, logs are always written to files:
 tail -f logging/backend_YYYYMMDD.log
 
 # Or view the latest log file
-ls -lt logging/ | head -2
-tail -f logging/$(ls -t logging/ | head -1)
+
 ```
 
 ## Running on New Server
