@@ -634,7 +634,7 @@ CHECKPOINT_PATH = MODEL_PATH
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Gemini client
-client = genai.Client(api_key="AIzaSyCNmpg89-pwOyrimMEmgyt4aT9d07MzYYc")
+genai.configure(api_key="AIzaSyCNmpg89-pwOyrimMEmgyt4aT9d07MzYYc")
 
 def extract_json_from_response(text: str) -> str:
     """
@@ -1083,14 +1083,14 @@ def get_feedback_from_gpt_for_bowling(keypoint_csv_path, bowler_type='fast_bowle
 # ================================
     logger.info("Stage 1: Running biomechanical analysis for bowling (Prompt A)...")
     try:
-        response_A = client.models.generate_content(
-            model="gemini-2.5-pro",
-            contents=[prompt_A],
-            config={
-            "temperature": 0,
-            "top_p": 1,
-            "top_k": 1
-        }
+        model = genai.GenerativeModel("gemini-2.5-pro")
+        response_A = model.generate_content(
+            prompt_A,
+            generation_config={
+                "temperature": 0,
+                "top_p": 1,
+                "top_k": 1
+            }
         )
 
         raw_content_A = response_A.text
@@ -1234,14 +1234,14 @@ REQUIRED JSON OUTPUT
 """
 
     try:
-        response_B = client.models.generate_content(
-            model="gemini-2.5-pro",
-            contents=[prompt_B],
-            config={
-            "temperature": 0,
-            "top_p": 1,
-            "top_k": 1
-        }
+        model = genai.GenerativeModel("gemini-2.5-pro")
+        response_B = model.generate_content(
+            prompt_B,
+            generation_config={
+                "temperature": 0,
+                "top_p": 1,
+                "top_k": 1
+            }
         )
 
         raw_content_B = response_B.text
@@ -1605,14 +1605,14 @@ def get_feedback_from_gpt_for_keeping(keypoint_csv_path, keeping_type='standing_
 # ================================
     logger.info("Stage 1: Running biomechanical analysis for keeping (Prompt A)...")
     try:
-        response_A = client.models.generate_content(
-            model="gemini-2.5-pro",
-            contents=[prompt_A],
-            config={
-            "temperature": 0,
-            "top_p": 1,
-            "top_k": 1
-        }
+        model = genai.GenerativeModel("gemini-2.5-pro")
+        response_A = model.generate_content(
+            prompt_A,
+            generation_config={
+                "temperature": 0,
+                "top_p": 1,
+                "top_k": 1
+            }
         )
 
         raw_content_A = response_A.text
@@ -1780,14 +1780,14 @@ REQUIRED JSON OUTPUT
 """
 
     try:
-        response_B = client.models.generate_content(
-            model="gemini-2.5-pro",
-            contents=[prompt_B],
-            config={
-            "temperature": 0,
-            "top_p": 1,
-            "top_k": 1
-        }
+        model = genai.GenerativeModel("gemini-2.5-pro")
+        response_B = model.generate_content(
+            prompt_B,
+            generation_config={
+                "temperature": 0,
+                "top_p": 1,
+                "top_k": 1
+            }
         )
 
         raw_content_B = response_B.text
@@ -2525,14 +2525,14 @@ def get_feedback_from_gpt(action_type, keypoint_csv_path, player_level='intermed
 # ================================
     logger.info("Stage 1: Running biomechanical analysis (Prompt A)...")
     try:
-        response_A = client.models.generate_content(
-            model="gemini-2.5-pro",
-            contents=[prompt_A],
-            config={
-            "temperature": 0,
-            "top_p": 1,
-            "top_k": 1
-        }
+        model = genai.GenerativeModel("gemini-2.5-pro")
+        response_A = model.generate_content(
+            prompt_A,
+            generation_config={
+                "temperature": 0,
+                "top_p": 1,
+                "top_k": 1
+            }
         )
 
         raw_content_A = response_A.text
@@ -2664,14 +2664,14 @@ REQUIRED JSON OUTPUT
 """
 
     try:
-        response_B = client.models.generate_content(
-            model="gemini-2.5-pro",
-            contents=[prompt_B],
-            config={
-            "temperature": 0,
-            "top_p": 1,
-            "top_k": 1
-        }
+        model = genai.GenerativeModel("gemini-2.5-pro")
+        response_B = model.generate_content(
+            prompt_B,
+            generation_config={
+                "temperature": 0,
+                "top_p": 1,
+                "top_k": 1
+            }
         )
 
         raw_content_B = response_B.text
@@ -2935,10 +2935,8 @@ Example JSON structure:
 """
 
     try:
-        response = client.models.generate_content(
-            model="gemini-2.5-pro",
-            contents=[prompt]
-        )
+        model = genai.GenerativeModel("gemini-2.5-pro")
+        response = model.generate_content(prompt)
         raw = response.text
         json_text = extract_json_from_response(raw)
         plan_json = json.loads(json_text)
@@ -4122,10 +4120,8 @@ RULES
             def make_api_call():
                 nonlocal response
                 try:
-                    response = client.models.generate_content(
-                        model="gemini-2.5-pro",
-                        contents=[prompt]
-                    )
+                    model = genai.GenerativeModel("gemini-2.5-pro")
+                    response = model.generate_content(prompt)
                 except Exception as e:
                     error_occurred[0] = True
                     exception_holder[0] = e
