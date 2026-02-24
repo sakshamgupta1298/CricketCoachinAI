@@ -953,9 +953,53 @@ class ApiService {
         data: error.config?.data
       });
       
+      // Determine error message based on error type
+      let errorMessage = 'Network error. Please try again.';
+      
+      // Check if it's a network connectivity error
+      if (!error.response) {
+        // No response means network error (connection refused, timeout, DNS error, etc.)
+        const errorCode = error.code || error.message || '';
+        const errorMessageStr = error.message || '';
+        const baseURL = error.config?.baseURL || this.baseURL;
+        
+        // Check for SSL/certificate errors first
+        if (errorCode.includes('CERT') || errorCode.includes('SSL') || 
+            errorCode.includes('UNABLE_TO_VERIFY_LEAF_SIGNATURE') ||
+            errorCode.includes('SELF_SIGNED_CERT') ||
+            errorMessageStr.includes('certificate') || 
+            errorMessageStr.includes('SSL') ||
+            errorMessageStr.includes('TLS')) {
+          errorMessage = `SSL/Certificate error connecting to ${baseURL}. The server may not have a valid SSL certificate configured. Please verify HTTPS is properly set up on the server, or use HTTP if SSL is not configured.`;
+        } else if (errorCode.includes('ECONNREFUSED') || errorCode.includes('ERR_CONNECTION_REFUSED')) {
+          errorMessage = `Cannot connect to server at ${baseURL}. Please check if the backend is running and the URL is correct.`;
+        } else if (errorCode.includes('ENOTFOUND') || errorCode.includes('ERR_NAME_NOT_RESOLVED')) {
+          errorMessage = `Cannot resolve server address ${baseURL}. Please check your internet connection or verify the domain name is correct.`;
+        } else if (errorCode.includes('ETIMEDOUT') || errorCode.includes('ERR_TIMED_OUT') || errorCode.includes('timeout')) {
+          errorMessage = `Connection timeout. The server at ${baseURL} is not responding. Please check if the backend is running.`;
+        } else if (errorCode.includes('ECONNABORTED')) {
+          errorMessage = `Request timeout. The server took too long to respond.`;
+        } else if (errorCode.includes('ERR_NETWORK') || errorCode.includes('Network Error') || errorMessageStr === 'Network Error') {
+          // Generic network error - provide more helpful message
+          if (baseURL.startsWith('https://')) {
+            errorMessage = `HTTPS connection failed to ${baseURL}. This could mean:\n1. The server doesn't have HTTPS configured\n2. SSL certificate is invalid or expired\n3. Server is not accessible\n\nTry using HTTP instead if SSL is not configured: ${baseURL.replace('https://', 'http://')}`;
+          } else {
+            errorMessage = `Network error. Cannot reach server at ${baseURL}. Please check:\n1. Your internet connection\n2. The backend server is running\n3. The URL is correct`;
+          }
+        } else {
+          errorMessage = `Network error: ${error.message || errorCode}. Cannot connect to ${baseURL}. Please check if the backend is running and accessible.`;
+        }
+      } else if (error.response?.status) {
+        // Server responded with an error status
+        errorMessage = error.response?.data?.error || error.message || `Server error (${error.response.status})`;
+      } else {
+        // Other errors
+        errorMessage = error.response?.data?.error || error.message || 'An unexpected error occurred';
+      }
+      
       return {
         success: false,
-        error: error.response?.data?.error || error.message,
+        error: errorMessage,
       };
     }
   }

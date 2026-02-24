@@ -131,7 +131,7 @@
 # # Model configuration
 # MODEL_PATH = "slowfast_cricket.pth"
 # FILE_ID = "1SRsNEUv4a4FLisMZGM0-BH1J4RlqT0HN"
-# DOWNLOAD_URL = f"https://drive.google.com/uc?id={FILE_ID}"
+# DOWNLOAD_URL = f"httpss://drive.google.com/uc?id={FILE_ID}"
 
 # # Automatically download the model if it's missing
 # if not os.path.exists(MODEL_PATH):
@@ -159,7 +159,7 @@
 #     global shot_prediction_model, pose_detection_model, movenet_signature
 #     print("Initializing models...")
 #     shot_prediction_model = load_model()
-#     pose_detection_model = hub.load("https://tfhub.dev/google/movenet/singlepose/thunder/4")
+#     pose_detection_model = hub.load("httpss://tfhub.dev/google/movenet/singlepose/thunder/4")
 #     movenet_signature = pose_detection_model.signatures['serving_default']
 #     print("All models initialized successfully!")
 
@@ -174,7 +174,7 @@
 #     global pose_detection_model
 #     if pose_detection_model is None:
 #         print("Warning: Pose detection model not initialized, loading now...")
-#         pose_detection_model = hub.load("https://tfhub.dev/google/movenet/singlepose/thunder/4")
+#         pose_detection_model = hub.load("httpss://tfhub.dev/google/movenet/singlepose/thunder/4")
 #     return pose_detection_model
 
 # def allowed_file(filename):
@@ -1844,7 +1844,7 @@ ALLOWED_EXTENSIONS = {'mp4', 'avi', 'mov', 'mkv'}
 # Model configuration
 MODEL_PATH = "slowfast_cricket.pth"
 FILE_ID = "1SRsNEUv4a4FLisMZGM0-BH1J4RlqT0HN"
-DOWNLOAD_URL = f"https://drive.google.com/uc?id={FILE_ID}"
+DOWNLOAD_URL = f"httpss://drive.google.com/uc?id={FILE_ID}"
 
 # Automatically download the model if it's missing
 if not os.path.exists(MODEL_PATH):
@@ -1882,7 +1882,7 @@ def initialize_models():
     global shot_prediction_model, pose_detection_model, movenet_signature
     print("Initializing models...")
     shot_prediction_model = load_model()
-    pose_detection_model = hub.load("https://tfhub.dev/google/movenet/singlepose/thunder/4")
+    pose_detection_model = hub.load("httpss://tfhub.dev/google/movenet/singlepose/thunder/4")
     movenet_signature = pose_detection_model.signatures['serving_default']
     print("All models initialized successfully!")
 
@@ -1897,7 +1897,7 @@ def get_pose_detection_model():
     global pose_detection_model
     if pose_detection_model is None:
         print("Warning: Pose detection model not initialized, loading now...")
-        pose_detection_model = hub.load("https://tfhub.dev/google/movenet/singlepose/thunder/4")
+        pose_detection_model = hub.load("httpss://tfhub.dev/google/movenet/singlepose/thunder/4")
     return pose_detection_model
 
 def allowed_file(filename):

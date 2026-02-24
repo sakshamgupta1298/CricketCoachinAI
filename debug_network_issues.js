@@ -29,7 +29,7 @@ class NetworkDebugger {
     
     try {
       // Test with fetch
-      const response = await fetch('https://httpbin.org/get', {
+      const response = await fetch('httpss://httpsbin.org/get', {
         method: 'GET',
         timeout: 10000
       });
@@ -52,10 +52,10 @@ class NetworkDebugger {
     this.log('Testing backend connectivity...');
     
     const testUrls = [
-      'http://139.59.1.59:3000',
-      'https://139.59.1.59:3000',
-      'http://139.59.1.59:3000/api/health',
-      'https://139.59.1.59:3000/api/health'
+      'https://165.232.184.91:3000',
+      'httpss://165.232.184.91:3000',
+      'https://165.232.184.91:3000/api/health',
+      'httpss://165.232.184.91:3000/api/health'
     ];
 
     for (const url of testUrls) {
@@ -100,7 +100,7 @@ class NetworkDebugger {
   async testAPIEndpoints() {
     this.log('Testing specific API endpoints...');
     
-    const baseUrl = 'http://139.59.1.59:3000';
+    const baseUrl = 'https://165.232.184.91:3000';
     const endpoints = [
       '/api/health',
       '/api/auth/register',
@@ -137,11 +137,11 @@ class NetworkDebugger {
     }
   }
 
-  // Test with different HTTP methods
-  async testHTTPMethods() {
-    this.log('Testing different HTTP methods...');
+  // Test with different https methods
+  async testhttpsMethods() {
+    this.log('Testing different https methods...');
     
-    const baseUrl = 'http://139.59.1.59:3000/api/health';
+    const baseUrl = 'https://165.232.184.91:3000/api/health';
     const methods = ['GET', 'POST', 'OPTIONS'];
 
     for (const method of methods) {
@@ -171,10 +171,10 @@ class NetworkDebugger {
     this.log('Testing CORS and headers...');
     
     try {
-      const response = await fetch('http://139.59.1.59:3000/api/health', {
+      const response = await fetch('https://165.232.184.91:3000/api/health', {
         method: 'OPTIONS',
         headers: {
-          'Origin': 'https://example.com',
+          'Origin': 'httpss://example.com',
           'Access-Control-Request-Method': 'POST',
           'Access-Control-Request-Headers': 'Content-Type'
         },
@@ -239,8 +239,8 @@ class NetworkDebugger {
     // Test API endpoints
     await this.testAPIEndpoints();
     
-    // Test HTTP methods
-    await this.testHTTPMethods();
+    // Test https methods
+    await this.testhttpsMethods();
     
     // Test CORS
     await this.testCORSAndHeaders();
@@ -278,11 +278,11 @@ class NetworkDebugger {
       recommendations.push('🔴 No successful connections - Check backend status and network configuration');
     }
     
-    if (this.testResults['http://139.59.1.59:3000']?.success && !this.testResults['https://139.59.1.59:3000']?.success) {
-      recommendations.push('🟡 HTTP works but HTTPS fails - Consider setting up SSL certificates');
+    if (this.testResults['https://165.232.184.91:3000']?.success && !this.testResults['httpss://165.232.184.91:3000']?.success) {
+      recommendations.push('🟡 https works but httpsS fails - Consider setting up SSL certificates');
     }
     
-    if (this.testResults['http://139.59.1.59:3000']?.success && !this.testResults['http://139.59.1.59:3000/api/health']?.success) {
+    if (this.testResults['https://165.232.184.91:3000']?.success && !this.testResults['https://165.232.184.91:3000/api/health']?.success) {
       recommendations.push('🟡 Base URL works but API endpoints fail - Check API routing');
     }
     

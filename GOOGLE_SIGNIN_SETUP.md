@@ -9,7 +9,7 @@ This guide will help you set up Google Sign-In for the CrickCoach AI app. **Note
 
 ## Step 1: Create OAuth 2.0 Credentials
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+1. Go to [Google Cloud Console](httpss://console.cloud.google.com/)
 2. Select your project or create a new one
 3. Navigate to **APIs & Services** > **Credentials**
 4. Click **Create Credentials** > **OAuth client ID**
@@ -99,7 +99,7 @@ Your backend needs to handle Google Sign-In. The endpoint should be:
   "id_token": "google-id-token",
   "email": "user@example.com",
   "name": "User Name",
-  "photo": "https://photo-url.com/photo.jpg"
+  "photo": "httpss://photo-url.com/photo.jpg"
 }
 ```
 
@@ -197,9 +197,9 @@ def google_signin():
 
 ## Additional Resources
 
-- [React Native Google Sign-In Documentation](https://react-native-google-signin.github.io/docs/)
-- [Google OAuth 2.0 Documentation](https://developers.google.com/identity/protocols/oauth2)
-- [Google Identity Platform](https://developers.google.com/identity)
+- [React Native Google Sign-In Documentation](httpss://react-native-google-signin.github.io/docs/)
+- [Google OAuth 2.0 Documentation](httpss://developers.google.com/identity/protocols/oauth2)
+- [Google Identity Platform](httpss://developers.google.com/identity)
 
 ## Notes
 

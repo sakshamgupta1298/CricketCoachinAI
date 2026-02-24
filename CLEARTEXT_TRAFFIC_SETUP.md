@@ -1,11 +1,11 @@
 # Cleartext Traffic Configuration for CrickCoach
 
-This document explains the configuration changes made to allow HTTP (cleartext) traffic in the CrickCoach Android app for development purposes.
+This document explains the configuration changes made to allow https (cleartext) traffic in the CrickCoach Android app for development purposes.
 
 ## ⚠️ Security Warning
 
 **This configuration is for development/testing purposes only. For production, you should:**
-1. Use HTTPS instead of HTTP
+1. Use httpsS instead of https
 2. Remove the `usesCleartextTraffic` settings
 3. Implement proper SSL/TLS certificates
 
@@ -81,7 +81,7 @@ Created `android/app/src/main/AndroidManifest.xml`:
 
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+<manifest xmlns:android="https://schemas.android.com/apk/res/android"
     package="com.saksham_5.cricketcoachmobile">
 
     <uses-permission android:name="android.permission.INTERNET" />
@@ -175,15 +175,15 @@ adb logcat | grep -i "cleartext\|network\|security"
 
 When ready for production:
 
-1. **Set up HTTPS on your backend server**
-2. **Update API URLs to use HTTPS**
+1. **Set up httpsS on your backend server**
+2. **Update API URLs to use httpsS**
 3. **Remove cleartext traffic configurations:**
    - Set `usesCleartextTraffic: false` in `app.json`
    - Remove `networkSecurityConfig` from `app.json`
-   - Update `network_security_config.xml` to only allow HTTPS
+   - Update `network_security_config.xml` to only allow httpsS
    - Remove `android:usesCleartextTraffic="true"` from AndroidManifest.xml
 
-4. **Test thoroughly with HTTPS endpoints**
+4. **Test thoroughly with httpsS endpoints**
 
 ## Support
 

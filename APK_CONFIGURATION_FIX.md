@@ -1,14 +1,14 @@
 # 🔧 APK Configuration Fix Guide
 
 ## 🚨 **Issue Identified**
-The APK is not able to connect to the backend because of network security configuration issues. The backend is running on Digital Ocean (`139.59.1.59:3000`) but the APK's network security settings were blocking connections.
+The APK is not able to connect to the backend because of network security configuration issues. The backend is running on Digital Ocean (`165.232.184.91:3000`) but the APK's network security settings were blocking connections.
 
 ## ✅ **Fixes Applied**
 
 ### 1. **Simplified Network Security Configuration**
 - **File**: `app.json`
 - **Change**: Removed `networkSecurityConfig` reference and kept only `usesCleartextTraffic: true`
-- **Impact**: Allows HTTP connections to all domains (including Digital Ocean backend)
+- **Impact**: Allows https connections to all domains (including Digital Ocean backend)
 
 ### 2. **Updated Network Security Plugin**
 - **File**: `plugins/network-security.js`
@@ -17,20 +17,20 @@ The APK is not able to connect to the backend because of network security config
 
 ### 3. **Verified API Configuration**
 - **File**: `config.js`
-- **Status**: ✅ Correctly configured to use `http://139.59.1.59:3000`
+- **Status**: ✅ Correctly configured to use `https://165.232.184.91:3000`
 - **Impact**: API service will use the correct backend URL
 
 ## 🔍 **Configuration Details**
 
 ### **Backend Status**
-- ✅ **Backend Running**: `http://139.59.1.59:3000`
+- ✅ **Backend Running**: `https://165.232.184.91:3000`
 - ✅ **Health Check**: Responding with status 200
 - ✅ **Authentication**: Login/Register endpoints working
 
 ### **APK Configuration**
-- ✅ **API Base URL**: `http://139.59.1.59:3000`
-- ✅ **Cleartext Traffic**: Enabled for HTTP connections
-- ✅ **Network Security**: Simplified to allow all HTTP traffic
+- ✅ **API Base URL**: `https://165.232.184.91:3000`
+- ✅ **Cleartext Traffic**: Enabled for https connections
+- ✅ **Network Security**: Simplified to allow all https traffic
 - ✅ **Permissions**: Internet and network state permissions included
 
 ## 🛠️ **Next Steps**
@@ -67,7 +67,7 @@ adb logcat | findstr "LOGIN API HEALTH APP CONNECTIVITY"
 ### **✅ Success Indicators**
 ```
 🚀 [APP] Initializing API Service...
-🌐 [APP] Base URL: http://139.59.1.59:3000
+🌐 [APP] Base URL: https://165.232.184.91:3000
 ✅ [APP] API health check passed
 ✅ [APP] Network connectivity test passed
 🔐 [LOGIN] Starting login process...
@@ -98,7 +98,7 @@ adb logcat | findstr "LOGIN API HEALTH APP CONNECTIVITY"
 3. **Test from Device**
    ```bash
    # Test connectivity from your phone
-   curl http://139.59.1.59:3000/api/health
+   curl https://165.232.184.91:3000/api/health
    ```
 
 4. **Check Firewall Settings**
@@ -127,7 +127,7 @@ adb logcat | findstr "LOGIN API HEALTH APP CONNECTIVITY"
 ## 🚀 **Production Considerations**
 
 For production deployment, consider:
-1. **HTTPS**: Switch to HTTPS for secure connections
+1. **httpsS**: Switch to httpsS for secure connections
 2. **Domain**: Use a proper domain instead of IP address
 3. **SSL Certificates**: Implement proper SSL/TLS certificates
 4. **Security**: Remove cleartext traffic allowances

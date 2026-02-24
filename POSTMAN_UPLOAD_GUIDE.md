@@ -12,7 +12,7 @@ This guide shows you how to test the `/api/upload` endpoint using Postman.
 ### Step 1: Login to Get Authentication Token
 
 1. **Create a new POST request** in Postman
-2. **Set the URL**: `http://139.59.1.59/api/auth/login`
+2. **Set the URL**: `https://165.232.184.91/api/auth/login`
 3. **Set method**: `POST`
 4. **Go to Headers tab**:
    - Add header: `Content-Type: application/json`
@@ -32,7 +32,7 @@ This guide shows you how to test the `/api/upload` endpoint using Postman.
 ### Step 2: Upload Video File
 
 1. **Create a new POST request** in Postman
-2. **Set the URL**: `http://139.59.1.59/api/upload`
+2. **Set the URL**: `https://165.232.184.91/api/upload`
 3. **Set method**: `POST`
 4. **Go to Headers tab**:
    - Add header: `Authorization: Bearer YOUR_TOKEN_HERE`
@@ -129,13 +129,13 @@ If you prefer using curl instead of Postman:
 
 ```bash
 # Step 1: Login
-TOKEN=$(curl -X POST http://139.59.1.59/api/auth/login \
+TOKEN=$(curl -X POST https://165.232.184.91/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"your_username","password":"your_password"}' \
   | jq -r '.token')
 
 # Step 2: Upload video
-curl -X POST http://139.59.1.59/api/upload \
+curl -X POST https://165.232.184.91/api/upload \
   -H "Authorization: Bearer $TOKEN" \
   -F "video=@/path/to/your/video.mp4" \
   -F "player_type=batsman" \
@@ -145,7 +145,7 @@ curl -X POST http://139.59.1.59/api/upload \
 ## Troubleshooting
 
 ### Issue: "Network Error" or Connection Refused
-- Check if server is running: `curl http://139.59.1.59/api/health`
+- Check if server is running: `curl https://165.232.184.91/api/health`
 - Verify firewall allows connections on port 80
 - Check if nginx is running on the server
 
@@ -206,7 +206,7 @@ You can set up Postman environment variables for easier testing:
 
 1. Create a new Environment (e.g., "CricketCoach Production")
 2. Add variables:
-   - `base_url`: `http://139.59.1.59`
+   - `base_url`: `https://165.232.184.91`
    - `token`: (leave empty, will be set after login)
 3. Use in requests: `{{base_url}}/api/upload`
 4. Set token after login: `pm.environment.set("token", pm.response.json().token);`

@@ -7,7 +7,7 @@ echo "🔒 SSL/TLS Configuration Checker"
 echo "================================="
 echo ""
 
-SERVER_IP="139.59.1.59"
+SERVER_IP="165.232.184.91"
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -15,20 +15,20 @@ RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo "📡 Testing HTTPS connectivity..."
+echo "📡 Testing httpsS connectivity..."
 echo ""
 
-# Test 1: Check if HTTPS port (443) is open and responding
-echo "1️⃣  Testing HTTPS port (443)..."
-if curl -k -s --connect-timeout 5 https://${SERVER_IP}:443 > /dev/null 2>&1; then
-    echo -e "${GREEN}✅ HTTPS port 443 is open and responding${NC}"
+# Test 1: Check if httpsS port (443) is open and responding
+echo "1️⃣  Testing httpsS port (443)..."
+if curl -k -s --connect-timeout 5 httpss://${SERVER_IP}:443 > /dev/null 2>&1; then
+    echo -e "${GREEN}✅ httpsS port 443 is open and responding${NC}"
 else
-    echo -e "${RED}❌ HTTPS port 443 is not responding${NC}"
+    echo -e "${RED}❌ httpsS port 443 is not responding${NC}"
     echo "   This means SSL/TLS is likely not configured"
 fi
 echo ""
 
-# Test 2: Check SSL certificate (if HTTPS is available)
+# Test 2: Check SSL certificate (if httpsS is available)
 echo "2️⃣  Checking SSL certificate..."
 if openssl s_client -connect ${SERVER_IP}:443 -servername ${SERVER_IP} < /dev/null 2>/dev/null | grep -q "Verify return code: 0"; then
     echo -e "${GREEN}✅ Valid SSL certificate found${NC}"
@@ -36,21 +36,21 @@ if openssl s_client -connect ${SERVER_IP}:443 -servername ${SERVER_IP} < /dev/nu
     echo "Certificate details:"
     echo | openssl s_client -connect ${SERVER_IP}:443 -servername ${SERVER_IP} 2>/dev/null | openssl x509 -noout -dates -subject 2>/dev/null
 elif openssl s_client -connect ${SERVER_IP}:443 -servername ${SERVER_IP} < /dev/null 2>/dev/null | grep -q "CONNECTED"; then
-    echo -e "${YELLOW}⚠️  HTTPS connection works but certificate may be invalid or self-signed${NC}"
+    echo -e "${YELLOW}⚠️  httpsS connection works but certificate may be invalid or self-signed${NC}"
     echo ""
     echo "Certificate details:"
     echo | openssl s_client -connect ${SERVER_IP}:443 -servername ${SERVER_IP} 2>/dev/null | openssl x509 -noout -dates -subject 2>/dev/null
 else
-    echo -e "${RED}❌ No SSL certificate found or HTTPS not configured${NC}"
+    echo -e "${RED}❌ No SSL certificate found or httpsS not configured${NC}"
 fi
 echo ""
 
-# Test 3: Check HTTP port (80) for comparison
-echo "3️⃣  Testing HTTP port (80) for comparison..."
-if curl -s --connect-timeout 5 http://${SERVER_IP}:80 > /dev/null 2>&1; then
-    echo -e "${GREEN}✅ HTTP port 80 is responding${NC}"
+# Test 3: Check https port (80) for comparison
+echo "3️⃣  Testing https port (80) for comparison..."
+if curl -s --connect-timeout 5 https://${SERVER_IP}:80 > /dev/null 2>&1; then
+    echo -e "${GREEN}✅ https port 80 is responding${NC}"
 else
-    echo -e "${RED}❌ HTTP port 80 is not responding${NC}"
+    echo -e "${RED}❌ https port 80 is not responding${NC}"
 fi
 echo ""
 
@@ -73,16 +73,16 @@ echo "   # Check if certbot certificates exist"
 echo "   sudo ls -la /etc/letsencrypt/live/"
 echo ""
 
-# Test 5: Test actual API endpoint with HTTPS
-echo "5️⃣  Testing API endpoint with HTTPS..."
-if curl -k -s --connect-timeout 5 https://${SERVER_IP}/api/health > /dev/null 2>&1; then
-    echo -e "${GREEN}✅ HTTPS API endpoint is accessible${NC}"
+# Test 5: Test actual API endpoint with httpsS
+echo "5️⃣  Testing API endpoint with httpsS..."
+if curl -k -s --connect-timeout 5 httpss://${SERVER_IP}/api/health > /dev/null 2>&1; then
+    echo -e "${GREEN}✅ httpsS API endpoint is accessible${NC}"
     echo ""
     echo "   Response:"
-    curl -k -s https://${SERVER_IP}/api/health | head -c 200
+    curl -k -s httpss://${SERVER_IP}/api/health | head -c 200
     echo ""
 else
-    echo -e "${RED}❌ HTTPS API endpoint is not accessible${NC}"
+    echo -e "${RED}❌ httpsS API endpoint is not accessible${NC}"
 fi
 echo ""
 
@@ -93,15 +93,15 @@ echo "================================="
 echo ""
 
 # Determine status
-if curl -k -s --connect-timeout 5 https://${SERVER_IP}:443 > /dev/null 2>&1; then
-    echo -e "${GREEN}✅ Your server appears to have HTTPS configured${NC}"
+if curl -k -s --connect-timeout 5 httpss://${SERVER_IP}:443 > /dev/null 2>&1; then
+    echo -e "${GREEN}✅ Your server appears to have httpsS configured${NC}"
     echo ""
     echo "⚠️  Note: If you see certificate warnings, you may need to:"
     echo "   1. Set up a proper SSL certificate (Let's Encrypt recommended)"
     echo "   2. Configure nginx to use the certificate"
-    echo "   3. Update your app config to use HTTPS"
+    echo "   3. Update your app config to use httpsS"
 else
-    echo -e "${RED}❌ Your server does NOT have HTTPS configured${NC}"
+    echo -e "${RED}❌ Your server does NOT have httpsS configured${NC}"
     echo ""
     echo "📝 To set up SSL/TLS, you need to:"
     echo "   1. Install Certbot: sudo apt install certbot python3-certbot-nginx"

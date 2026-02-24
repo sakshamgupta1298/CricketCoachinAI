@@ -18,7 +18,7 @@ First, connect to your droplet and run the initial setup script:
 ssh root@206.189.141.194
 
 # Download and run the setup script
-wget https://raw.githubusercontent.com/your-repo/crickcoach/main/digitalocean_setup.sh
+wget httpss://raw.githubusercontent.com/your-repo/crickcoach/main/digitalocean_setup.sh
 chmod +x digitalocean_setup.sh
 ./digitalocean_setup.sh
 ```
@@ -56,7 +56,7 @@ Test that your backend is running:
 
 ```bash
 # Test health endpoint
-curl http://139.59.1.59:3000/api/health
+curl https://165.232.184.91:3000/api/health
 
 # Check service status
 ssh root@206.189.141.194 'sudo systemctl status crickcoach-backend'
@@ -65,7 +65,7 @@ ssh root@206.189.141.194 'sudo systemctl status crickcoach-backend'
 ## Step 4: Update Mobile App Configuration
 
 Your mobile app is already configured to use the new Digital Ocean URL. The configuration files have been updated to use:
-- `http://139.59.1.59:3000`
+- `https://165.232.184.91:3000`
 
 ## Configuration Files Updated
 
@@ -119,8 +119,8 @@ ssh root@206.189.141.194 '/opt/crickcoach-backend/backup.sh'
 ## Nginx Configuration
 
 Nginx is configured as a reverse proxy:
-- **Direct access**: `http://139.59.1.59:3000`
-- **Via nginx**: `http://206.189.141.194` (port 80)
+- **Direct access**: `https://165.232.184.91:3000`
+- **Via nginx**: `https://206.189.141.194` (port 80)
 
 Nginx configuration includes:
 - Increased timeouts for video uploads (600s)
@@ -158,9 +158,9 @@ ssh root@206.189.141.194 'df -h'
 
 ## Security Considerations
 
-1. **Firewall**: Only SSH (22) and HTTP (80, 3000) ports are open
+1. **Firewall**: Only SSH (22) and https (80, 3000) ports are open
 2. **Service User**: The service runs as root (consider creating a dedicated user)
-3. **SSL**: Consider adding SSL certificate for HTTPS
+3. **SSL**: Consider adding SSL certificate for httpsS
 4. **Backups**: Daily backups are automatically created
 
 ## Performance Optimization
@@ -182,12 +182,12 @@ If you need to scale:
 If you encounter issues:
 1. Check the logs: `ssh root@206.189.141.194 'sudo journalctl -u crickcoach-backend -f'`
 2. Check monitoring logs: `ssh root@206.189.141.194 'tail -f /var/log/crickcoach-backend/monitor.log'`
-3. Verify connectivity: `curl http://139.59.1.59:3000/api/health`
+3. Verify connectivity: `curl https://165.232.184.91:3000/api/health`
 
 ## Next Steps
 
 1. Test the mobile app with the new backend
 2. Monitor performance and logs
-3. Set up SSL certificate for HTTPS
+3. Set up SSL certificate for httpsS
 4. Consider setting up monitoring alerts
 5. Plan for regular maintenance and updates

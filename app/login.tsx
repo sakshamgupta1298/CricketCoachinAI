@@ -154,10 +154,15 @@ export default function LoginScreen() {
         stack: error.stack
       });
       
+      // Extract error message from the error object
+      const errorMessage = error?.response?.error || 
+                          error?.message || 
+                          'Network error. Please check your connection and ensure the backend server is running.';
+      
       Toast.show({
         type: 'error',
-        text1: 'Error',
-        text2: 'Network error. Please try again.',
+        text1: 'Connection Error',
+        text2: errorMessage,
       });
     } finally {
       console.log('🏁 [LOGIN_SCREEN] Authentication process completed');

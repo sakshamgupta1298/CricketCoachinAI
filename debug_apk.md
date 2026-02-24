@@ -44,7 +44,7 @@ adb logcat | findstr "LOGIN API HEALTH APP CONNECTIVITY"
 
 ### ✅ Success Indicators:
 - `🚀 [APP] CrickCoach App starting...`
-- `🌐 [API] Production URL: http://192.168.1.3:8000`
+- `🌐 [API] Production URL: https://192.168.1.3:8000`
 - `✅ [APP] API health check passed`
 - `✅ [APP] Network connectivity test passed`
 - `🔐 [LOGIN] Starting login process...`

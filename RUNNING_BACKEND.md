@@ -134,12 +134,12 @@ If you see the startup logs, the script is working correctly!
 If you're getting network errors when trying to login from the mobile app:
 
 ### Quick Fix
-1. **Update config.js** - Already updated to use `http://139.59.1.59:3000` ✅
+1. **Update config.js** - Already updated to use `https://139.59.1.59:3000` ✅
 2. **Rebuild the mobile app** after config changes
 3. **Verify backend is accessible**:
    ```bash
    # Test from command line
-   curl http://139.59.1.59:3000/api/health
+   curl https://139.59.1.59:3000/api/health
    
    # Or run the test script
    python test_login_connectivity.py

@@ -18,7 +18,7 @@ def get_local_ip():
 def test_backend_connectivity(ip_address, port=8000):
     """Test if backend is accessible from a specific IP"""
     try:
-        url = f"http://{ip_address}:{port}/api/health"
+        url = f"https://{ip_address}:{port}/api/health"
         print(f"🔍 Testing: {url}")
         
         response = requests.get(url, timeout=5)

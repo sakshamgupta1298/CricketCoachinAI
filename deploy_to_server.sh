@@ -6,7 +6,7 @@
 set -e
 
 # Configuration
-SERVER_IP="139.59.1.59"
+SERVER_IP="165.232.184.91"
 SERVER_USER="root"
 PROJECT_NAME="CrickCoach"
 
@@ -104,14 +104,14 @@ print_info "Testing the production setup..."
 sleep 10  # Give services time to start
 
 # Test backend health
-if curl -f http://$SERVER_IP/health > /dev/null 2>&1; then
+if curl -f https://$SERVER_IP/health > /dev/null 2>&1; then
     print_status "Backend is accessible through nginx proxy"
 else
     print_warning "Backend health check failed through nginx"
 fi
 
 # Test direct backend access
-if curl -f http://$SERVER_IP:3000/api/health > /dev/null 2>&1; then
+if curl -f https://$SERVER_IP:3000/api/health > /dev/null 2>&1; then
     print_status "Backend is accessible directly"
 else
     print_warning "Direct backend access failed"
@@ -124,9 +124,9 @@ echo ""
 print_info "Your CrickCoach backend is now running 24/7 with nginx!"
 echo ""
 print_info "Access URLs:"
-echo "  - Main Backend: http://$SERVER_IP"
-echo "  - Health Check: http://$SERVER_IP/health"
-echo "  - Direct Backend: http://$SERVER_IP:3000"
+echo "  - Main Backend: https://$SERVER_IP"
+echo "  - Health Check: https://$SERVER_IP/health"
+echo "  - Direct Backend: https://$SERVER_IP:3000"
 echo ""
 print_info "Service Management:"
 echo "  - Backend Status: ssh $SERVER_USER@$SERVER_IP 'systemctl status crickcoach-backend'"
@@ -134,7 +134,7 @@ echo "  - Backend Logs: ssh $SERVER_USER@$SERVER_IP 'journalctl -u crickcoach-ba
 echo "  - Restart Backend: ssh $SERVER_USER@$SERVER_IP 'systemctl restart crickcoach-backend'"
 echo ""
 print_warning "Next Steps:"
-echo "  1. Update your mobile app config to use: http://$SERVER_IP"
+echo "  1. Update your mobile app config to use: https://$SERVER_IP"
 echo "  2. Test the mobile app connection"
 echo "  3. Monitor the logs for any issues"
 echo ""

@@ -41,16 +41,16 @@ sleep 10
 
 # Test the backend
 echo "🧪 Testing backend..."
-if curl -f http://localhost:3000/api/health > /dev/null 2>&1; then
+if curl -f https://localhost:3000/api/health > /dev/null 2>&1; then
     echo "✅ Backend is running successfully!"
-    echo "🌐 External URL: http://139.59.1.59:3000"
+    echo "🌐 External URL: https://165.232.184.91:3000"
     
     # Test CORS headers
     echo "🔍 Testing CORS headers..."
-    curl -I -H "Origin: https://example.com" \
+    curl -I -H "Origin: httpss://example.com" \
          -H "Access-Control-Request-Method: POST" \
          -H "Access-Control-Request-Headers: Content-Type" \
-         -X OPTIONS http://localhost:3000/api/health
+         -X OPTIONS https://localhost:3000/api/health
     
     echo ""
     echo "✅ Backend should now work with your mobile app!"

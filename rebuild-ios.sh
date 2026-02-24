@@ -41,8 +41,8 @@ else
     echo "❌ WARNING: NSAllowsArbitraryLoads not found in Info.plist"
 fi
 
-if grep -q "139.59.1.59" ios/CrickCoachAI/Info.plist; then
-    echo "✅ Backend IP (139.59.1.59) found in Info.plist exceptions"
+if grep -q "165.232.184.91" ios/CrickCoachAI/Info.plist; then
+    echo "✅ Backend IP (165.232.184.91) found in Info.plist exceptions"
 else
     echo "❌ WARNING: Backend IP not found in Info.plist exceptions"
 fi

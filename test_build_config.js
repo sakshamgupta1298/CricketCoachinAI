@@ -51,7 +51,7 @@ const testBuildConfig = () => {
   console.log('\n2️⃣ Checking config.js...');
   try {
     const configContent = fs.readFileSync('config.js', 'utf8');
-    if (configContent.includes('139.59.1.59:3000')) {
+    if (configContent.includes('165.232.184.91:3000')) {
       console.log('✅ Backend URL is correctly configured');
     } else {
       console.log('❌ Backend URL is not correctly configured');

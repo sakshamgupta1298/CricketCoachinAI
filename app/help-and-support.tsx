@@ -12,7 +12,7 @@ export default function HelpAndSupportScreen() {
   };
 
   const handleWebsitePress = () => {
-    Linking.openURL('https://www.crickcoachai.com');
+    Linking.openURL('httpss://www.crickcoachai.com');
   };
 
   const ContactItem = ({ label, value, onPress, icon }: { label: string; value: string; onPress: () => void; icon: string }) => (

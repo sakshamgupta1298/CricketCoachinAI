@@ -1,5 +1,4 @@
 import os
-import sys
 import json
 import torch
 import torch.nn as nn
@@ -37,32 +36,20 @@ import subprocess
 import shutil
 
 # ==================== LOGGING CONFIGURATION ====================
-# Force unbuffered output for immediate log visibility
-sys.stdout.reconfigure(line_buffering=True) if hasattr(sys.stdout, 'reconfigure') else None
-sys.stderr.reconfigure(line_buffering=True) if hasattr(sys.stderr, 'reconfigure') else None
-
 # Create logging directory if it doesn't exist
 LOG_DIR = 'logging'
 os.makedirs(LOG_DIR, exist_ok=True)
 
 # Configure logging with date and time
 log_filename = os.path.join(LOG_DIR, f'backend_{datetime.now().strftime("%Y%m%d")}.log')
-
-# Create a custom StreamHandler that flushes immediately
-class UnbufferedStreamHandler(logging.StreamHandler):
-    def emit(self, record):
-        super().emit(record)
-        self.flush()
-
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S',
     handlers=[
         logging.FileHandler(log_filename, encoding='utf-8'),
-        UnbufferedStreamHandler(sys.stdout)  # Unbuffered console output
-    ],
-    force=True  # Override any existing configuration
+        logging.StreamHandler()  # Also log to console
+    ]
 )
 
 # Get logger for this module
@@ -446,7 +433,7 @@ def send_expo_push(expo_push_token, title, body, data=None):
         }
         logger.info(f"📣 [PUSH] Sending push to token: {str(expo_push_token)[:30]}...")
         resp = requests.post(
-            "https://exp.host/--/api/v2/push/send",
+            "httpss://exp.host/--/api/v2/push/send",
             json=payload,
             timeout=10,
         )
@@ -632,13 +619,13 @@ def process_analysis_job(job_id, user_id, username, filepath, filename, form, ex
 # Model configuration
 MODEL_PATH = "slowfast_cricket.pth"
 FILE_ID = "1SRsNEUv4a4FLisMZGM0-BH1J4RlqT0HN"
-# DOWNLOAD_URL = f"https://drive.google.com/uc?id={FILE_ID}"
+DOWNLOAD_URL = f"httpss://drive.google.com/uc?id={FILE_ID}"
 
 # Automatically download the model if it's missing
-# if not os.path.exists(MODEL_PATH):
-#     logger.info("Model not found locally. Downloading from Google Drive...")
-#     gdown.download(DOWNLOAD_URL, MODEL_PATH, quiet=False)
-#     logger.info(f"Model downloaded successfully to {MODEL_PATH}")
+if not os.path.exists(MODEL_PATH):
+    logger.info("Model not found locally. Downloading from Google Drive...")
+    gdown.download(DOWNLOAD_URL, MODEL_PATH, quiet=False)
+    logger.info(f"Model downloaded successfully to {MODEL_PATH}")
 
 CHECKPOINT_PATH = MODEL_PATH
 # BATTER_SIDE = "right"
@@ -647,7 +634,7 @@ CHECKPOINT_PATH = MODEL_PATH
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Gemini client
-genai.configure(api_key="AIzaSyCNmpg89-pwOyrimMEmgyt4aT9d07MzYYc")
+client = genai.Client(api_key="AIzaSyCNmpg89-pwOyrimMEmgyt4aT9d07MzYYc")
 
 def extract_json_from_response(text: str) -> str:
     """
@@ -745,7 +732,7 @@ def initialize_models():
     logger.info("Initializing models...")
     # shot_prediction_model = load_model()  # Commented out - users will select shot type manually
     # logger.info("Shot prediction model loaded successfully")
-    pose_detection_model = hub.load("https://tfhub.dev/google/movenet/singlepose/thunder/4")
+    pose_detection_model = hub.load("httpss://tfhub.dev/google/movenet/singlepose/thunder/4")
     movenet_signature = pose_detection_model.signatures['serving_default']
     logger.info("Pose detection model loaded successfully")
     logger.info("All models initialized successfully!")
@@ -763,7 +750,7 @@ def get_pose_detection_model():
     global pose_detection_model
     if pose_detection_model is None:
         logger.warning("Pose detection model not initialized, loading now...")
-        pose_detection_model = hub.load("https://tfhub.dev/google/movenet/singlepose/thunder/4")
+        pose_detection_model = hub.load("httpss://tfhub.dev/google/movenet/singlepose/thunder/4")
         logger.info("Pose detection model loaded")
     return pose_detection_model
 
@@ -1096,14 +1083,14 @@ def get_feedback_from_gpt_for_bowling(keypoint_csv_path, bowler_type='fast_bowle
 # ================================
     logger.info("Stage 1: Running biomechanical analysis for bowling (Prompt A)...")
     try:
-        model = genai.GenerativeModel("gemini-2.5-pro")
-        response_A = model.generate_content(
-            prompt_A,
-            generation_config={
-                "temperature": 0,
-                "top_p": 1,
-                "top_k": 1
-            }
+        response_A = client.models.generate_content(
+            model="gemini-2.5-pro",
+            contents=[prompt_A],
+            config={
+            "temperature": 0,
+            "top_p": 1,
+            "top_k": 1
+        }
         )
 
         raw_content_A = response_A.text
@@ -1177,6 +1164,26 @@ INTERPRETATION RULES (STRICT)
 - Data Mapping: Carry over the 'observed' and 'ideal_range' values EXACTLY as they appear in the Biomechanics Report for the chosen faults
 
 ────────────────────────
+USER-FRIENDLY LANGUAGE RULE (CRITICAL)
+────────────────────────
+- "feature_key" must remain biomechanical (exact feature name)
+- Add a new field: "display_name"
+- display_name must:
+    - be simple English
+    - avoid scientific or anatomical terminology
+    - be understandable by school-level players
+    - avoid words like: angular velocity, separation, trunk, sequencing, kinematic
+
+Examples:
+- "hip–shoulder separation" → "Body twist timing"
+- "trunk lean" → "Upper body tilt"
+- "center of mass shift" → "Body weight movement"
+- "bat angular velocity" → "Bat swing speed"
+- "spine angle change" → "Back posture change"
+- "front knee flexion" → "Front knee bend"
+- "bat proximity to torso" → "Bat too close to body"
+
+────────────────────────
 SKILL-LEVEL ADAPTATION
 ────────────────────────
 - Beginner → simple language, run-up rhythm & basic action focus
@@ -1247,14 +1254,14 @@ REQUIRED JSON OUTPUT
 """
 
     try:
-        model = genai.GenerativeModel("gemini-2.5-pro")
-        response_B = model.generate_content(
-            prompt_B,
-            generation_config={
-                "temperature": 0,
-                "top_p": 1,
-                "top_k": 1
-            }
+        response_B = client.models.generate_content(
+            model="gemini-2.5-pro",
+            contents=[prompt_B],
+            config={
+            "temperature": 0,
+            "top_p": 1,
+            "top_k": 1
+        }
         )
 
         raw_content_B = response_B.text
@@ -1618,14 +1625,14 @@ def get_feedback_from_gpt_for_keeping(keypoint_csv_path, keeping_type='standing_
 # ================================
     logger.info("Stage 1: Running biomechanical analysis for keeping (Prompt A)...")
     try:
-        model = genai.GenerativeModel("gemini-2.5-pro")
-        response_A = model.generate_content(
-            prompt_A,
-            generation_config={
-                "temperature": 0,
-                "top_p": 1,
-                "top_k": 1
-            }
+        response_A = client.models.generate_content(
+            model="gemini-2.5-pro",
+            contents=[prompt_A],
+            config={
+            "temperature": 0,
+            "top_p": 1,
+            "top_k": 1
+        }
         )
 
         raw_content_A = response_A.text
@@ -1793,14 +1800,14 @@ REQUIRED JSON OUTPUT
 """
 
     try:
-        model = genai.GenerativeModel("gemini-2.5-pro")
-        response_B = model.generate_content(
-            prompt_B,
-            generation_config={
-                "temperature": 0,
-                "top_p": 1,
-                "top_k": 1
-            }
+        response_B = client.models.generate_content(
+            model="gemini-2.5-pro",
+            contents=[prompt_B],
+            config={
+            "temperature": 0,
+            "top_p": 1,
+            "top_k": 1
+        }
         )
 
         raw_content_B = response_B.text
@@ -2538,14 +2545,14 @@ def get_feedback_from_gpt(action_type, keypoint_csv_path, player_level='intermed
 # ================================
     logger.info("Stage 1: Running biomechanical analysis (Prompt A)...")
     try:
-        model = genai.GenerativeModel("gemini-2.5-pro")
-        response_A = model.generate_content(
-            prompt_A,
-            generation_config={
-                "temperature": 0,
-                "top_p": 1,
-                "top_k": 1
-            }
+        response_A = client.models.generate_content(
+            model="gemini-2.5-pro",
+            contents=[prompt_A],
+            config={
+            "temperature": 0,
+            "top_p": 1,
+            "top_k": 1
+        }
         )
 
         raw_content_A = response_A.text
@@ -2614,6 +2621,26 @@ INTERPRETATION RULES (STRICT)
 - Data Mapping: Carry over the 'observed' and 'ideal_range' values EXACTLY as they appear in the Biomechanics Report for the chosen faults
 
 ────────────────────────
+USER-FRIENDLY LANGUAGE RULE (CRITICAL)
+────────────────────────
+- "feature_key" must remain biomechanical (exact feature name)
+- Add a new field: "display_name"
+- display_name must:
+    - be simple English
+    - avoid scientific or anatomical terminology
+    - be understandable by school-level players
+    - avoid words like: angular velocity, separation, trunk, sequencing, kinematic
+
+Examples:
+- "hip–shoulder separation" → "Body twist timing"
+- "trunk lean" → "Upper body tilt"
+- "center of mass shift" → "Body weight movement"
+- "bat angular velocity" → "Bat swing speed"
+- "spine angle change" → "Back posture change"
+- "front knee flexion" → "Front knee bend"
+- "bat proximity to torso" → "Bat too close to body"
+
+────────────────────────
 SKILL-LEVEL ADAPTATION
 ────────────────────────
 - Beginner → simple language, balance & head position focus
@@ -2677,14 +2704,14 @@ REQUIRED JSON OUTPUT
 """
 
     try:
-        model = genai.GenerativeModel("gemini-2.5-pro")
-        response_B = model.generate_content(
-            prompt_B,
-            generation_config={
-                "temperature": 0,
-                "top_p": 1,
-                "top_k": 1
-            }
+        response_B = client.models.generate_content(
+            model="gemini-2.5-pro",
+            contents=[prompt_B],
+            config={
+            "temperature": 0,
+            "top_p": 1,
+            "top_k": 1
+        }
         )
 
         raw_content_B = response_B.text
@@ -2948,8 +2975,10 @@ Example JSON structure:
 """
 
     try:
-        model = genai.GenerativeModel("gemini-2.5-pro")
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model="gemini-2.5-pro",
+            contents=[prompt]
+        )
         raw = response.text
         json_text = extract_json_from_response(raw)
         plan_json = json.loads(json_text)
@@ -4133,8 +4162,10 @@ RULES
             def make_api_call():
                 nonlocal response
                 try:
-                    model = genai.GenerativeModel("gemini-2.5-pro")
-                    response = model.generate_content(prompt)
+                    response = client.models.generate_content(
+                        model="gemini-2.5-pro",
+                        contents=[prompt]
+                    )
                 except Exception as e:
                     error_occurred[0] = True
                     exception_holder[0] = e
@@ -4408,7 +4439,7 @@ def google_signin():
             logger.debug(f"Decoded token data: {token_data.get('email', 'N/A')}")
             
             # Verify the token is from Google
-            if token_data.get('iss') not in ['https://accounts.google.com', 'accounts.google.com']:
+            if token_data.get('iss') not in ['httpss://accounts.google.com', 'accounts.google.com']:
                 logger.warning(f"Invalid token issuer: {token_data.get('iss')}")
                 return jsonify({'error': 'Invalid Google token'}), 401
             
@@ -5301,39 +5332,18 @@ def verify_username_otp():
         return jsonify({'error': 'Failed to verify OTP'}), 500
 
 if __name__ == '__main__':
-    try:
-        # Initialize database
-        logger.info("Initializing database...")
-        sys.stdout.flush()  # Ensure output is visible
-        init_database()
-        logger.info("Database initialized successfully")
-        sys.stdout.flush()
-        
-        # Initialize models before starting the server
-        logger.info("Initializing AI models...")
-        sys.stdout.flush()
-        initialize_models()
-        logger.info("Models initialized successfully")
-        sys.stdout.flush()
-        
-        # Start the Flask server
-        port = int(os.environ.get('FLASK_PORT', 3000))
-        logger.info(f"Starting Flask server on port {port}")
-        logger.info("=" * 80)
-        logger.info("Server is ready to accept connections")
-        logger.info(f"Access the API at: http://0.0.0.0:{port}")
-        logger.info("=" * 80)
-        sys.stdout.flush()
-        
-        # Server environment - disable debug mode and reloader
-        app.run(debug=False, host='0.0.0.0', port=port, use_reloader=False)
-    except KeyboardInterrupt:
-        logger.info("Server shutdown requested by user")
-        sys.stdout.flush()
-        sys.exit(0)
-    except Exception as e:
-        logger.error(f"Fatal error starting server: {str(e)}", exc_info=True)
-        sys.stdout.flush()
-        sys.stderr.flush()
-        sys.exit(1)
+    # Initialize database
+    logger.info("Initializing database...")
+    init_database()
+    
+    # Initialize models before starting the server
+    initialize_models()
+    
+    # Start the Flask server
+    port = int(os.environ.get('FLASK_PORT', 3000))
+    logger.info(f"Starting Flask server on port {port}")
+    logger.info("=" * 80)
+    
+    # Server environment - disable debug mode and reloader
+    app.run(debug=False, host='0.0.0.0', port=port, use_reloader=False)
     

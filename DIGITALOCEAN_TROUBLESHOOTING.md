@@ -41,10 +41,10 @@ sudo ufw reload
 ### Step 5: Test the backend locally on the droplet
 ```bash
 # Test if the backend responds locally
-curl http://localhost:3000/api/health
+curl https://localhost:3000/api/health
 
 # Test from external IP
-curl http://139.59.1.59:3000/api/health
+curl https://165.232.184.91:3000/api/health
 ```
 
 ## 🔧 Complete Setup Instructions
@@ -129,7 +129,7 @@ import os
 import gdown
 MODEL_PATH = 'slowfast_cricket.pth'
 FILE_ID = '1SRsNEUv4a4FLisMZGM0-BH1J4RlqT0HN'
-DOWNLOAD_URL = f'https://drive.google.com/uc?id={FILE_ID}'
+DOWNLOAD_URL = f'httpss://drive.google.com/uc?id={FILE_ID}'
 if not os.path.exists(MODEL_PATH):
     gdown.download(DOWNLOAD_URL, MODEL_PATH, quiet=False)
 "
@@ -206,7 +206,7 @@ sudo systemctl enable crickcoach-backend.service
 ### From your local machine
 ```bash
 # Test basic connectivity
-curl http://139.59.1.59:3000/api/health
+curl https://165.232.184.91:3000/api/health
 
 # Run the test script
 python3 test_backend_connectivity.py
@@ -215,10 +215,10 @@ python3 test_backend_connectivity.py
 ### From the droplet
 ```bash
 # Test locally
-curl http://localhost:3000/api/health
+curl https://localhost:3000/api/health
 
 # Test from external IP
-curl http://139.59.1.59:3000/api/health
+curl https://165.232.184.91:3000/api/health
 ```
 
 ## 📱 Mobile App Configuration
@@ -227,11 +227,11 @@ Make sure your mobile app's `config.js` has the correct URL:
 ```javascript
 const config = {
   development: {
-    API_BASE_URL: 'http://139.59.1.59:3000',
+    API_BASE_URL: 'https://165.232.184.91:3000',
     API_TIMEOUT: 600000,
   },
   production: {
-    API_BASE_URL: 'http://139.59.1.59:3000',
+    API_BASE_URL: 'https://165.232.184.91:3000',
     API_TIMEOUT: 600000,
   }
 };
@@ -261,6 +261,6 @@ cd CrickCoach
 
 If you're still having issues:
 1. Check the logs: `sudo journalctl -u crickcoach-backend.service -f`
-2. Test connectivity: `curl http://localhost:3000/api/health`
+2. Test connectivity: `curl https://localhost:3000/api/health`
 3. Check firewall: `sudo ufw status`
 4. Verify the backend is running: `ps aux | grep python`

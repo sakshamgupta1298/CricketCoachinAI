@@ -9,7 +9,7 @@ import json
 
 def test_cors_headers():
     """Test CORS headers with mobile app-like requests"""
-    base_url = "http://139.59.1.59:3000"
+    base_url = "https://165.232.184.91:3000"
     
     print("🔍 Testing CORS Headers and Mobile App Connectivity")
     print("=" * 60)
@@ -28,7 +28,7 @@ def test_cors_headers():
     print("\n2️⃣ Testing OPTIONS request (preflight)...")
     try:
         headers = {
-            'Origin': 'https://example.com',
+            'Origin': 'httpss://example.com',
             'Access-Control-Request-Method': 'POST',
             'Access-Control-Request-Headers': 'Content-Type,Authorization'
         }
@@ -48,7 +48,7 @@ def test_cors_headers():
             'Content-Type': 'application/json',
             'Accept': 'application/json',
             'User-Agent': 'CrickCoach/1.0 (React Native)',
-            'Origin': 'https://example.com'
+            'Origin': 'httpss://example.com'
         }
         data = {
             'username': 'test_user_cors',

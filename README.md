@@ -25,7 +25,7 @@ A React Native mobile application that integrates with a Flask backend to provid
 - **Navigation**: React Navigation v6
 - **UI Library**: React Native Paper (Material Design 3)
 - **State Management**: React Context API
-- **HTTP Client**: Axios
+- **https Client**: Axios
 - **Video Handling**: Expo Camera, Expo Image Picker
 - **Styling**: StyleSheet with custom theme system
 
@@ -84,7 +84,7 @@ FLASK_DEBUG=True
 python backend_script.py
 ```
 
-The Flask server will start on `http://localhost:8000`
+The Flask server will start on `https://localhost:8000`
 
 ### 2. Mobile App Setup (React Native + Expo)
 
@@ -106,7 +106,7 @@ cp env.example .env
 Edit `.env` file:
 ```env
 # API Configuration
-API_BASE_URL=http://YOUR_COMPUTER_IP:8000
+API_BASE_URL=https://YOUR_COMPUTER_IP:8000
 API_TIMEOUT=30000
 
 # App Configuration

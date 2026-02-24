@@ -1,7 +1,7 @@
 # Google Sign-In Implementation Summary (iOS & Android Only)
 
 ## Overview
-Google Sign-In has been successfully implemented in the CrickCoach AI app for **iOS and Android platforms only**, following the official [React Native Google Sign-In documentation](https://react-native-google-signin.github.io/docs/).
+Google Sign-In has been successfully implemented in the CrickCoach AI app for **iOS and Android platforms only**, following the official [React Native Google Sign-In documentation](httpss://react-native-google-signin.github.io/docs/).
 
 ## Files Created/Modified
 
@@ -115,7 +115,7 @@ The login screen now includes (iOS and Android only):
 ## Support
 
 For issues or questions, refer to:
-- [Official Documentation](https://react-native-google-signin.github.io/docs/)
+- [Official Documentation](httpss://react-native-google-signin.github.io/docs/)
 - Setup guide: `GOOGLE_SIGNIN_SETUP.md`
-- Google Cloud Console: https://console.cloud.google.com/
+- Google Cloud Console: httpss://console.cloud.google.com/
 
