@@ -70,7 +70,7 @@ import os
 import gdown
 MODEL_PATH = 'slowfast_cricket.pth'
 FILE_ID = '1SRsNEUv4a4FLisMZGM0-BH1J4RlqT0HN'
-DOWNLOAD_URL = f'https://drive.google.com/uc?id={FILE_ID}'
+DOWNLOAD_URL = f'httpss://drive.google.com/uc?id={FILE_ID}'
 if not os.path.exists(MODEL_PATH):
     print('Downloading model...')
     gdown.download(DOWNLOAD_URL, MODEL_PATH, quiet=False)
@@ -127,10 +127,10 @@ sudo systemctl status crickcoach-backend.service --no-pager
 # 13. Test the API
 print_status "Testing API endpoint..."
 sleep 10
-if curl -f http://localhost:3000/api/health > /dev/null 2>&1; then
+if curl -f https://localhost:3000/api/health > /dev/null 2>&1; then
     print_status "✅ Backend is running successfully!"
-    print_status "🌐 External URL: http://$(curl -s ifconfig.me):3000"
-    print_status "🔧 Health check: http://$(curl -s ifconfig.me):3000/api/health"
+    print_status "🌐 External URL: https://$(curl -s ifconfig.me):3000"
+    print_status "🔧 Health check: https://$(curl -s ifconfig.me):3000/api/health"
 else
     print_error "❌ Backend is not responding. Check logs with: sudo journalctl -u crickcoach-backend.service -f"
 fi
@@ -142,6 +142,6 @@ echo "  View logs: sudo journalctl -u crickcoach-backend.service -f"
 echo "  Restart service: sudo systemctl restart crickcoach-backend.service"
 echo "  Stop service: sudo systemctl stop crickcoach-backend.service"
 echo "  Check status: sudo systemctl status crickcoach-backend.service"
-echo "  Test API: curl http://localhost:3000/api/health"
+echo "  Test API: curl https://localhost:3000/api/health"
 
 print_status "Setup completed! Your backend should now be accessible from your mobile app."

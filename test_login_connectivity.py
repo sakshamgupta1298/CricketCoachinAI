@@ -9,9 +9,9 @@ import sys
 
 # Test URLs - update if needed
 TEST_URLS = [
-    'http://139.59.1.59:3000',
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
+    'https://139.59.1.59:3000',
+    'https://localhost:3000',
+    'https://127.0.0.1:3000',
 ]
 
 def test_health_check(base_url):

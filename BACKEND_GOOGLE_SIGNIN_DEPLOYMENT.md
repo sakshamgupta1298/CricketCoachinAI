@@ -20,7 +20,7 @@ I've added the `/api/auth/google-signin` endpoint to your `backend_script.py` fi
   "id_token": "google-jwt-token",
   "email": "user@example.com",
   "name": "User Name",
-  "photo": "https://photo-url.com/photo.jpg"
+  "photo": "httpss://photo-url.com/photo.jpg"
 }
 ```
 
@@ -80,7 +80,7 @@ Test the endpoint to make sure it's working:
 
 ```bash
 # Test with curl (replace with actual token)
-curl -X POST https://api.crickcoachai.com/api/auth/google-signin \
+curl -X POST httpss://api.crickcoachai.com/api/auth/google-signin \
   -H "Content-Type: application/json" \
   -d '{
     "id_token": "test-token",

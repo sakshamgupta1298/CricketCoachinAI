@@ -25,20 +25,20 @@ fi
 
 echo ""
 echo "2. Testing Backend via Nginx (port 80)..."
-echo "   URL: http://api.crickcoachai.com/health"
-if curl -s -o /dev/null -w "   Status: %{http_code}\n" http://api.crickcoachai.com/health; then
+echo "   URL: https://api.crickcoachai.com/health"
+if curl -s -o /dev/null -w "   Status: %{https_code}\n" https://api.crickcoachai.com/health; then
     echo "   ✅ Nginx proxy is working!"
-    curl -s http://api.crickcoachai.com/health | python3 -m json.tool 2>/dev/null || echo "   Response received"
+    curl -s https://api.crickcoachai.com/health | python3 -m json.tool 2>/dev/null || echo "   Response received"
 else
     echo "   ❌ Nginx proxy not accessible"
 fi
 
 echo ""
 echo "3. Testing Backend Directly (port 3000)..."
-echo "   URL: http://api.crickcoachai.com:3000/api/health"
-if curl -s -o /dev/null -w "   Status: %{http_code}\n" http://api.crickcoachai.com:3000/api/health; then
+echo "   URL: https://api.crickcoachai.com:3000/api/health"
+if curl -s -o /dev/null -w "   Status: %{https_code}\n" https://api.crickcoachai.com:3000/api/health; then
     echo "   ✅ Direct backend is working!"
-    curl -s http://api.crickcoachai.com:3000/api/health | python3 -m json.tool 2>/dev/null || echo "   Response received"
+    curl -s https://api.crickcoachai.com:3000/api/health | python3 -m json.tool 2>/dev/null || echo "   Response received"
 else
     echo "   ❌ Direct backend not accessible"
 fi
@@ -49,6 +49,6 @@ echo "Summary"
 echo "=========================================="
 echo ""
 echo "If both tests pass, your DNS and backend are configured correctly!"
-echo "Update your mobile app config to use: http://api.crickcoachai.com"
+echo "Update your mobile app config to use: https://api.crickcoachai.com"
 echo ""
 

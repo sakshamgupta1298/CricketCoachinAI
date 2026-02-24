@@ -50,7 +50,7 @@
 ```bash
 # 1. Stop ngrok (Ctrl+C)
 # 2. Restart ngrok
-ngrok http 8000
+ngrok https 8000
 
 # 3. Rebuild app
 expo start --clear
@@ -73,7 +73,7 @@ expo start --clear
 ## 📊 **Current Configuration:**
 
 - **API Timeout:** 300,000ms (5 minutes)
-- **Ngrok URL:** https://b0a929210c19.ngrok-free.app
+- **Ngrok URL:** httpss://b0a929210c19.ngrok-free.app
 - **Upload Endpoint:** /api/upload
 - **Authentication:** Required (JWT token)
 

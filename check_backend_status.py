@@ -16,7 +16,7 @@ def check_backend_status():
     # Test 1: Check if backend is responding
     print("\n1️⃣ Testing backend connectivity...")
     try:
-        response = requests.get('http://139.59.1.59:3000/api/health', timeout=10)
+        response = requests.get('https://165.232.184.91:3000/api/health', timeout=10)
         print(f"✅ Backend is responding: Status {response.status_code}")
         print(f"📄 Response: {response.text}")
     except requests.exceptions.ConnectionError:
@@ -36,7 +36,7 @@ def check_backend_status():
         import socket
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(5)
-        result = sock.connect_ex(('139.59.1.59', 3000))
+        result = sock.connect_ex(('165.232.184.91', 3000))
         sock.close()
         
         if result == 0:
@@ -57,7 +57,7 @@ def check_backend_status():
             'email': 'test_status@example.com',
             'password': 'testpass123'
         }
-        response = requests.post('http://139.59.1.59:3000/api/auth/register', 
+        response = requests.post('https://165.232.184.91:3000/api/auth/register', 
                                json=register_data, timeout=10)
         print(f"📊 Register endpoint: Status {response.status_code}")
         
@@ -66,7 +66,7 @@ def check_backend_status():
             'username': 'test_user_status',
             'password': 'testpass123'
         }
-        response = requests.post('http://139.59.1.59:3000/api/auth/login', 
+        response = requests.post('https://165.232.184.91:3000/api/auth/login', 
                                json=login_data, timeout=10)
         print(f"📊 Login endpoint: Status {response.status_code}")
         
@@ -87,7 +87,7 @@ def provide_fix_instructions():
     print("\n🔧 If backend is not running, here's how to fix it:")
     print("=" * 60)
     print("1. SSH into your droplet:")
-    print("   ssh root@139.59.1.59")
+    print("   ssh root@165.232.184.91")
     print()
     print("2. Navigate to your project:")
     print("   cd /root/CricketCoachinAI")
@@ -104,7 +104,7 @@ def provide_fix_instructions():
     print("   sudo ufw allow 3000/tcp")
     print()
     print("6. Test locally on droplet:")
-    print("   curl http://localhost:3000/api/health")
+    print("   curl https://localhost:3000/api/health")
 
 if __name__ == "__main__":
     if not check_backend_status():

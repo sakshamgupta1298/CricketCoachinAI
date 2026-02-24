@@ -23,7 +23,7 @@ start "Frontend App" cmd /k "npx expo start --clear"
 
 echo.
 echo ✅ Both servers should now be running!
-echo 🌐 Backend: http://192.168.1.3:8000
+echo 🌐 Backend: https://192.168.1.3:8000
 echo 📱 Frontend: Expo development server
 echo.
 echo 📋 Next steps:

@@ -7,14 +7,14 @@ You've updated the DNS to point `api.crickcoachai.com` to your server IP (139.59
 ## Configuration Updated
 
 The `config.js` file has been updated to use the domain name instead of the IP address:
-- **Before**: `http://139.59.1.59:3000`
-- **After**: `http://api.crickcoachai.com` (using Nginx proxy on port 80)
+- **Before**: `https://139.59.1.59:3000`
+- **After**: `https://api.crickcoachai.com` (using Nginx proxy on port 80)
 
 ## Benefits of Using Domain Name
 
 1. **Better Maintainability**: If server IP changes, just update DNS, no need to rebuild app
 2. **Professional**: Using domain names looks more professional
-3. **SSL Ready**: Easy to add SSL/HTTPS later with Let's Encrypt
+3. **SSL Ready**: Easy to add SSL/httpsS later with Let's Encrypt
 4. **Nginx Proxy**: Using Nginx on port 80 provides better performance and security
 
 ## Current Setup
@@ -23,12 +23,12 @@ The `config.js` file has been updated to use the domain name instead of the IP a
 - **Listening on**: Port 80
 - **Domain**: `api.crickcoachai.com`
 - **Proxies to**: Backend on port 3000
-- **Access**: `http://api.crickcoachai.com`
+- **Access**: `https://api.crickcoachai.com`
 
 ### Backend Configuration
 - **Running on**: Port 3000
-- **Direct access**: `http://api.crickcoachai.com:3000` (if needed)
-- **Via Nginx**: `http://api.crickcoachai.com` (recommended)
+- **Direct access**: `https://api.crickcoachai.com:3000` (if needed)
+- **Via Nginx**: `https://api.crickcoachai.com` (recommended)
 
 ## Testing DNS Resolution
 
@@ -45,13 +45,13 @@ dig api.crickcoachai.com
 ### 2. Test Backend via Domain
 ```bash
 # Test health check via Nginx (port 80)
-curl http://api.crickcoachai.com/health
+curl https://api.crickcoachai.com/health
 
 # Test health check directly (port 3000)
-curl http://api.crickcoachai.com:3000/api/health
+curl https://api.crickcoachai.com:3000/api/health
 
 # Test login endpoint
-curl -X POST http://api.crickcoachai.com/api/auth/login \
+curl -X POST https://api.crickcoachai.com/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"test","password":"test"}'
 ```
@@ -96,13 +96,13 @@ If you're still using IP addresses in network security configs, you can optional
 ```xml
 <key>api.crickcoachai.com</key>
 <dict>
-    <key>NSExceptionAllowsInsecureHTTPLoads</key>
+    <key>NSExceptionAllowsInsecurehttpsLoads</key>
     <true/>
 </dict>
 ```
 
-### 3. (Optional) Set Up SSL/HTTPS
-If you want to use HTTPS (recommended for production):
+### 3. (Optional) Set Up SSL/httpsS
+If you want to use httpsS (recommended for production):
 
 1. **Install Certbot**:
    ```bash
@@ -116,10 +116,10 @@ If you want to use HTTPS (recommended for production):
 
 3. **Update config.js**:
    ```javascript
-   API_BASE_URL: 'https://api.crickcoachai.com',
+   API_BASE_URL: 'httpss://api.crickcoachai.com',
    ```
 
-4. **Rebuild app** with HTTPS URL
+4. **Rebuild app** with httpsS URL
 
 ## Troubleshooting
 
@@ -148,7 +148,7 @@ If you want to use HTTPS (recommended for production):
 - [x] DNS updated to point to server IP
 - [x] `config.js` updated to use domain name
 - [ ] DNS propagation verified (`nslookup api.crickcoachai.com`)
-- [ ] Backend accessible via domain (`curl http://api.crickcoachai.com/health`)
+- [ ] Backend accessible via domain (`curl https://api.crickcoachai.com/health`)
 - [ ] Nginx is running and configured
 - [ ] Mobile app rebuilt with new configuration
 - [ ] Login tested from mobile app
@@ -159,8 +159,8 @@ If you want to use HTTPS (recommended for production):
 - **Server IP**: `139.59.1.59` (or `139.50.1.59`)
 - **Nginx**: Port 80 → Proxies to port 3000
 - **Backend**: Port 3000
-- **App Config**: `http://api.crickcoachai.com`
-- **Direct Backend**: `http://api.crickcoachai.com:3000` (if needed)
+- **App Config**: `https://api.crickcoachai.com`
+- **Direct Backend**: `https://api.crickcoachai.com:3000` (if needed)
 
 ## Notes
 

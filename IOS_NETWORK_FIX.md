@@ -1,23 +1,23 @@
 # iOS Network Connection Fix Guide
 
 ## 🚨 Issue
-iOS app cannot connect to HTTP backend (`http://139.59.1.59`) even though Android works fine.
+iOS app cannot connect to https backend (`https://165.232.184.91`) even though Android works fine.
 
 ## ✅ Configuration Status
 
 ### Current Configuration (Verified)
 - ✅ `Info.plist` has `NSAllowsArbitraryLoads: true`
-- ✅ `Info.plist` has exception domain for `139.59.1.59`
+- ✅ `Info.plist` has exception domain for `165.232.184.91`
 - ✅ Network security plugin is configured correctly
 - ✅ `app.json` has proper scheme configuration
 
 ## 🔍 Critical Check: Are you using Expo Go?
 
-**IMPORTANT**: If you're using the standard **Expo Go** app, HTTP connections will NOT work, even with ATS disabled. Expo Go has its own network restrictions.
+**IMPORTANT**: If you're using the standard **Expo Go** app, https connections will NOT work, even with ATS disabled. Expo Go has its own network restrictions.
 
 ### How to Check:
 1. Look at the app icon on your device
-2. If it says "Expo Go" - **this won't work with HTTP**
+2. If it says "Expo Go" - **this won't work with https**
 3. You MUST use a **development build** (custom dev client)
 
 ### Solution: Use Development Build
@@ -66,7 +66,7 @@ grep -A 5 "NSAppTransportSecurity" ios/CrickCoachAI/Info.plist
 
 You should see:
 - `NSAllowsArbitraryLoads` = `true`
-- `139.59.1.59` in exception domains
+- `165.232.184.91` in exception domains
 
 ## 🔍 Troubleshooting
 
@@ -106,12 +106,12 @@ You should see:
 3. Check if it works in simulator
 4. If simulator works, the issue might be device-specific
 
-## 🔧 If Nothing Works: Use HTTPS
+## 🔧 If Nothing Works: Use httpsS
 
-If HTTP still doesn't work after all steps, consider:
-1. Setting up HTTPS on your backend (recommended for production)
+If https still doesn't work after all steps, consider:
+1. Setting up httpsS on your backend (recommended for production)
 2. Using a reverse proxy with SSL certificate
-3. Using a service like ngrok for HTTPS tunneling
+3. Using a service like ngrok for httpsS tunneling
 
 ## ✅ Verification Checklist
 
@@ -119,7 +119,7 @@ If HTTP still doesn't work after all steps, consider:
 - [ ] Clean rebuild completed (`npx expo prebuild --clean`)
 - [ ] Using development build (NOT Expo Go)
 - [ ] Info.plist has `NSAllowsArbitraryLoads: true`
-- [ ] Info.plist has `139.59.1.59` in exception domains
+- [ ] Info.plist has `165.232.184.91` in exception domains
 - [ ] App rebuilt and reinstalled
 - [ ] Checked device logs for ATS errors
 

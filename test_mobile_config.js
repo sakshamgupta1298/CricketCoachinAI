@@ -3,12 +3,12 @@
 
 const testMobileConfig = async () => {
   console.log('🔍 Testing Mobile App Configuration...');
-  console.log('🌐 Target Backend: http://139.59.1.59:3000');
+  console.log('🌐 Target Backend: https://165.232.184.91:3000');
   
   // Test 1: Basic fetch
   try {
     console.log('📡 Testing basic fetch...');
-    const response = await fetch('http://139.59.1.59:3000/api/health');
+    const response = await fetch('https://165.232.184.91:3000/api/health');
     console.log('✅ Basic fetch successful:', response.status);
     const data = await response.text();
     console.log('📄 Response:', data);
@@ -20,7 +20,7 @@ const testMobileConfig = async () => {
   // Test 2: With specific headers
   try {
     console.log('🔧 Testing with specific headers...');
-    const response = await fetch('http://139.59.1.59:3000/api/health', {
+    const response = await fetch('https://165.232.184.91:3000/api/health', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -36,7 +36,7 @@ const testMobileConfig = async () => {
   // Test 3: POST request
   try {
     console.log('📝 Testing POST request...');
-    const response = await fetch('http://139.59.1.59:3000/api/auth/register', {
+    const response = await fetch('https://165.232.184.91:3000/api/auth/register', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -58,7 +58,7 @@ const testMobileConfig = async () => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
     
-    const response = await fetch('http://139.59.1.59:3000/api/health', {
+    const response = await fetch('https://165.232.184.91:3000/api/health', {
       signal: controller.signal
     });
     
@@ -82,7 +82,7 @@ const testMobileConfig = async () => {
   for (const endpoint of endpoints) {
     try {
       console.log(`🔗 Testing endpoint: ${endpoint}`);
-      const response = await fetch(`http://139.59.1.59:3000${endpoint}`, {
+      const response = await fetch(`https://165.232.184.91:3000${endpoint}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'

@@ -63,7 +63,7 @@ server {
     server_name 206.189.141.194;
 
     location / {
-        proxy_pass http://127.0.0.1:3000;
+        proxy_pass https://127.0.0.1:3000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -221,6 +221,6 @@ echo "   Check nginx: systemctl status nginx"
 echo "   View nginx logs: tail -f /var/log/nginx/access.log"
 echo ""
 echo "🌐 Your backend will be accessible at:"
-echo "   http://139.59.1.59:3000 (direct)"
-echo "   http://206.189.141.194 (via nginx)"
+echo "   https://165.232.184.91:3000 (direct)"
+echo "   https://206.189.141.194 (via nginx)"
 echo ""

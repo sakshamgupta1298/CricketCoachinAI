@@ -2,9 +2,9 @@
 const debugConfig = {
   // Test different URLs
   testUrls: [
-    'http://139.59.1.59:3000',
-    'https://139.59.1.59:3000', // Try HTTPS if available
-    'http://localhost:3000', // For local testing
+    'https://165.232.184.91:3000',
+    'httpss://165.232.184.91:3000', // Try httpsS if available
+    'https://localhost:3000', // For local testing
   ],
   
   // Network timeout settings

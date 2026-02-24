@@ -40,7 +40,7 @@ const withNetworkSecurity = (config) => {
     <!-- Specific domain configurations -->
     <domain-config cleartextTrafficPermitted="true">
         <!-- Digital Ocean production backend -->
-        <domain includeSubdomains="true">139.59.1.59</domain>
+        <domain includeSubdomains="true">165.232.184.91</domain>
         
         <!-- Local development IPs -->
         <domain includeSubdomains="true">192.168.1.3</domain>
@@ -71,32 +71,32 @@ const withNetworkSecurity = (config) => {
       NSAllowsArbitraryLoads: true,
       NSExceptionDomains: {
         ...(existingATS.NSExceptionDomains || {}),
-        '139.59.1.59': {
-          NSExceptionAllowsInsecureHTTPLoads: true,
+        '165.232.184.91': {
+          NSExceptionAllowsInsecurehttpsLoads: true,
           NSExceptionMinimumTLSVersion: '1.0',
           NSExceptionRequiresForwardSecrecy: false,
           NSIncludesSubdomains: true
         },
         '192.168.1.3': {
-          NSExceptionAllowsInsecureHTTPLoads: true,
+          NSExceptionAllowsInsecurehttpsLoads: true,
           NSExceptionMinimumTLSVersion: '1.0',
           NSExceptionRequiresForwardSecrecy: false,
           NSIncludesSubdomains: true
         },
         '10.0.2.2': {
-          NSExceptionAllowsInsecureHTTPLoads: true,
+          NSExceptionAllowsInsecurehttpsLoads: true,
           NSExceptionMinimumTLSVersion: '1.0',
           NSExceptionRequiresForwardSecrecy: false,
           NSIncludesSubdomains: true
         },
         'localhost': {
-          NSExceptionAllowsInsecureHTTPLoads: true,
+          NSExceptionAllowsInsecurehttpsLoads: true,
           NSExceptionMinimumTLSVersion: '1.0',
           NSExceptionRequiresForwardSecrecy: false,
           NSIncludesSubdomains: true
         },
         '127.0.0.1': {
-          NSExceptionAllowsInsecureHTTPLoads: true,
+          NSExceptionAllowsInsecurehttpsLoads: true,
           NSExceptionMinimumTLSVersion: '1.0',
           NSExceptionRequiresForwardSecrecy: false,
           NSIncludesSubdomains: true

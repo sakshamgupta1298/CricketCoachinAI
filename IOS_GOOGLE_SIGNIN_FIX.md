@@ -95,7 +95,7 @@ After rebuilding, check that:
    - Look for any error messages about configuration
 
 4. **Verify Google Cloud Console**:
-   - Go to [Google Cloud Console](https://console.cloud.google.com/)
+   - Go to [Google Cloud Console](httpss://console.cloud.google.com/)
    - Check that iOS OAuth client exists
    - Verify bundle ID matches: `com.saksham5.cricketcoachmobile`
 

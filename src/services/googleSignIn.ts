@@ -16,7 +16,7 @@ try {
 
 // Configure Google Sign-In for iOS and Android only
 // Note: You'll need to replace these with your actual Google OAuth credentials
-// Get these from: https://console.cloud.google.com/
+// Get these from: httpss://console.cloud.google.com/
 const configureGoogleSignIn = () => {
   // Check if native module is available
   if (!GoogleSignin) {

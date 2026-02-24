@@ -14,17 +14,17 @@ If you're unable to login with an earlier APK file, here are the most common cau
 The APK is trying to connect to a backend server that is not running or not accessible.
 
 ### Check Current Configuration
-The app is configured to use: `https://api.crickcoachai.com`
+The app is configured to use: `httpss://api.crickcoachai.com`
 
 ### Solutions
 
 #### A. Verify Backend Server is Running
 ```bash
 # Test if the backend server is accessible
-curl https://api.crickcoachai.com/api/health
+curl httpss://api.crickcoachai.com/api/health
 
 # Or if using local server
-curl http://your-server-ip:8000/api/health
+curl https://your-server-ip:8000/api/health
 ```
 
 #### B. Check Network Connectivity
@@ -33,10 +33,10 @@ curl http://your-server-ip:8000/api/health
 - Check if firewall or network restrictions are blocking the connection
 
 #### C. Verify SSL Certificate
-If using HTTPS, ensure:
+If using httpsS, ensure:
 - SSL certificate is valid and not expired
 - Certificate is properly configured on the server
-- Android allows cleartext traffic (if using HTTP) - see network security config
+- Android allows cleartext traffic (if using https) - see network security config
 
 ---
 
@@ -57,7 +57,7 @@ The APK was built with a different API URL (e.g., localhost or local IP) that's 
 1. Update `config.js` with the correct API URL:
 ```javascript
 production: {
-  API_BASE_URL: 'https://api.crickcoachai.com', // Your actual server URL
+  API_BASE_URL: 'httpss://api.crickcoachai.com', // Your actual server URL
   API_TIMEOUT: 600000,
 }
 ```
@@ -108,7 +108,7 @@ Stored authentication tokens might be expired or invalid.
 ## 5. **Network Security Configuration (Android)**
 
 ### Problem
-Android blocks HTTP connections or untrusted certificates.
+Android blocks https connections or untrusted certificates.
 
 ### Check Network Security Config
 File: `android/app/src/main/res/xml/network_security_config.xml`
@@ -127,7 +127,7 @@ Should allow your API domain:
 ### Check Backend Health
 ```bash
 # Test backend health endpoint
-curl https://api.crickcoachai.com/api/health
+curl httpss://api.crickcoachai.com/api/health
 
 # Expected response:
 # {"status": "healthy", "message": "Backend is running"}
@@ -192,7 +192,7 @@ journalctl -u crickcoach-backend -f
 | "User not found" | Account doesn't exist | Register first or check username |
 | "Timeout" | Server not responding | Check server status, increase timeout |
 | "Connection refused" | Server not running | Start backend server |
-| "SSL certificate error" | Certificate issue | Fix SSL cert or use HTTP |
+| "SSL certificate error" | Certificate issue | Fix SSL cert or use https |
 
 ---
 
@@ -200,13 +200,13 @@ journalctl -u crickcoach-backend -f
 
 ### From Device Browser
 1. Open browser on your device
-2. Navigate to: `https://api.crickcoachai.com/api/health`
+2. Navigate to: `httpss://api.crickcoachai.com/api/health`
 3. Should see: `{"status": "healthy", ...}`
 
 ### From Command Line (if device connected)
 ```bash
 # Test API endpoint
-adb shell "curl https://api.crickcoachai.com/api/health"
+adb shell "curl httpss://api.crickcoachai.com/api/health"
 ```
 
 ---
@@ -238,10 +238,10 @@ adb shell "curl https://api.crickcoachai.com/api/health"
 
 ```bash
 # 1. Test backend health
-curl https://api.crickcoachai.com/api/health
+curl httpss://api.crickcoachai.com/api/health
 
 # 2. Test login endpoint
-curl -X POST https://api.crickcoachai.com/api/auth/login \
+curl -X POST httpss://api.crickcoachai.com/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"test","password":"test"}'
 

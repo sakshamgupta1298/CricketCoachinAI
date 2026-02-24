@@ -242,8 +242,8 @@ After making changes:
 
 ## 📚 Resources
 
-- [Google Gemini API Documentation](https://ai.google.dev/docs)
-- [Python SDK for Gemini](https://github.com/google/generative-ai-python)
-- [Gemini API Quickstart](https://ai.google.dev/tutorials/python_quickstart)
+- [Google Gemini API Documentation](httpss://ai.google.dev/docs)
+- [Python SDK for Gemini](httpss://github.com/google/generative-ai-python)
+- [Gemini API Quickstart](httpss://ai.google.dev/tutorials/python_quickstart)
 
 

@@ -4,16 +4,16 @@
 When running `python backend_script.py` and trying to login, you're getting a network error.
 
 ## Root Cause
-The mobile app is configured to connect to `https://api.crickcoachai.com`, but:
+The mobile app is configured to connect to `httpss://api.crickcoachai.com`, but:
 1. The backend is running on the new server at `139.59.1.59:3000`
 2. The domain `api.crickcoachai.com` may not be pointing to the new server
-3. The app is trying to use HTTPS but the server might only have HTTP configured
+3. The app is trying to use httpsS but the server might only have https configured
 
 ## Solutions
 
 ### Solution 1: Update Mobile App Configuration (Recommended)
 
-The `config.js` file has been updated to use the new server IP: `http://139.59.1.59:3000`
+The `config.js` file has been updated to use the new server IP: `https://139.59.1.59:3000`
 
 **If you're testing locally:**
 1. Find your local IP address:
@@ -27,7 +27,7 @@ The `config.js` file has been updated to use the new server IP: `http://139.59.1
 
 2. Update `config.js` temporarily for local testing:
    ```javascript
-   API_BASE_URL: 'http://YOUR_LOCAL_IP:3000',
+   API_BASE_URL: 'https://YOUR_LOCAL_IP:3000',
    ```
 
 3. Rebuild the app:
@@ -51,16 +51,16 @@ systemctl status crickcoach-backend
 netstat -tlnp | grep 3000
 
 # Test the backend directly
-curl http://localhost:3000/api/health
+curl https://localhost:3000/api/health
 ```
 
 **From your local machine:**
 ```bash
 # Test if server is accessible
-curl http://139.59.1.59:3000/api/health
+curl https://139.59.1.59:3000/api/health
 
 # Test login endpoint
-curl -X POST http://139.59.1.59:3000/api/auth/login \
+curl -X POST https://139.59.1.59:3000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"test","password":"test"}'
 ```
@@ -116,21 +116,21 @@ tail -f logging/backend_*.log
 
 ### 2. Test from Mobile Device
 - Open a browser on your mobile device
-- Navigate to: `http://139.59.1.59:3000/api/health`
+- Navigate to: `https://139.59.1.59:3000/api/health`
 - You should see: `{"status":"ok","message":"Backend is running"}`
 
 ### 3. Check Network Security Config (Android)
-Verify `android/app/src/main/res/xml/network_security_config.xml` allows HTTP:
+Verify `android/app/src/main/res/xml/network_security_config.xml` allows https:
 ```xml
 <domain includeSubdomains="true">139.59.1.59</domain>
 ```
 
 ### 4. Check iOS Info.plist (iOS)
-Verify `ios/CrickCoachAI/Info.plist` has exception for HTTP:
+Verify `ios/CrickCoachAI/Info.plist` has exception for https:
 ```xml
 <key>139.59.1.59</key>
 <dict>
-    <key>NSExceptionAllowsInsecureHTTPLoads</key>
+    <key>NSExceptionAllowsInsecurehttpsLoads</key>
     <true/>
 </dict>
 ```
@@ -149,8 +149,8 @@ Verify `ios/CrickCoachAI/Info.plist` has exception for HTTP:
 **Fix**: Verify CORS is enabled in `backend_script.py` (should already be configured)
 
 ### Issue 3: "SSL/TLS Error"
-**Cause**: App trying to use HTTPS but server only has HTTP
-**Fix**: Update `config.js` to use `http://` instead of `https://`
+**Cause**: App trying to use httpsS but server only has https
+**Fix**: Update `config.js` to use `https://` instead of `httpss://`
 
 ### Issue 4: "Timeout Error"
 **Cause**: Network connectivity issues or firewall blocking
@@ -162,10 +162,10 @@ Verify `ios/CrickCoachAI/Info.plist` has exception for HTTP:
 ## Testing Checklist
 
 - [ ] Backend is running (`systemctl status crickcoach-backend` or `python backend_script.py`)
-- [ ] Backend is accessible from network (`curl http://139.59.1.59:3000/api/health`)
+- [ ] Backend is accessible from network (`curl https://139.59.1.59:3000/api/health`)
 - [ ] Port 3000 is open in firewall (`ufw status`)
-- [ ] `config.js` has correct server IP (`http://139.59.1.59:3000`)
-- [ ] Mobile app network security config allows HTTP to `139.59.1.59`
+- [ ] `config.js` has correct server IP (`https://139.59.1.59:3000`)
+- [ ] Mobile app network security config allows https to `139.59.1.59`
 - [ ] App has been rebuilt after config changes
 - [ ] Device can reach server IP (`ping 139.59.1.59` from device)
 
@@ -189,7 +189,7 @@ Verify `ios/CrickCoachAI/Info.plist` has exception for HTTP:
 
 2. Test with curl to verify backend works:
    ```bash
-   curl -X POST http://139.59.1.59:3000/api/auth/login \
+   curl -X POST https://139.59.1.59:3000/api/auth/login \
      -H "Content-Type: application/json" \
      -d '{"username":"your_username","password":"your_password"}'
    ```

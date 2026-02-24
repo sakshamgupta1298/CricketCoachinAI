@@ -161,7 +161,7 @@ print_info "Testing backend connectivity..."
 sleep 10  # Give backend time to fully start
 
 # Test health endpoint
-if curl -f http://localhost:3000/api/health > /dev/null 2>&1; then
+if curl -f https://localhost:3000/api/health > /dev/null 2>&1; then
     print_status "Backend health check passed"
 else
     print_warning "Backend health check failed, checking logs..."
@@ -169,7 +169,7 @@ else
 fi
 
 # Test nginx proxy
-if curl -f http://localhost/health > /dev/null 2>&1; then
+if curl -f https://localhost/health > /dev/null 2>&1; then
     print_status "Nginx proxy is working"
 else
     print_warning "Nginx proxy test failed"
@@ -181,9 +181,9 @@ echo "🎉 Production Server Setup Complete!"
 echo "===================================="
 echo ""
 print_info "Server Information:"
-echo "  - Backend URL: http://139.59.1.59:3000"
-echo "  - Nginx Proxy: http://139.59.1.59"
-echo "  - Health Check: http://139.59.1.59/health"
+echo "  - Backend URL: https://165.232.184.91:3000"
+echo "  - Nginx Proxy: https://165.232.184.91"
+echo "  - Health Check: https://165.232.184.91/health"
 echo ""
 print_info "Service Management:"
 echo "  - Backend Status: systemctl status crickcoach-backend"
@@ -195,12 +195,12 @@ print_info "Useful Commands:"
 echo "  - Restart Backend: systemctl restart crickcoach-backend"
 echo "  - Restart Nginx: systemctl restart nginx"
 echo "  - View Backend Logs: journalctl -u crickcoach-backend -f"
-echo "  - Test Backend: curl http://139.59.1.59/health"
+echo "  - Test Backend: curl https://165.232.184.91/health"
 echo ""
 print_warning "Next Steps:"
-echo "  1. Update your mobile app config to use: http://139.59.1.59"
+echo "  1. Update your mobile app config to use: https://165.232.184.91"
 echo "  2. Test the mobile app connection"
 echo "  3. Monitor logs for any issues"
-echo "  4. Consider setting up SSL/HTTPS for production"
+echo "  4. Consider setting up SSL/httpsS for production"
 echo ""
 print_status "Setup completed successfully! 🚀"

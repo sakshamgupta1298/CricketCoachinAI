@@ -1,6 +1,6 @@
 // Test all upload endpoints to identify the 405 error
 const testAllUploadEndpoints = async () => {
-  const baseURL = 'https://b0a929210c19.ngrok-free.app';
+  const baseURL = 'httpss://b0a929210c19.ngrok-free.app';
   
   console.log('🔍 Testing all upload endpoints...\n');
   console.log('🌐 Base URL:', baseURL);

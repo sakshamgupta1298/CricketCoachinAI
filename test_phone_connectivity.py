@@ -25,7 +25,7 @@ def test_backend_from_phone_perspective():
     # Test 1: Check if backend is running
     print("\n🔍 Test 1: Backend Status")
     try:
-        response = requests.get(f"http://{local_ip}:8000/api/health", timeout=5)
+        response = requests.get(f"https://{local_ip}:8000/api/health", timeout=5)
         if response.status_code == 200:
             print(f"✅ Backend is running and accessible at {local_ip}:8000")
         else:
@@ -85,7 +85,7 @@ def provide_solutions():
     print("\n3. 📱 APK Configuration:")
     print("   - Rebuild the APK with the correct IP address")
     print("   - Make sure the APK has internet permissions")
-    print("   - Try using HTTP instead of HTTPS")
+    print("   - Try using https instead of httpsS")
     
     print("\n4. 🔧 Alternative Solutions:")
     print("   - Use ngrok to create a public tunnel")

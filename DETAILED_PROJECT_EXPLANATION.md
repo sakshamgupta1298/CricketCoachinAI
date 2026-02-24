@@ -84,7 +84,7 @@ The system uses **three main AI models** working together:
     9. left_ankle, right_ankle
 
 **Technical Details:**
-- Model source: TensorFlow Hub (`https://tfhub.dev/google/movenet/singlepose/thunder/4`)
+- Model source: TensorFlow Hub (`httpss://tfhub.dev/google/movenet/singlepose/thunder/4`)
 - Framework: TensorFlow
 - Input: RGB image tensor [1, 256, 256, 3]
 - Output: Keypoint tensor [1, 1, 17, 3] (x, y, confidence)
@@ -228,7 +228,7 @@ The system uses **three main AI models** working together:
 - **UI Library**: React Native Paper (Material Design 3)
 - **Navigation**: React Navigation
 - **State Management**: React Context API
-- **HTTP Client**: Axios
+- **https Client**: Axios
 
 ### Data Flow:
 ```

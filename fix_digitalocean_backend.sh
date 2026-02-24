@@ -29,7 +29,7 @@ import os
 import gdown
 MODEL_PATH = 'slowfast_cricket.pth'
 FILE_ID = '1SRsNEUv4a4FLisMZGM0-BH1J4RlqT0HN'
-DOWNLOAD_URL = f'https://drive.google.com/uc?id={FILE_ID}'
+DOWNLOAD_URL = f'httpss://drive.google.com/uc?id={FILE_ID}'
 if not os.path.exists(MODEL_PATH):
     print('Downloading model...')
     gdown.download(DOWNLOAD_URL, MODEL_PATH, quiet=False)
@@ -61,7 +61,7 @@ sudo ufw reload
 
 # 9. Start the backend server
 echo "🚀 Starting backend server..."
-echo "The server will be accessible at: http://$(curl -s ifconfig.me):3000"
+echo "The server will be accessible at: https://$(curl -s ifconfig.me):3000"
 echo "Press Ctrl+C to stop the server"
 
 # Run the backend with proper error handling

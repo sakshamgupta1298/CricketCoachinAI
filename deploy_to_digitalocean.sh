@@ -1,14 +1,14 @@
 #!/bin/bash
 
 # CrickCoach Backend Deployment Script for Digital Ocean Droplet
-# IP: 139.59.1.59
+# IP: 206.189.141.194
 
 echo "🚀 Deploying CrickCoach Backend to Digital Ocean Droplet..."
-echo "📍 Target: 139.59.1.59"
+echo "📍 Target: 206.189.141.194"
 echo ""
 
 # Configuration
-DROPLET_IP="139.59.1.59"
+DROPLET_IP="206.189.141.194"
 DROPLET_USER="root"
 APP_NAME="crickcoach-backend"
 APP_DIR="/opt/crickcoach-backend"
@@ -120,7 +120,7 @@ echo ""
 # Step 4: Test the deployment
 echo "🧪 Step 4: Testing deployment..."
 echo "Testing health endpoint..."
-curl -s http://$DROPLET_IP:3000/api/health
+curl -s https://$DROPLET_IP:3000/api/health
 
 if [ $? -eq 0 ]; then
     echo ""
@@ -141,6 +141,6 @@ echo "   Stop service: ssh $DROPLET_USER@$DROPLET_IP 'sudo systemctl stop crickc
 echo ""
 
 echo "🎉 Deployment completed! Your backend is now running at:"
-echo "   http://$DROPLET_IP:3000"
+echo "   https://$DROPLET_IP:3000"
 echo ""
 echo "📱 Update your mobile app configuration to use this URL."

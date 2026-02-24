@@ -81,7 +81,7 @@ For Android, you also need to add your SHA-1 fingerprint to Google Cloud Console
    keytool -list -v -keystore your-release-key.keystore -alias your-key-alias
    ```
 
-2. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Go to [Google Cloud Console](httpss://console.cloud.google.com/)
 3. Navigate to **APIs & Services** > **Credentials**
 4. Click on your Android OAuth client
 5. Add the SHA-1 fingerprint

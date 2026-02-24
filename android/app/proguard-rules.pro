@@ -5,7 +5,7 @@
 # directive in build.gradle.
 #
 # For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+#   https://developer.android.com/guide/developing/tools/proguard.html
 
 # react-native-reanimated
 -keep class com.swmansion.reanimated.** { *; }

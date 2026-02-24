@@ -1,6 +1,6 @@
 // Test upload endpoint specifically
 const testUploadEndpoint = async () => {
-  const baseURL = 'https://b0a929210c19.ngrok-free.app';
+  const baseURL = 'httpss://b0a929210c19.ngrok-free.app';
   const endpoints = [
     '/api/upload',
     '/api/upload-video',

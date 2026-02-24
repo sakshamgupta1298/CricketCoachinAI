@@ -2,8 +2,8 @@
 // This script tests the nginx proxy and backend connectivity
 
 const testProductionSetup = async () => {
-  const baseURL = 'http://139.59.1.59';  // Using nginx proxy (no port)
-  const directURL = 'http://139.59.1.59:3000';  // Direct backend access
+  const baseURL = 'https://165.232.184.91';  // Using nginx proxy (no port)
+  const directURL = 'https://165.232.184.91:3000';  // Direct backend access
   
   console.log('🔍 Testing CrickCoach Production Setup...\n');
   console.log('🌐 Nginx Proxy URL:', baseURL);
@@ -49,15 +49,15 @@ const testProductionSetup = async () => {
   
   console.log('🏁 Production setup test completed!');
   console.log('\n📱 For your mobile app:');
-  console.log('   - Use the nginx proxy URL: http://139.59.1.59');
+  console.log('   - Use the nginx proxy URL: https://165.232.184.91');
   console.log('   - No port needed (nginx handles routing)');
   console.log('   - Better performance and reliability');
   console.log('   - Production-ready setup');
   console.log('\n💡 System Information:');
-  console.log('   - Server IP: 139.59.1.59');
+  console.log('   - Server IP: 165.232.184.91');
   console.log('   - Nginx Port: 80 (default)');
   console.log('   - Backend Port: 3000 (internal)');
-  console.log('   - Protocol: HTTP');
+  console.log('   - Protocol: https');
   console.log('   - Status: Production Ready');
 };
 
