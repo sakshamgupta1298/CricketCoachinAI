@@ -24,8 +24,8 @@ pytorchvideo
 pandas
 numpy
 
-# OpenAI API
-openai
+# Google Gemini API (use google-genai for genai.Client; do not use google-generativeai)
+google-genai
 
 # Database
 sqlite3

@@ -8,7 +8,7 @@ import numpy as np
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
-import google.generativeai as genai
+from google import genai
 import csv
 from torchvision import transforms as T
 from pytorchvideo.models.hub import slowfast_r50
