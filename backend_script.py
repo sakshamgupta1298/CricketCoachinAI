@@ -732,7 +732,7 @@ def initialize_models():
     logger.info("Initializing models...")
     # shot_prediction_model = load_model()  # Commented out - users will select shot type manually
     # logger.info("Shot prediction model loaded successfully")
-    pose_detection_model = hub.load("httpss://tfhub.dev/google/movenet/singlepose/thunder/4")
+    pose_detection_model = hub.load("https://tfhub.dev/google/movenet/singlepose/thunder/4")
     movenet_signature = pose_detection_model.signatures['serving_default']
     logger.info("Pose detection model loaded successfully")
     logger.info("All models initialized successfully!")
@@ -750,7 +750,7 @@ def get_pose_detection_model():
     global pose_detection_model
     if pose_detection_model is None:
         logger.warning("Pose detection model not initialized, loading now...")
-        pose_detection_model = hub.load("httpss://tfhub.dev/google/movenet/singlepose/thunder/4")
+        pose_detection_model = hub.load("https://tfhub.dev/google/movenet/singlepose/thunder/4")
         logger.info("Pose detection model loaded")
     return pose_detection_model
 
