@@ -57,6 +57,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
   const [isLoading, setIsLoading] = useState(true);
 
+  // When token is expired or server returns 401, API service will call this to log the user out
+  useEffect(() => {
+    apiService.setOnUnauthorized(() => {
+      dispatch({ type: 'LOGOUT' });
+    });
+    return () => {
+      apiService.setOnUnauthorized(() => {});
+    };
+  }, []);
+
   // Restore auth state from storage on app start
   useEffect(() => {
     const restoreAuth = async () => {
