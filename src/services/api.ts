@@ -9,6 +9,16 @@ class ApiService {
   private api: AxiosInstance;
   private jsonApi: AxiosInstance;
   private baseURL: string;
+  private onUnauthorizedCallback: (() => void) | null = null;
+
+  /** Call when auth is invalid/expired so the app can log the user out (e.g. dispatch LOGOUT). */
+  setOnUnauthorized(callback: () => void): void {
+    this.onUnauthorizedCallback = callback;
+  }
+
+  private notifyUnauthorized(): void {
+    this.onUnauthorizedCallback?.();
+  }
 
   constructor() {
     // Determine the appropriate base URL based on environment
@@ -150,10 +160,10 @@ class ApiService {
         // Handle 401 Unauthorized errors
         if (error.response?.status === 401) {
           console.error('🔒 [API_RESPONSE] Authentication failed - clearing auth data');
-          // Clear auth data on 401 error
           try {
             await this.clearAuthData();
             console.log('🧹 [API_RESPONSE] Auth data cleared due to 401 error');
+            this.notifyUnauthorized();
           } catch (clearError) {
             console.error('❌ [API_RESPONSE] Failed to clear auth data:', clearError);
           }
@@ -214,10 +224,10 @@ class ApiService {
         // Handle 401 Unauthorized errors
         if (error.response?.status === 401) {
           console.error('🔒 [JSON_API_RESPONSE] Authentication failed - clearing auth data');
-          // Clear auth data on 401 error
           try {
             await this.clearAuthData();
             console.log('🧹 [JSON_API_RESPONSE] Auth data cleared due to 401 error');
+            this.notifyUnauthorized();
           } catch (clearError) {
             console.error('❌ [JSON_API_RESPONSE] Failed to clear auth data:', clearError);
           }
@@ -354,8 +364,9 @@ class ApiService {
       const tokenVerification = await this.verifyToken();
       if (!tokenVerification.success) {
         console.error('❌ [UPLOAD] Token verification failed:', tokenVerification.error);
-        // Clear invalid auth data
+        // Clear invalid auth data and log user out
         await this.clearAuthData();
+        this.notifyUnauthorized();
         return {
           success: false,
           error: 'Your session has expired. Please login again.',
@@ -1589,6 +1600,7 @@ class ApiService {
         if (now >= expiresAt) {
           console.log('Token has expired, clearing auth data');
           await this.clearAuthData();
+          this.notifyUnauthorized();
           return null;
         }
         
@@ -1660,6 +1672,7 @@ class ApiService {
       if (now >= expiresAt) {
         console.log('Auth data has expired, clearing...');
         await this.clearAuthData();
+        this.notifyUnauthorized();
         return null;
       }
       
@@ -1689,6 +1702,7 @@ class ApiService {
       if (now >= expiresAt) {
         console.log('Token already expired, cannot refresh');
         await this.clearAuthData();
+        this.notifyUnauthorized();
         return;
       }
       
@@ -1718,6 +1732,7 @@ class ApiService {
         if (now >= expiresAt) {
           console.log('Token has expired, clearing auth data');
           await this.clearAuthData();
+          this.notifyUnauthorized();
           return null;
         }
         

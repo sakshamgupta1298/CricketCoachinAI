@@ -65,7 +65,7 @@ app.secret_key = 'cricket_shot_prediction_secret_key'
 # JWT Configuration
 JWT_SECRET_KEY = 'your-super-secret-jwt-key-change-in-production'
 JWT_ALGORITHM = 'HS256'
-JWT_EXPIRATION_HOURS = 24
+JWT_EXPIRATION_HOURS = 24 * 7  # 7 days
 
 # Database Configuration
 DATABASE_PATH = 'cricket_coach.db'
@@ -4439,7 +4439,7 @@ def google_signin():
             logger.debug(f"Decoded token data: {token_data.get('email', 'N/A')}")
             
             # Verify the token is from Google
-            if token_data.get('iss') not in ['httpss://accounts.google.com', 'accounts.google.com']:
+            if token_data.get('iss') not in ['https://accounts.google.com', 'accounts.google.com']:
                 logger.warning(f"Invalid token issuer: {token_data.get('iss')}")
                 return jsonify({'error': 'Invalid Google token'}), 401
             
