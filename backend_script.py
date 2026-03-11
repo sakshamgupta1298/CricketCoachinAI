@@ -4599,7 +4599,20 @@ def apple_signin():
 
         if token_data.get('iss') != 'https://appleid.apple.com':
             return jsonify({'error': 'Invalid Apple token issuer'}), 401
-        if token_data.get('aud') != 'com.saksham5.cricketcoachmobile':
+
+        # Apple may send aud as a string or array (JWT spec). Simulator/Expo Go can use different IDs.
+        allowed_audiences = (
+            'com.saksham5.cricketcoachmobile',  # app bundle ID from app.json
+            'host.exp.Exponent',                 # Expo Go on simulator
+        )
+        aud = token_data.get('aud')
+        logger.info(f"Apple Sign-In token aud: {aud!r} (type: {type(aud).__name__})")
+        if aud is None:
+            return jsonify({'error': 'Invalid Apple token audience'}), 401
+        if isinstance(aud, list):
+            if not any(a in allowed_audiences for a in aud):
+                return jsonify({'error': 'Invalid Apple token audience'}), 401
+        elif aud not in allowed_audiences:
             return jsonify({'error': 'Invalid Apple token audience'}), 401
 
         sub = token_data.get('sub')
