@@ -3,7 +3,7 @@ const debugConfig = {
   // Test different URLs
   testUrls: [
     'https://165.232.184.91:3000',
-    'httpss://165.232.184.91:3000', // Try httpsS if available
+    'https://165.232.184.91:3000', // Try https if available
     'https://localhost:3000', // For local testing
   ],
   

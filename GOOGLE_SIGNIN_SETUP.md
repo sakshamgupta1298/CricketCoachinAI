@@ -9,7 +9,7 @@ This guide will help you set up Google Sign-In for the CrickCoach AI app. **Note
 
 ## Step 1: Create OAuth 2.0 Credentials
 
-1. Go to [Google Cloud Console](httpss://console.cloud.google.com/)
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
 2. Select your project or create a new one
 3. Navigate to **APIs & Services** > **Credentials**
 4. Click **Create Credentials** > **OAuth client ID**
@@ -99,7 +99,7 @@ Your backend needs to handle Google Sign-In. The endpoint should be:
   "id_token": "google-id-token",
   "email": "user@example.com",
   "name": "User Name",
-  "photo": "httpss://photo-url.com/photo.jpg"
+  "photo": "https://photo-url.com/photo.jpg"
 }
 ```
 
@@ -179,8 +179,9 @@ def google_signin():
 
 ### "DEVELOPER_ERROR" on Android
 - Make sure your SHA-1 fingerprint is correctly added in Google Cloud Console
-- Verify the package name matches exactly
-- Rebuild the app after adding SHA-1
+- **Closed testing / Play Store:** The app is signed by **Google Play App Signing**, so you must add the **Play App Signing SHA-1** (from Play Console → Setup → App signing) to your Android OAuth client. See **[GOOGLE_SIGNIN_PLAY_STORE_SHA.md](./GOOGLE_SIGNIN_PLAY_STORE_SHA.md)** for step-by-step instructions.
+- Verify the package name matches exactly: `com.saksham_5.cricketcoachmobile`
+- Rebuild the app after adding SHA-1 (only needed when you add a new SHA; no app update needed after adding Play SHA-1)
 
 ### "Sign in was cancelled"
 - This is normal if the user cancels the sign-in flow
@@ -197,9 +198,9 @@ def google_signin():
 
 ## Additional Resources
 
-- [React Native Google Sign-In Documentation](httpss://react-native-google-signin.github.io/docs/)
-- [Google OAuth 2.0 Documentation](httpss://developers.google.com/identity/protocols/oauth2)
-- [Google Identity Platform](httpss://developers.google.com/identity)
+- [React Native Google Sign-In Documentation](https://react-native-google-signin.github.io/docs/)
+- [Google OAuth 2.0 Documentation](https://developers.google.com/identity/protocols/oauth2)
+- [Google Identity Platform](https://developers.google.com/identity)
 
 ## Notes
 

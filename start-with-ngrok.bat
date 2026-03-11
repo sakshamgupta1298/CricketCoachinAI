@@ -10,7 +10,7 @@ echo.
 
 echo [2/4] Configuration Summary:
 echo ✅ Using Digital Ocean droplet: https://165.232.184.91:3000
-echo ✅ httpsS (no cleartext traffic issues)
+echo ✅ https (no cleartext traffic issues)
 echo ✅ Works from any network
 echo ✅ No special Android configuration needed
 echo.
@@ -35,7 +35,7 @@ echo ========================================
 echo 🔗 Digital Ocean droplet: https://165.232.184.91:3000
 echo ⚠️  Keep ngrok running: ngrok https 8000
 echo 📱 Works on any device/network
-echo 🔒 httpsS - no security issues
+echo 🔒 https - no security issues
 echo.
 
 echo Starting Expo...

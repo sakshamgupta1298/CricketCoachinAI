@@ -85,7 +85,7 @@ def provide_solutions():
     print("\n3. 📱 APK Configuration:")
     print("   - Rebuild the APK with the correct IP address")
     print("   - Make sure the APK has internet permissions")
-    print("   - Try using https instead of httpsS")
+    print("   - Try using https instead of https")
     
     print("\n4. 🔧 Alternative Solutions:")
     print("   - Use ngrok to create a public tunnel")

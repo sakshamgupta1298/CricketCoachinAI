@@ -5,7 +5,7 @@ This document explains the configuration changes made to allow https (cleartext)
 ## ⚠️ Security Warning
 
 **This configuration is for development/testing purposes only. For production, you should:**
-1. Use httpsS instead of https
+1. Use https instead of https
 2. Remove the `usesCleartextTraffic` settings
 3. Implement proper SSL/TLS certificates
 
@@ -175,15 +175,15 @@ adb logcat | grep -i "cleartext\|network\|security"
 
 When ready for production:
 
-1. **Set up httpsS on your backend server**
-2. **Update API URLs to use httpsS**
+1. **Set up https on your backend server**
+2. **Update API URLs to use https**
 3. **Remove cleartext traffic configurations:**
    - Set `usesCleartextTraffic: false` in `app.json`
    - Remove `networkSecurityConfig` from `app.json`
-   - Update `network_security_config.xml` to only allow httpsS
+   - Update `network_security_config.xml` to only allow https
    - Remove `android:usesCleartextTraffic="true"` from AndroidManifest.xml
 
-4. **Test thoroughly with httpsS endpoints**
+4. **Test thoroughly with https endpoints**
 
 ## Support
 

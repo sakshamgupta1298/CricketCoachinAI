@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "1002249784978",
+    "project_id": "crickcoachai",
+    "storage_bucket": "crickcoachai.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1002249784978:android:786b9b8032323f5028204b",
+        "android_client_info": {
+          "package_name": "com.saksham_5.cricketcoachmobile"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1002249784978-e98d549dld5a0kdcunu59u15o4kcakk2.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBLjCkiz_SEWFq20SxesUZrbBrEM6niBZc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1002249784978-e98d549dld5a0kdcunu59u15o4kcakk2.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "1002249784978-gmepmhh1mh8is050hb10be0q40j33k60.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.saksham5.cricketcoachmobile"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -4,10 +4,10 @@
 When running `python backend_script.py` and trying to login, you're getting a network error.
 
 ## Root Cause
-The mobile app is configured to connect to `httpss://api.crickcoachai.com`, but:
+The mobile app is configured to connect to `https://api.crickcoachai.com`, but:
 1. The backend is running on the new server at `139.59.1.59:3000`
 2. The domain `api.crickcoachai.com` may not be pointing to the new server
-3. The app is trying to use httpsS but the server might only have https configured
+3. The app is trying to use https but the server might only have https configured
 
 ## Solutions
 
@@ -149,8 +149,8 @@ Verify `ios/CrickCoachAI/Info.plist` has exception for https:
 **Fix**: Verify CORS is enabled in `backend_script.py` (should already be configured)
 
 ### Issue 3: "SSL/TLS Error"
-**Cause**: App trying to use httpsS but server only has https
-**Fix**: Update `config.js` to use `https://` instead of `httpss://`
+**Cause**: App trying to use https but server only has https
+**Fix**: Update `config.js` to use `https://` instead of `https://`
 
 ### Issue 4: "Timeout Error"
 **Cause**: Network connectivity issues or firewall blocking

@@ -1,6 +1,6 @@
 // Test upload with extended timeout and detailed error reporting
 const testUploadTimeout = async () => {
-  const baseURL = 'httpss://b0a929210c19.ngrok-free.app';
+  const baseURL = 'https://b0a929210c19.ngrok-free.app';
   
   console.log('🔍 Testing upload with extended timeout...\n');
   console.log('🌐 Base URL:', baseURL);

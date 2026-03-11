@@ -18,7 +18,7 @@ const SimpleNetworkTest: React.FC = () => {
     // Test 1: Basic internet connectivity
     try {
       addResult('📡 Testing basic internet connectivity...');
-      const response = await fetch('httpss://httpsbin.org/get', {
+      const response = await fetch('https://httpsbin.org/get', {
         method: 'GET',
         timeout: 10000
       });

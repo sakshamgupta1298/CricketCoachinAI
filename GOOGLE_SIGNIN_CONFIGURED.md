@@ -81,7 +81,7 @@ For Android, you also need to add your SHA-1 fingerprint to Google Cloud Console
    keytool -list -v -keystore your-release-key.keystore -alias your-key-alias
    ```
 
-2. Go to [Google Cloud Console](httpss://console.cloud.google.com/)
+2. Go to [Google Cloud Console](https://console.cloud.google.com/)
 3. Navigate to **APIs & Services** > **Credentials**
 4. Click on your Android OAuth client
 5. Add the SHA-1 fingerprint
@@ -107,9 +107,10 @@ For Android, you also need to add your SHA-1 fingerprint to Google Cloud Console
 
 ### "DEVELOPER_ERROR" on Android
 
-- Verify SHA-1 fingerprint is added in Google Cloud Console
+- **For closed testing / Play Store:** Add the **Play App Signing SHA-1** from Play Console (Setup → App signing) to your Android OAuth client. See **[GOOGLE_SIGNIN_PLAY_STORE_SHA.md](./GOOGLE_SIGNIN_PLAY_STORE_SHA.md)**.
+- Verify SHA-1 fingerprint(s) are in Google Cloud Console (debug for local builds, Play App Signing for store builds).
 - Make sure package name matches: `com.saksham_5.cricketcoachmobile`
-- Rebuild the app after adding SHA-1
+- Rebuild the app after adding SHA-1 (for local builds only; Play SHA-1 change needs no new release).
 
 ### "Sign in was cancelled"
 

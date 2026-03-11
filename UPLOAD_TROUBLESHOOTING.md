@@ -73,7 +73,7 @@ expo start --clear
 ## 📊 **Current Configuration:**
 
 - **API Timeout:** 300,000ms (5 minutes)
-- **Ngrok URL:** httpss://b0a929210c19.ngrok-free.app
+- **Ngrok URL:** https://b0a929210c19.ngrok-free.app
 - **Upload Endpoint:** /api/upload
 - **Authentication:** Required (JWT token)
 

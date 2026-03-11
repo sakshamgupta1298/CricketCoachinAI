@@ -47,7 +47,7 @@ if curl -f https://localhost:3000/api/health > /dev/null 2>&1; then
     
     # Test CORS headers
     echo "🔍 Testing CORS headers..."
-    curl -I -H "Origin: httpss://example.com" \
+    curl -I -H "Origin: https://example.com" \
          -H "Access-Control-Request-Method: POST" \
          -H "Access-Control-Request-Headers: Content-Type" \
          -X OPTIONS https://localhost:3000/api/health

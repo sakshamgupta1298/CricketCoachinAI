@@ -14,7 +14,7 @@ The `config.js` file has been updated to use the domain name instead of the IP a
 
 1. **Better Maintainability**: If server IP changes, just update DNS, no need to rebuild app
 2. **Professional**: Using domain names looks more professional
-3. **SSL Ready**: Easy to add SSL/httpsS later with Let's Encrypt
+3. **SSL Ready**: Easy to add SSL/https later with Let's Encrypt
 4. **Nginx Proxy**: Using Nginx on port 80 provides better performance and security
 
 ## Current Setup
@@ -101,8 +101,8 @@ If you're still using IP addresses in network security configs, you can optional
 </dict>
 ```
 
-### 3. (Optional) Set Up SSL/httpsS
-If you want to use httpsS (recommended for production):
+### 3. (Optional) Set Up SSL/https
+If you want to use https (recommended for production):
 
 1. **Install Certbot**:
    ```bash
@@ -116,10 +116,10 @@ If you want to use httpsS (recommended for production):
 
 3. **Update config.js**:
    ```javascript
-   API_BASE_URL: 'httpss://api.crickcoachai.com',
+   API_BASE_URL: 'https://api.crickcoachai.com',
    ```
 
-4. **Rebuild app** with httpsS URL
+4. **Rebuild app** with https URL
 
 ## Troubleshooting
 

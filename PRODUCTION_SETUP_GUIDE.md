@@ -205,10 +205,10 @@ ufw status
 ## 🔒 Security Considerations
 
 ### Firewall
-- Only ports 22 (SSH), 80 (https), and 443 (httpsS) are open
+- Only ports 22 (SSH), 80 (https), and 443 (https) are open
 - Port 3000 is accessible but should be used only for direct access if needed
 
-### SSL/httpsS (Recommended for Production)
+### SSL/https (Recommended for Production)
 ```bash
 # Install Certbot
 apt install certbot python3-certbot-nginx

@@ -1067,6 +1067,68 @@ class ApiService {
     }
   }
 
+  async appleSignIn(appleData: {
+    idToken: string;
+    email?: string | null;
+    fullName?: string | null;
+    appleUserId: string;
+    authorizationCode?: string | null;
+  }): Promise<ApiResponse<any>> {
+    try {
+      console.log('🔐 [APPLE_SIGNIN] Starting Apple Sign-In process...');
+      console.log('📧 [APPLE_SIGNIN] Email:', appleData.email);
+      console.log('👤 [APPLE_SIGNIN] Apple User ID:', appleData.appleUserId);
+      console.log('🌐 [APPLE_SIGNIN] API Base URL:', this.baseURL);
+      console.log('📡 [APPLE_SIGNIN] Making request to:', `${this.baseURL}/api/auth/apple-signin`);
+
+      const response = await this.jsonApi.post('/api/auth/apple-signin', {
+        id_token: appleData.idToken,
+        email: appleData.email,
+        full_name: appleData.fullName,
+        apple_user_id: appleData.appleUserId,
+        authorization_code: appleData.authorizationCode,
+      });
+
+      if (response.status === 401 || response.status === 400) {
+        console.error('❌ [APPLE_SIGNIN] Apple Sign-In failed');
+        console.error('📊 [APPLE_SIGNIN] Response status:', response.status);
+        console.error('📄 [APPLE_SIGNIN] Response data:', response.data);
+
+        const errorMessage = response.data?.error || 'Apple Sign-In failed. Please try again.';
+        return {
+          success: false,
+          error: errorMessage,
+        };
+      }
+
+      if (!response.data?.token || !response.data?.success) {
+        console.error('❌ [APPLE_SIGNIN] Apple Sign-In failed - No token or success flag in response');
+        console.error('📄 [APPLE_SIGNIN] Response data:', response.data);
+        return {
+          success: false,
+          error: response.data?.error || 'Apple Sign-In failed. Please try again.',
+        };
+      }
+
+      console.log('✅ [APPLE_SIGNIN] Apple Sign-In successful!');
+      console.log('📊 [APPLE_SIGNIN] Response status:', response.status);
+      console.log('🔑 [APPLE_SIGNIN] Token received:', response.data.token ? 'Yes' : 'No');
+
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error: any) {
+      console.error('❌ [APPLE_SIGNIN] Apple Sign-In error:', error);
+      console.error('📊 [APPLE_SIGNIN] Response status:', error.response?.status);
+      console.error('📄 [APPLE_SIGNIN] Response data:', error.response?.data);
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message || 'Apple Sign-In failed. Please try again.',
+      };
+    }
+  }
+
   async googleSignIn(googleData: { idToken: string; email: string; name: string; photo?: string }): Promise<ApiResponse<any>> {
     try {
       console.log('🔐 [GOOGLE_SIGNIN] Starting Google Sign-In process...');

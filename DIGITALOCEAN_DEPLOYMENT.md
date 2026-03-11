@@ -18,7 +18,7 @@ First, connect to your droplet and run the initial setup script:
 ssh root@206.189.141.194
 
 # Download and run the setup script
-wget httpss://raw.githubusercontent.com/your-repo/crickcoach/main/digitalocean_setup.sh
+wget https://raw.githubusercontent.com/your-repo/crickcoach/main/digitalocean_setup.sh
 chmod +x digitalocean_setup.sh
 ./digitalocean_setup.sh
 ```
@@ -160,7 +160,7 @@ ssh root@206.189.141.194 'df -h'
 
 1. **Firewall**: Only SSH (22) and https (80, 3000) ports are open
 2. **Service User**: The service runs as root (consider creating a dedicated user)
-3. **SSL**: Consider adding SSL certificate for httpsS
+3. **SSL**: Consider adding SSL certificate for https
 4. **Backups**: Daily backups are automatically created
 
 ## Performance Optimization
@@ -188,6 +188,6 @@ If you encounter issues:
 
 1. Test the mobile app with the new backend
 2. Monitor performance and logs
-3. Set up SSL certificate for httpsS
+3. Set up SSL certificate for https
 4. Consider setting up monitoring alerts
 5. Plan for regular maintenance and updates

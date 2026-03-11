@@ -127,7 +127,7 @@ adb logcat | findstr "LOGIN API HEALTH APP CONNECTIVITY"
 ## 🚀 **Production Considerations**
 
 For production deployment, consider:
-1. **httpsS**: Switch to httpsS for secure connections
+1. **https**: Switch to https for secure connections
 2. **Domain**: Use a proper domain instead of IP address
 3. **SSL Certificates**: Implement proper SSL/TLS certificates
 4. **Security**: Remove cleartext traffic allowances

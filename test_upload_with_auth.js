@@ -1,6 +1,6 @@
 // Test upload endpoint with authentication
 const testUploadWithAuth = async () => {
-  const baseURL = 'httpss://b0a929210c19.ngrok-free.app';
+  const baseURL = 'https://b0a929210c19.ngrok-free.app';
   
   console.log('🔍 Testing upload with authentication...\n');
   console.log('🌐 Base URL:', baseURL);

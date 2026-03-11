@@ -1,15 +1,15 @@
 # Ngrok Setup for CrickCoach
 
-This document explains how to use ngrok to solve the cleartext traffic issue and enable secure httpsS communication between your mobile app and backend.
+This document explains how to use ngrok to solve the cleartext traffic issue and enable secure https communication between your mobile app and backend.
 
 ## 🎯 Problem Solved
 
 - ❌ **Before**: "Cleartext traffic not permitted" errors
-- ✅ **After**: Secure httpsS communication with no configuration issues
+- ✅ **After**: Secure https communication with no configuration issues
 
 ## 🚀 Benefits of Using Ngrok
 
-1. **httpsS by Default** - No more cleartext traffic issues
+1. **https by Default** - No more cleartext traffic issues
 2. **Works from Anywhere** - Your app can connect from any network
 3. **No Special Configuration** - No need for Android manifest changes
 4. **Secure** - Encrypted traffic between app and backend
@@ -19,7 +19,7 @@ This document explains how to use ngrok to solve the cleartext traffic issue and
 
 ### API Base URL
 ```
-httpss://7ffc0e8d88a6.ngrok-free.app
+https://7ffc0e8d88a6.ngrok-free.app
 ```
 
 ### Updated Files
@@ -71,11 +71,11 @@ If ngrok restarts and gives you a new URL:
 - ngrok free tier has some limitations
 - For production, consider a paid ngrok plan or proper hosting
 
-## 🔄 Migration from https to httpsS
+## 🔄 Migration from https to https
 
 ### What Changed
 - **Before**: `https://192.168.1.3:8000`
-- **After**: `httpss://7ffc0e8d88a6.ngrok-free.app`
+- **After**: `https://7ffc0e8d88a6.ngrok-free.app`
 
 ### Removed Configuration
 - ❌ `usesCleartextTraffic: true`
@@ -109,7 +109,7 @@ If ngrok restarts and gives you a new URL:
 ## 📊 Testing Results
 
 ```
-✅ SUCCESS: httpss://7ffc0e8d88a6.ngrok-free.app/api/health
+✅ SUCCESS: https://7ffc0e8d88a6.ngrok-free.app/api/health
    Status: 200
    Response: {
      "message": "Cricket Coach API is running",
@@ -119,7 +119,7 @@ If ngrok restarts and gives you a new URL:
 
 ## 🎉 Success!
 
-Your app should now work without any cleartext traffic issues. The httpsS connection through ngrok provides:
+Your app should now work without any cleartext traffic issues. The https connection through ngrok provides:
 
 - **Secure communication**
 - **No Android configuration needed**

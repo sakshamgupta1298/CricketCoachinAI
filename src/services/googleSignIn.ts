@@ -16,7 +16,7 @@ try {
 
 // Configure Google Sign-In for iOS and Android only
 // Note: You'll need to replace these with your actual Google OAuth credentials
-// Get these from: httpss://console.cloud.google.com/
+// Get these from: https://console.cloud.google.com/
 const configureGoogleSignIn = () => {
   // Check if native module is available
   if (!GoogleSignin) {
@@ -43,13 +43,12 @@ const configureGoogleSignIn = () => {
     }
 
     // Android-specific configuration
+    // Use ONE Android OAuth client ("CrickCoachAI Android") and add BOTH SHA-1s to it in Google Cloud:
+    // - Debug SHA-1 (from keytool / debug.keystore) for local/APK builds
+    // - Play App Signing SHA-1 (from Play Console → Setup → App integrity → App signing) for closed testing/Play
     if (Platform.OS === 'android') {
-      // Web Client ID is required for Android (can also use androidClientId)
       config.webClientId = "1002249784978-e98d549dld5a0kdcunu59u15o4kcakk2.apps.googleusercontent.com";
-      // Optional: Use specific Android Client ID if provided
-      if (process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID) {
-        config.androidClientId = "1002249784978-19qb1v8bbcn1hulvsci9tdfngulmvf7g.apps.googleusercontent.com";
-      }
+      config.androidClientId = "1002249784978-od9k3l3e0824m302h4lgh3mme8p5ovpb.apps.googleusercontent.com";
     }
 
     GoogleSignin.configure(config);

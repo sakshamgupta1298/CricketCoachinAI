@@ -28,7 +28,7 @@ def test_cors_headers():
     print("\n2️⃣ Testing OPTIONS request (preflight)...")
     try:
         headers = {
-            'Origin': 'httpss://example.com',
+            'Origin': 'https://example.com',
             'Access-Control-Request-Method': 'POST',
             'Access-Control-Request-Headers': 'Content-Type,Authorization'
         }
@@ -48,7 +48,7 @@ def test_cors_headers():
             'Content-Type': 'application/json',
             'Accept': 'application/json',
             'User-Agent': 'CrickCoach/1.0 (React Native)',
-            'Origin': 'httpss://example.com'
+            'Origin': 'https://example.com'
         }
         data = {
             'username': 'test_user_cors',

@@ -106,12 +106,12 @@ You should see:
 3. Check if it works in simulator
 4. If simulator works, the issue might be device-specific
 
-## 🔧 If Nothing Works: Use httpsS
+## 🔧 If Nothing Works: Use https
 
 If https still doesn't work after all steps, consider:
-1. Setting up httpsS on your backend (recommended for production)
+1. Setting up https on your backend (recommended for production)
 2. Using a reverse proxy with SSL certificate
-3. Using a service like ngrok for httpsS tunneling
+3. Using a service like ngrok for https tunneling
 
 ## ✅ Verification Checklist
 
