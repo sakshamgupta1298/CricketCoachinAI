@@ -6,16 +6,19 @@ import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacit
 import { Text, TextInput, useTheme } from 'react-native-paper';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import Toast from 'react-native-toast-message';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { PremiumButton } from '../src/components/ui/PremiumButton';
 import { PremiumCard } from '../src/components/ui/PremiumCard';
 import { useAuth } from '../src/context/AuthContext';
 import apiService from '../src/services/api';
+import { signInWithApple } from '../src/services/appleSignIn';
 import { signInWithGoogle } from '../src/services/googleSignIn';
 import { spacing } from '../src/theme';
 import { getResponsiveFontSize, getResponsiveSize } from '../src/utils/responsive';
 
 // Check if Google Sign-In is supported (iOS and Android only)
 const isGoogleSignInSupported = Platform.OS === 'ios' || Platform.OS === 'android';
+const isAppleSignInSupported = Platform.OS === 'ios';
 
 export default function LoginScreen() {
   const theme = useTheme();
@@ -293,6 +296,34 @@ export default function LoginScreen() {
     }
   };
 
+  const handleAppleSignIn = async () => {
+    if (Platform.OS !== 'ios') return;
+    setLoading(true);
+    try {
+      const appleUser = await signInWithApple();
+      const response = await apiService.appleSignIn({
+        identityToken: appleUser.identityToken ?? '',
+        user: appleUser.id,
+        email: appleUser.email ?? undefined,
+        fullName: appleUser.fullName ?? undefined,
+      });
+      if (response.success && response.data) {
+        await apiService.storeAuthData(response.data.token, response.data.user);
+        loginContext(response.data.user, response.data.token);
+        Toast.show({ type: 'success', text1: 'Success', text2: 'Sign in with Apple successful!' });
+        router.replace('/(tabs)/home');
+      } else {
+        Toast.show({ type: 'error', text1: 'Error', text2: response.error || 'Apple Sign-In failed' });
+      }
+    } catch (error: any) {
+      if (error?.message && !error.message.includes('cancelled')) {
+        Toast.show({ type: 'error', text1: 'Error', text2: error.message || 'Apple Sign-In failed' });
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <KeyboardAvoidingView 
       style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -455,6 +486,19 @@ export default function LoginScreen() {
                       </Text>
                     </TouchableOpacity>
                   </View>
+
+                  {/* Sign in with Apple (iOS only) */}
+                  {isAppleSignInSupported && (
+                    <View style={styles.buttonContainer} pointerEvents={loading ? 'none' : 'auto'}>
+                      <AppleAuthentication.AppleAuthenticationButton
+                        buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                        buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                        cornerRadius={8}
+                        style={styles.appleButton}
+                        onPress={handleAppleSignIn}
+                      />
+                    </View>
+                  )}
                 </>
               )}
 
@@ -655,5 +699,9 @@ const styles = StyleSheet.create({
   googleButtonText: {
     fontWeight: '600',
     // fontSize set dynamically
+  },
+  appleButton: {
+    width: '100%',
+    height: getResponsiveSize(44),
   },
 }); 

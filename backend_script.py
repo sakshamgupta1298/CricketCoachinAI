@@ -107,7 +107,10 @@ def init_database():
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    
+    try:
+        cursor.execute('ALTER TABLE users ADD COLUMN apple_id TEXT')
+    except sqlite3.OperationalError:
+        pass  # Column already exists
     conn.commit()
     conn.close()
     logger.info("Database initialized successfully")
@@ -4562,6 +4565,140 @@ def google_signin():
     except Exception as e:
         logger.error(f"Google Sign-In error: {str(e)}", exc_info=True)
         return jsonify({'error': 'Google Sign-In failed'}), 500
+
+@app.route('/api/auth/apple-signin', methods=['POST'])
+def apple_signin():
+    """Sign in with Apple - verify identity token and get or create user"""
+    try:
+        logger.info("=== APPLE SIGN-IN REQUEST RECEIVED ===")
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        identity_token = data.get('identity_token')
+        apple_user_id = data.get('user')  # Apple's unique user identifier (sub)
+        email = data.get('email')
+        full_name = data.get('full_name')
+
+        if not identity_token or not apple_user_id:
+            return jsonify({'error': 'Apple identity token and user id are required'}), 400
+
+        import base64
+        import json as json_lib
+
+        token_parts = identity_token.split('.')
+        if len(token_parts) != 3:
+            return jsonify({'error': 'Invalid Apple identity token'}), 401
+
+        payload_b64 = token_parts[1]
+        padding = len(payload_b64) % 4
+        if padding:
+            payload_b64 += '=' * (4 - padding)
+        decoded = base64.urlsafe_b64decode(payload_b64)
+        token_data = json_lib.loads(decoded)
+
+        if token_data.get('iss') != 'https://appleid.apple.com':
+            return jsonify({'error': 'Invalid Apple token issuer'}), 401
+        if token_data.get('aud') != 'com.saksham5.cricketcoachmobile':
+            return jsonify({'error': 'Invalid Apple token audience'}), 401
+
+        sub = token_data.get('sub')
+        if sub != apple_user_id:
+            return jsonify({'error': 'Apple user id mismatch'}), 401
+
+        token_email = token_data.get('email')
+        verified_email = (email or token_email or '').strip() or None
+        verified_name = (full_name or token_data.get('email', '').split('@')[0] or f'apple_{sub[:8]}').strip()
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute('SELECT id, username, email FROM users WHERE apple_id = ?', (sub,))
+            user = cursor.fetchone()
+            if user:
+                user_id = user['id']
+                username = user['username']
+                conn.close()
+                token = generate_jwt_token(user_id, username)
+                return jsonify({
+                    'success': True,
+                    'message': 'Apple Sign-In successful',
+                    'token': token,
+                    'user': {'id': user_id, 'username': username, 'email': user['email'], 'name': verified_name}
+                })
+
+            if verified_email:
+                cursor.execute('SELECT id, username, email FROM users WHERE email = ?', (verified_email,))
+                user = cursor.fetchone()
+                if user:
+                    cursor.execute('UPDATE users SET apple_id = ? WHERE id = ?', (sub, user['id']))
+                    conn.commit()
+                    conn.close()
+                    token = generate_jwt_token(user['id'], user['username'])
+                    return jsonify({
+                        'success': True,
+                        'message': 'Apple Sign-In successful',
+                        'token': token,
+                        'user': {'id': user['id'], 'username': user['username'], 'email': user['email'], 'name': verified_name}
+                    })
+
+            base_username = verified_name.lower().replace(' ', '_').replace('.', '_')[:30] or f'apple_{sub[:8]}'
+            username = base_username
+            counter = 1
+            while True:
+                cursor.execute('SELECT id FROM users WHERE username = ?', (username,))
+                if cursor.fetchone():
+                    username = f"{base_username}_{counter}"
+                    counter += 1
+                else:
+                    break
+
+            create_email = verified_email or f'apple_{sub}@privaterelay.appleid.com'
+            dummy_password = ''.join(random.choices(string.ascii_letters + string.digits, k=32))
+            password_hash = bcrypt.hashpw(dummy_password.encode('utf-8'), bcrypt.gensalt())
+
+            cursor.execute('''
+                INSERT INTO users (username, email, password_hash, apple_id)
+                VALUES (?, ?, ?, ?)
+            ''', (username, create_email, password_hash.decode('utf-8'), sub))
+            conn.commit()
+            user_id = cursor.lastrowid
+            conn.close()
+
+            token = generate_jwt_token(user_id, username)
+            response = jsonify({
+                'success': True,
+                'message': 'Apple Sign-In successful',
+                'token': token,
+                'user': {'id': user_id, 'username': username, 'email': create_email, 'name': verified_name}
+            })
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+            response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+            return response
+
+        except sqlite3.IntegrityError as e:
+            conn.close()
+            if 'apple_id' in str(e).lower() or 'UNIQUE' in str(e):
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute('SELECT id, username, email FROM users WHERE apple_id = ?', (sub,))
+                user = cursor.fetchone()
+                conn.close()
+                if user:
+                    token = generate_jwt_token(user['id'], user['username'])
+                    return jsonify({
+                        'success': True,
+                        'message': 'Apple Sign-In successful',
+                        'token': token,
+                        'user': {'id': user['id'], 'username': user['username'], 'email': user['email'], 'name': verified_name}
+                    })
+            return jsonify({'error': 'Failed to create or find user'}), 500
+
+    except Exception as e:
+        logger.error(f"Apple Sign-In error: {str(e)}", exc_info=True)
+        return jsonify({'error': 'Apple Sign-In failed'}), 500
 
 @app.route('/api/auth/verify', methods=['GET'])
 @require_auth
