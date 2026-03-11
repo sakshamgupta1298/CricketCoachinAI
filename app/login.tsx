@@ -1,10 +1,9 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Text, TextInput, useTheme } from 'react-native-paper';
-import * as AppleAuthentication from 'expo-apple-authentication';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import Toast from 'react-native-toast-message';
 import { PremiumButton } from '../src/components/ui/PremiumButton';
@@ -12,7 +11,6 @@ import { PremiumCard } from '../src/components/ui/PremiumCard';
 import { useAuth } from '../src/context/AuthContext';
 import apiService from '../src/services/api';
 import { signInWithGoogle } from '../src/services/googleSignIn';
-import { signInWithApple } from '../src/services/appleSignIn';
 import { spacing } from '../src/theme';
 import { getResponsiveFontSize, getResponsiveSize } from '../src/utils/responsive';
 
@@ -295,89 +293,6 @@ export default function LoginScreen() {
     }
   };
 
-  const handleAppleSignIn = async () => {
-    console.log('🔐 [LOGIN_SCREEN] Apple Sign-In button pressed');
-    setLoading(true);
-
-    try {
-      if (Platform.OS !== 'ios') {
-        throw new Error('Apple Sign In is only available on iOS devices.');
-      }
-
-      console.log('📱 [LOGIN_SCREEN] Initiating Apple Sign-In...');
-      const appleUser = await signInWithApple();
-
-      console.log('✅ [LOGIN_SCREEN] Apple Sign-In successful');
-      console.log('📧 [LOGIN_SCREEN] Apple email:', appleUser.email);
-
-      if (!appleUser.identityToken) {
-        throw new Error('Missing Apple identity token.');
-      }
-
-      console.log('📡 [LOGIN_SCREEN] Sending Apple token to backend...');
-      const response = await apiService.appleSignIn({
-        idToken: appleUser.identityToken,
-        email: appleUser.email,
-        fullName: appleUser.fullName,
-        appleUserId: appleUser.id,
-        authorizationCode: appleUser.authorizationCode,
-      } as any);
-
-      console.log('📊 [LOGIN_SCREEN] Apple backend response:', {
-        success: response.success,
-        hasError: !!response.error,
-        errorMessage: response.error,
-      });
-
-      if (response.success) {
-        console.log('✅ [LOGIN_SCREEN] Apple authentication successful!');
-        console.log('💾 [LOGIN_SCREEN] Storing auth data...');
-
-        await apiService.storeAuthData(response.data.token, response.data.user);
-        loginContext(response.data.user, response.data.token);
-
-        console.log('🎉 [LOGIN_SCREEN] Auth data stored, showing success toast');
-        Toast.show({
-          type: 'success',
-          text1: 'Success',
-          text2: 'Apple Sign-In successful!',
-        });
-
-        console.log('🏠 [LOGIN_SCREEN] Navigating to home page...');
-        router.replace('/(tabs)/home');
-      } else {
-        console.log('❌ [LOGIN_SCREEN] Apple authentication failed:', response.error);
-        Toast.show({
-          type: 'error',
-          text1: 'Error',
-          text2: response.error || 'Apple Sign-In failed',
-        });
-      }
-    } catch (error: any) {
-      console.error('🚨 [LOGIN_SCREEN] Apple Sign-In error:', error);
-      console.error('📡 [LOGIN_SCREEN] Error details:', {
-        name: error?.name,
-        message: error?.message,
-        code: error?.code,
-        stack: error?.stack,
-        platform: Platform.OS,
-      });
-
-      if (error?.message && !error.message.includes('cancelled')) {
-        const errorMessage = error.message || 'Apple Sign-In failed. Please try again.';
-
-        Toast.show({
-          type: 'error',
-          text1: 'Error',
-          text2: errorMessage,
-        });
-      }
-    } finally {
-      console.log('🏁 [LOGIN_SCREEN] Apple Sign-In process completed');
-      setLoading(false);
-    }
-  };
-
   return (
     <KeyboardAvoidingView 
       style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -504,7 +419,7 @@ export default function LoginScreen() {
                 />
               </View>
 
-              {/* Social Sign-In (iOS and Android only) */}
+              {/* Google Sign-In (iOS and Android only) */}
               {isGoogleSignInSupported && (
                 <>
                   {/* Divider */}
@@ -515,19 +430,6 @@ export default function LoginScreen() {
                     </Text>
                     <View style={[styles.dividerLine, { backgroundColor: theme.colors.outline }]} />
                   </View>
-
-                  {/* Apple Sign-In Button (iOS only) */}
-                  {Platform.OS === 'ios' && (
-                    <View style={styles.buttonContainer}>
-                      <AppleAuthentication.AppleAuthenticationButton
-                        buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
-                        buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
-                        cornerRadius={8}
-                        style={{ width: '100%', height: 44 }}
-                        onPress={handleAppleSignIn}
-                      />
-                    </View>
-                  )}
 
                   {/* Google Sign-In Button */}
                   <View style={styles.buttonContainer}>
