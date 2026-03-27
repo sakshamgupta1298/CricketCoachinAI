@@ -3834,6 +3834,42 @@ def api_ball_speed_frame():
         return jsonify({'success': False, 'error': f'Ball speed processing failed: {str(e)}'}), 500
 
 
+@app.route('/api/ball-speed/session/start', methods=['POST'])
+@require_auth
+def api_ball_speed_start_session():
+    """Create or refresh a real-time ball speed session."""
+    try:
+        data = request.get_json(silent=True) or {}
+        session_id = (data.get('session_id') or '').strip()
+        if not session_id:
+            return jsonify({'success': False, 'error': 'session_id is required'}), 400
+
+        user_id = request.user['user_id']
+        now = time.time()
+
+        with BALL_SPEED_SESSION_LOCK:
+            existing = BALL_SPEED_SESSIONS.get(session_id)
+            if existing and existing.get('user_id') != user_id:
+                return jsonify({'success': False, 'error': 'Session belongs to another user'}), 403
+
+            BALL_SPEED_SESSIONS[session_id] = {
+                'user_id': user_id,
+                'tracker': BallKalmanTracker(),
+                'tracked_history': deque(maxlen=6),
+                'speed_buffer': deque(maxlen=6),
+                'first_tracked': None,
+                'last_tracked': None,
+                'total_frames': 0,
+                'detected_frames': 0,
+                'last_seen': now,
+            }
+
+        return jsonify({'success': True, 'session_id': session_id})
+    except Exception as e:
+        logger.error(f"Ball speed session start failed: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': f'Ball speed session start failed: {str(e)}'}), 500
+
+
 @app.route('/api/ball-speed/status', methods=['GET'])
 @require_auth
 def api_ball_speed_status():

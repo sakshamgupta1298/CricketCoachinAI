@@ -918,6 +918,24 @@ class ApiService {
     }
   }
 
+  async startBallSpeedSession(sessionId: string): Promise<ApiResponse<any>> {
+    try {
+      const response = await this.jsonApi.post('/api/ball-speed/session/start', { session_id: sessionId }, {
+        timeout: 10000,
+      });
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error: any) {
+      console.error('Start Ball Speed Session Error:', error);
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message || 'Failed to start ball speed session.',
+      };
+    }
+  }
+
   async endBallSpeedSession(sessionId: string): Promise<ApiResponse<any>> {
     try {
       const response = await this.jsonApi.delete(`/api/ball-speed/session/${sessionId}`);

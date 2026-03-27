@@ -135,7 +135,7 @@ export default function BallSpeedScreen() {
     await endSession();
   };
 
-  const startTracking = () => {
+  const startTracking = async () => {
     const mpp = Number.isFinite(metersPerPixel) ? metersPerPixel : 0;
     if (mpp <= 0) {
       Alert.alert('Invalid calibration', 'Please provide a valid meters-per-pixel value.');
@@ -149,6 +149,14 @@ export default function BallSpeedScreen() {
     setTrackedFrames(0);
     setTotalFrames(0);
     setStatusText('Initializing tracker...');
+    const started = await apiService.startBallSpeedSession(sid);
+    if (!started.success || !started.data?.success) {
+      sessionIdRef.current = '';
+      setStatusText(started.error || started.data?.error || 'Failed to start tracking session');
+      Alert.alert('Could not start tracking', started.error || started.data?.error || 'Session init failed');
+      return;
+    }
+
     setIsTracking(true);
     stopTrackingInterval();
 
@@ -233,6 +241,16 @@ export default function BallSpeedScreen() {
           </Text>
         </PremiumCard>
 
+        <View style={styles.actionsRow}>
+          <PremiumButton
+            title={isTracking ? 'Stop & Compute Speed' : 'Start Tracking'}
+            onPress={isTracking ? pauseTracking : () => void startTracking()}
+            variant="primary"
+            size="medium"
+          />
+          <PremiumButton title="Reset" onPress={() => void resetTracker()} variant="secondary" size="medium" />
+        </View>
+
         <PremiumCard variant="elevated" padding="medium" style={styles.card}>
           <View style={styles.cameraWrapper}>
             <CameraView ref={cameraRef} style={styles.camera} facing="back" />
@@ -307,16 +325,6 @@ export default function BallSpeedScreen() {
             </>
           )}
         </PremiumCard>
-
-        <View style={styles.actionsRow}>
-          <PremiumButton
-            title={isTracking ? 'Stop & Compute Speed' : 'Start Tracking'}
-            onPress={isTracking ? pauseTracking : startTracking}
-            variant="primary"
-            size="medium"
-          />
-          <PremiumButton title="Reset" onPress={() => void resetTracker()} variant="secondary" size="medium" />
-        </View>
       </ScrollView>
     </SafeAreaView>
   );
