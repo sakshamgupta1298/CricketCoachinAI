@@ -15,9 +15,10 @@ export default function BallSpeedScreen() {
   const theme = useTheme();
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView | null>(null);
-  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inFlightRef = useRef(false);
   const sessionIdRef = useRef<string>('');
+  const trackingActiveRef = useRef(false);
 
   const [isTracking, setIsTracking] = useState(false);
   const [finalSpeedKmh, setFinalSpeedKmh] = useState<number | null>(null);
@@ -28,7 +29,7 @@ export default function BallSpeedScreen() {
   const [isBallDetected, setIsBallDetected] = useState(false);
   const [statusText, setStatusText] = useState('Ready');
   const [trackingMode, setTrackingMode] = useState<'yolo' | 'fallback' | 'checking'>('checking');
-  const [frameIntervalMsInput, setFrameIntervalMsInput] = useState('100');
+  const [frameIntervalMsInput, setFrameIntervalMsInput] = useState('60');
 
   const [metersPerPixelInput, setMetersPerPixelInput] = useState('0.015');
   const [pitchPixelLengthInput, setPitchPixelLengthInput] = useState('');
@@ -44,13 +45,14 @@ export default function BallSpeedScreen() {
 
   const frameIntervalMs = useMemo(() => {
     const val = Number(frameIntervalMsInput);
-    return val >= 50 ? val : 100;
+    return val >= 20 ? val : 60;
   }, [frameIntervalMsInput]);
 
   const stopTrackingInterval = () => {
-    if (pollIntervalRef.current) {
-      clearInterval(pollIntervalRef.current);
-      pollIntervalRef.current = null;
+    trackingActiveRef.current = false;
+    if (pollTimeoutRef.current) {
+      clearTimeout(pollTimeoutRef.current);
+      pollTimeoutRef.current = null;
     }
   };
 
@@ -68,7 +70,7 @@ export default function BallSpeedScreen() {
     try {
       const frame = await cameraRef.current.takePictureAsync({
         base64: true,
-        quality: 0.2,
+        quality: 0.1,
         skipProcessing: true,
       });
 
@@ -101,6 +103,34 @@ export default function BallSpeedScreen() {
     } finally {
       inFlightRef.current = false;
     }
+  };
+
+  const scheduleNextFrame = () => {
+    if (!trackingActiveRef.current) return;
+    pollTimeoutRef.current = setTimeout(async () => {
+      if (!trackingActiveRef.current) return;
+      const startedAt = Date.now();
+      await processOneFrame();
+      const elapsed = Date.now() - startedAt;
+      const nextDelay = Math.max(0, frameIntervalMs - elapsed);
+      if (trackingActiveRef.current) {
+        scheduleNextFrameWithDelay(nextDelay);
+      }
+    }, 0);
+  };
+
+  const scheduleNextFrameWithDelay = (delayMs: number) => {
+    if (!trackingActiveRef.current) return;
+    pollTimeoutRef.current = setTimeout(async () => {
+      if (!trackingActiveRef.current) return;
+      const startedAt = Date.now();
+      await processOneFrame();
+      const elapsed = Date.now() - startedAt;
+      const nextDelay = Math.max(0, frameIntervalMs - elapsed);
+      if (trackingActiveRef.current) {
+        scheduleNextFrameWithDelay(nextDelay);
+      }
+    }, delayMs);
   };
 
   useEffect(() => {
@@ -158,13 +188,10 @@ export default function BallSpeedScreen() {
     }
 
     setIsTracking(true);
+    trackingActiveRef.current = true;
     stopTrackingInterval();
-
-    // Run first cycle immediately, then adaptive schedule for high throughput.
-    void processOneFrame();
-    pollIntervalRef.current = setInterval(() => {
-      void processOneFrame();
-    }, frameIntervalMs);
+    trackingActiveRef.current = true;
+    scheduleNextFrame();
   };
 
   const pauseTracking = async () => {
@@ -192,7 +219,7 @@ export default function BallSpeedScreen() {
     }
 
     setFinalSpeedKmh(Number(finalize.data.final_speed_kmh) || 0);
-    setFinalizeMeta({ durationSeconds: Number(finalize.data.duration_seconds) || 0 });
+    setFinalizeMeta({ durationSeconds: Number(finalize.data.session_duration ?? finalize.data.duration_seconds) || 0 });
     setTrackedFrames(Number(finalize.data.detected_frames) || trackedFrames);
     setTotalFrames(Number(finalize.data.total_frames) || totalFrames);
     setStatusText('Final speed computed');
@@ -281,7 +308,7 @@ export default function BallSpeedScreen() {
             style={styles.input}
           />
           <TextInput
-            label="Frame interval ms (recommended 60-120)"
+            label="Frame interval ms (recommended 30-80)"
             value={frameIntervalMsInput}
             onChangeText={setFrameIntervalMsInput}
             keyboardType="number-pad"
