@@ -3771,18 +3771,30 @@ def api_ball_speed_frame():
                     'tracker': BallKalmanTracker(),
                     'tracked_history': deque(maxlen=6),
                     'speed_buffer': deque(maxlen=6),
+                    'first_tracked': None,
+                    'last_tracked': None,
+                    'total_frames': 0,
+                    'detected_frames': 0,
                     'last_seen': now,
                 }
                 BALL_SPEED_SESSIONS[session_id] = session
             else:
                 session['last_seen'] = now
+                session['total_frames'] = int(session.get('total_frames', 0))
+                session['detected_frames'] = int(session.get('detected_frames', 0))
+
+        session['total_frames'] += 1
 
         measured_center, det_conf = _detect_ball_center(frame_bgr, confidence=confidence)
         tracker_center = session['tracker'].update(measured_center)
         current_speed_kmh = 0.0
 
         if tracker_center is not None:
+            session['detected_frames'] += 1
             session['tracked_history'].append((float(tracker_center[0]), float(tracker_center[1]), now))
+            if session.get('first_tracked') is None:
+                session['first_tracked'] = (float(tracker_center[0]), float(tracker_center[1]), now)
+            session['last_tracked'] = (float(tracker_center[0]), float(tracker_center[1]), now)
 
         if len(session['tracked_history']) >= 6:
             start = session['tracked_history'][0]
@@ -3813,6 +3825,8 @@ def api_ball_speed_frame():
             'detection_confidence': float(det_conf),
             'current_speed_kmh': float(current_speed_kmh),
             'smoothed_speed_kmh': float(avg_speed_kmh),
+            'total_frames': int(session.get('total_frames', 0)),
+            'detected_frames': int(session.get('detected_frames', 0)),
             'meters_per_pixel': float(meters_per_pixel),
         })
     except Exception as e:
@@ -3842,6 +3856,65 @@ def api_ball_speed_end_session(session_id):
         if existing and existing.get('user_id') == user_id:
             BALL_SPEED_SESSIONS.pop(session_id, None)
     return jsonify({'success': True, 'session_id': session_id})
+
+
+@app.route('/api/ball-speed/session/<session_id>/finalize', methods=['POST'])
+@require_auth
+def api_ball_speed_finalize_session(session_id):
+    """Compute one final speed over the full tracked session (first tracked -> last tracked)."""
+    try:
+        data = request.get_json(silent=True) or {}
+        pitch_pixel_length = float(data.get('pitch_pixel_length') or 0.0)
+        meters_per_pixel = float(data.get('meters_per_pixel') or 0.015)
+        if pitch_pixel_length > 0:
+            meters_per_pixel = PITCH_LENGTH_METERS / pitch_pixel_length
+        if meters_per_pixel <= 0:
+            return jsonify({'success': False, 'error': 'Invalid calibration value'}), 400
+
+        user_id = request.user['user_id']
+        with BALL_SPEED_SESSION_LOCK:
+            session = BALL_SPEED_SESSIONS.get(session_id)
+            if not session or session.get('user_id') != user_id:
+                return jsonify({'success': False, 'error': 'Session not found'}), 404
+
+            first = session.get('first_tracked')
+            last = session.get('last_tracked')
+            total_frames = int(session.get('total_frames', 0))
+            detected_frames = int(session.get('detected_frames', 0))
+
+        if first is None or last is None:
+            return jsonify({
+                'success': False,
+                'error': 'Insufficient tracking data. Ball was not detected.',
+                'total_frames': total_frames,
+                'detected_frames': detected_frames,
+            }), 400
+
+        dt_seconds = float(last[2] - first[2])
+        final_speed_kmh = estimate_speed_kmh(
+            start_center=(first[0], first[1]),
+            end_center=(last[0], last[1]),
+            dt_seconds=dt_seconds,
+            meters_per_pixel=meters_per_pixel,
+        )
+
+        return jsonify({
+            'success': True,
+            'session_id': session_id,
+            'final_speed_kmh': float(final_speed_kmh),
+            'duration_seconds': float(max(0.0, dt_seconds)),
+            'total_frames': total_frames,
+            'detected_frames': detected_frames,
+            'meters_per_pixel': float(meters_per_pixel),
+            'debug': {
+                'has_first': first is not None,
+                'has_last': last is not None,
+                'dt_seconds': float(dt_seconds),
+            }
+        })
+    except Exception as e:
+        logger.error(f"Ball speed finalize failed: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': f'Ball speed finalize failed: {str(e)}'}), 500
 
 @app.route('/api/history', methods=['GET'])
 @require_auth

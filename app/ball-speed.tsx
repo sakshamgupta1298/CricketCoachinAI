@@ -20,8 +20,10 @@ export default function BallSpeedScreen() {
   const sessionIdRef = useRef<string>('');
 
   const [isTracking, setIsTracking] = useState(false);
-  const [currentSpeedKmh, setCurrentSpeedKmh] = useState(0);
-  const [smoothedSpeedKmh, setSmoothedSpeedKmh] = useState(0);
+  const [finalSpeedKmh, setFinalSpeedKmh] = useState<number | null>(null);
+  const [trackedFrames, setTrackedFrames] = useState(0);
+  const [totalFrames, setTotalFrames] = useState(0);
+  const [finalizeMeta, setFinalizeMeta] = useState<{ durationSeconds?: number } | null>(null);
   const [lastDetectionConfidence, setLastDetectionConfidence] = useState(0);
   const [isBallDetected, setIsBallDetected] = useState(false);
   const [statusText, setStatusText] = useState('Ready');
@@ -89,8 +91,8 @@ export default function BallSpeedScreen() {
       }
 
       const data = response.data;
-      setCurrentSpeedKmh(Number(data.current_speed_kmh) || 0);
-      setSmoothedSpeedKmh(Number(data.smoothed_speed_kmh) || 0);
+      setTrackedFrames(Number(data.detected_frames) || 0);
+      setTotalFrames(Number(data.total_frames) || 0);
       setLastDetectionConfidence(Number(data.detection_confidence) || 0);
       setIsBallDetected(Boolean(data.detected));
       setStatusText(data.detected ? 'Ball detected' : 'Tracking... ball not detected');
@@ -123,8 +125,10 @@ export default function BallSpeedScreen() {
   const resetTracker = async () => {
     stopTrackingInterval();
     setIsTracking(false);
-    setCurrentSpeedKmh(0);
-    setSmoothedSpeedKmh(0);
+    setFinalSpeedKmh(null);
+    setFinalizeMeta(null);
+    setTrackedFrames(0);
+    setTotalFrames(0);
     setLastDetectionConfidence(0);
     setIsBallDetected(false);
     setStatusText('Ready');
@@ -140,8 +144,10 @@ export default function BallSpeedScreen() {
 
     const sid = `bs_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
     sessionIdRef.current = sid;
-    setCurrentSpeedKmh(0);
-    setSmoothedSpeedKmh(0);
+    setFinalSpeedKmh(null);
+    setFinalizeMeta(null);
+    setTrackedFrames(0);
+    setTotalFrames(0);
     setStatusText('Initializing tracker...');
     setIsTracking(true);
     stopTrackingInterval();
@@ -153,10 +159,35 @@ export default function BallSpeedScreen() {
     }, frameIntervalMs);
   };
 
-  const pauseTracking = () => {
+  const pauseTracking = async () => {
     stopTrackingInterval();
     setIsTracking(false);
-    setStatusText('Paused');
+    setStatusText('Computing final speed...');
+
+    if (!sessionIdRef.current) {
+      setStatusText('Paused');
+      return;
+    }
+
+    const finalize = await apiService.finalizeBallSpeedSession(sessionIdRef.current, {
+      meters_per_pixel: metersPerPixel,
+      pitch_pixel_length: Number(pitchPixelLengthInput) || 0,
+    });
+
+    if (!finalize.success || !finalize.data?.success) {
+      setFinalSpeedKmh(null);
+      setFinalizeMeta(null);
+      const msg = finalize.error || finalize.data?.error || 'Could not compute final speed';
+      setStatusText(msg);
+      Alert.alert('Ball speed compute failed', msg);
+      return;
+    }
+
+    setFinalSpeedKmh(Number(finalize.data.final_speed_kmh) || 0);
+    setFinalizeMeta({ durationSeconds: Number(finalize.data.duration_seconds) || 0 });
+    setTrackedFrames(Number(finalize.data.detected_frames) || trackedFrames);
+    setTotalFrames(Number(finalize.data.total_frames) || totalFrames);
+    setStatusText('Final speed computed');
   };
 
   if (!permission) {
@@ -190,7 +221,7 @@ export default function BallSpeedScreen() {
             Live Ball Speed Checker
           </Text>
           <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(13) }]}>
-            Auto-detect ball speed using backend vision processing in real-time.
+            Speed is calculated over the full tracked session and shown after you stop tracking.
           </Text>
           <Text style={[styles.modeText, { color: theme.colors.onSurfaceVariant }]}>
             Mode:{' '}
@@ -245,13 +276,13 @@ export default function BallSpeedScreen() {
         </PremiumCard>
 
         <PremiumCard variant="outlined" padding="large" style={styles.card}>
-          <Text style={[styles.metricLabel, { color: theme.colors.onSurfaceVariant }]}>Live Speed (5-frame)</Text>
-          <Text style={[styles.metricValue, { color: theme.colors.onSurface }]}>{currentSpeedKmh.toFixed(1)} km/h</Text>
-
-          <Text style={[styles.metricLabel, { color: theme.colors.onSurfaceVariant, marginTop: getResponsiveSize(spacing.md) }]}>
-            Smoothed Speed
+          <Text style={[styles.metricLabel, { color: theme.colors.onSurfaceVariant }]}>Final Session Speed</Text>
+          <Text style={[styles.metricValue, { color: theme.colors.onSurface }]}>
+            {finalSpeedKmh === null ? '--' : `${finalSpeedKmh.toFixed(1)} km/h`}
           </Text>
-          <Text style={[styles.metricValue, { color: theme.colors.primary }]}>{smoothedSpeedKmh.toFixed(1)} km/h</Text>
+          <Text style={[styles.smallStatusText, { color: theme.colors.onSurfaceVariant }]}>
+            {statusText}
+          </Text>
 
           <Text style={[styles.metricLabel, { color: theme.colors.onSurfaceVariant, marginTop: getResponsiveSize(spacing.md) }]}>
             Ball Detection
@@ -259,11 +290,27 @@ export default function BallSpeedScreen() {
           <Text style={[styles.detectionText, { color: isBallDetected ? theme.colors.primary : theme.colors.error }]}>
             {isBallDetected ? `Detected (conf ${lastDetectionConfidence.toFixed(2)})` : 'Not detected'}
           </Text>
+          <Text style={[styles.metricLabel, { color: theme.colors.onSurfaceVariant, marginTop: getResponsiveSize(spacing.md) }]}>
+            Tracked Frames
+          </Text>
+          <Text style={[styles.framesText, { color: theme.colors.onSurface }]}>
+            {trackedFrames} / {totalFrames}
+          </Text>
+          {finalizeMeta?.durationSeconds !== undefined && (
+            <>
+              <Text style={[styles.metricLabel, { color: theme.colors.onSurfaceVariant, marginTop: getResponsiveSize(spacing.md) }]}>
+                Duration
+              </Text>
+              <Text style={[styles.framesText, { color: theme.colors.onSurface }]}>
+                {finalizeMeta.durationSeconds.toFixed(2)} s
+              </Text>
+            </>
+          )}
         </PremiumCard>
 
         <View style={styles.actionsRow}>
           <PremiumButton
-            title={isTracking ? 'Pause' : 'Start Tracking'}
+            title={isTracking ? 'Stop & Compute Speed' : 'Start Tracking'}
             onPress={isTracking ? pauseTracking : startTracking}
             variant="primary"
             size="medium"
@@ -351,10 +398,20 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: getResponsiveSize(spacing.xs),
   },
+  framesText: {
+    fontSize: getResponsiveFontSize(16),
+    fontWeight: '700',
+    marginTop: getResponsiveSize(spacing.xs),
+  },
   actionsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: getResponsiveSize(spacing.sm),
     marginBottom: getResponsiveSize(spacing.xl),
+  },
+  smallStatusText: {
+    marginTop: getResponsiveSize(spacing.xs),
+    fontSize: getResponsiveFontSize(12),
+    fontWeight: '500',
   },
 });

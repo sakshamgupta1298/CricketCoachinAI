@@ -934,6 +934,27 @@ class ApiService {
     }
   }
 
+  async finalizeBallSpeedSession(
+    sessionId: string,
+    payload: { meters_per_pixel?: number; pitch_pixel_length?: number }
+  ): Promise<ApiResponse<any>> {
+    try {
+      const response = await this.jsonApi.post(`/api/ball-speed/session/${sessionId}/finalize`, payload, {
+        timeout: 20000,
+      });
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error: any) {
+      console.error('Finalize Ball Speed Session Error:', error);
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message || 'Failed to finalize ball speed session.',
+      };
+    }
+  }
+
   // Authentication Methods
   async login(credentials: { username: string; password: string }): Promise<ApiResponse<any>> {
     try {
