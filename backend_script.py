@@ -219,7 +219,7 @@ PITCH_LENGTH_METERS = 20.12
 DEFAULT_BALL_CLASS_ID = int(os.getenv("BALL_CLASS_ID", "32"))  # COCO: sports ball
 DEFAULT_BALL_MODEL_PATH = os.getenv("BALL_YOLO_MODEL_PATH", "yolov8s.pt")
 DEFAULT_YOLO_STRIDE = int(os.getenv("BALL_YOLO_STRIDE", "2"))
-DEFAULT_CONFIDENCE = float(os.getenv("BALL_CONFIDENCE", "0.30"))
+DEFAULT_CONFIDENCE = float(os.getenv("BALL_CONFIDENCE", "0.25"))
 MIN_VALID_SPEED_KMH = float(os.getenv("BALL_MIN_SPEED_KMH", "20.0"))
 MAX_VALID_SPEED_KMH = float(os.getenv("BALL_MAX_SPEED_KMH", "200.0"))
 
@@ -274,11 +274,57 @@ def estimate_speed_kmh(start_center, end_center, dt_seconds, meters_per_pixel):
         return 0.0
 
     dx = end_center[0] - start_center[0]
-    dy = end_center[1] - start_center[1]
-    distance_pixels = float(np.sqrt(dx * dx + dy * dy))
+    # Horizontal displacement only: vertical motion in view adds noise for cricket ball release.
+    distance_pixels = float(abs(dx))
     distance_meters = distance_pixels * meters_per_pixel
     speed_mps = distance_meters / dt_seconds
     return speed_mps * 3.6
+
+
+def _resolve_ball_speed_meters_per_pixel(data):
+    """
+    Require explicit calibration: full pitch line width in pixels, or meters_per_pixel.
+    No silent default (a wrong default can scale speed by 3× or more).
+    """
+    pitch_pixel_length = float(data.get('pitch_pixel_length') or 0.0)
+    mpp_raw = data.get('meters_per_pixel')
+    if pitch_pixel_length > 0:
+        return PITCH_LENGTH_METERS / pitch_pixel_length
+    if mpp_raw is not None:
+        mpp = float(mpp_raw)
+        if mpp > 0:
+            return mpp
+    return None
+
+
+def _ensure_session_camera_fps(session, data):
+    """Persist capture rate from client (camera_fps or frame_interval_ms); used for dt, not network time."""
+    if session.get('camera_fps'):
+        return float(session['camera_fps'])
+    fps = float(data.get('camera_fps') or 0.0)
+    if fps <= 0:
+        fim = float(data.get('frame_interval_ms') or 0.0)
+        if fim > 0:
+            fps = 1000.0 / fim
+    if fps <= 0:
+        fps = 30.0
+    fps = min(max(fps, 1.0), 240.0)
+    session['camera_fps'] = fps
+    return fps
+
+
+def _dt_seconds_between_tracked_points(prev, curr, camera_fps):
+    """Prefer (frame_idx delta) / fps; avoids jitter from network arrival timestamps."""
+    fps = float(camera_fps) if camera_fps and float(camera_fps) > 0 else 30.0
+    fi_p = prev.get('frame_idx')
+    fi_c = curr.get('frame_idx')
+    if fi_p is not None and fi_c is not None:
+        dfi = max(1, int(fi_c) - int(fi_p))
+        return dfi / fps
+    dt_net = float(curr.get('t', 0)) - float(prev.get('t', 0))
+    if dt_net > 1e-6:
+        return dt_net
+    return 1.0 / fps
 
 
 def _get_ball_model():
@@ -350,7 +396,7 @@ def _detect_ball_center(frame_bgr, confidence=0.30, class_id=DEFAULT_BALL_CLASS_
     if original_w > max_infer_width:
         new_w = max_infer_width
         new_h = max(1, int((original_h / max(1, original_w)) * new_w))
-        infer_frame = cv2.resize(frame_bgr, (new_w, new_h), interpolation=cv2.INTER_AREA)
+        infer_frame = cv2.resize(roi_frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
         scale_x = float(original_w) / float(new_w)
         scale_y = float(original_h) / float(new_h)
 
@@ -3797,18 +3843,21 @@ def api_ball_speed_frame():
         class_id = int(data.get('class_id', DEFAULT_BALL_CLASS_ID))
         yolo_stride = max(1, int(data.get('yolo_stride', DEFAULT_YOLO_STRIDE)))
         roi = data.get('roi')
-        pitch_pixel_length = float(data.get('pitch_pixel_length') or 0.0)
-        meters_per_pixel = float(data.get('meters_per_pixel') or 0.015)
 
         if not session_id:
             return jsonify({'success': False, 'error': 'session_id is required'}), 400
         if not image_base64:
             return jsonify({'success': False, 'error': 'image_base64 is required'}), 400
 
-        if pitch_pixel_length > 0:
-            meters_per_pixel = PITCH_LENGTH_METERS / pitch_pixel_length
-        if meters_per_pixel <= 0:
-            return jsonify({'success': False, 'error': 'Invalid calibration value'}), 400
+        meters_per_pixel = _resolve_ball_speed_meters_per_pixel(data)
+        if meters_per_pixel is None or meters_per_pixel <= 0:
+            return jsonify({
+                'success': False,
+                'error': (
+                    'Calibration required: set pitch_pixel_length (full pitch line width in pixels) '
+                    'or a positive meters_per_pixel value. Do not rely on defaults.'
+                ),
+            }), 400
 
         # Strip data URL prefix if provided
         if isinstance(image_base64, str) and image_base64.startswith('data:image'):
@@ -3842,6 +3891,7 @@ def api_ball_speed_frame():
                     'detected_frames': 0,
                     'frame_index': 0,
                     'last_seen': now,
+                    'camera_fps': None,
                 }
                 BALL_SPEED_SESSIONS[session_id] = session
             else:
@@ -3850,10 +3900,19 @@ def api_ball_speed_frame():
                 session['detected_frames'] = int(session.get('detected_frames', 0))
                 session['frame_index'] = int(session.get('frame_index', 0))
 
+        camera_fps = _ensure_session_camera_fps(session, data)
+
         session['total_frames'] += 1
         session['frame_index'] += 1
 
-        run_detection = (session['frame_index'] % yolo_stride == 0) or (session.get('first_tracked') is None)
+        # Run YOLO every frame until Kalman is initialized and we have enough points; then apply stride.
+        tr = session['tracker']
+        fp_len = len(session.get('frame_points', []))
+        run_detection = (
+            (not getattr(tr, 'initialized', False))
+            or fp_len < 4
+            or (session['frame_index'] % yolo_stride == 0)
+        )
         measured_center, det_conf = (None, 0.0)
         if run_detection:
             measured_center, det_conf = _detect_ball_center(
@@ -3874,6 +3933,7 @@ def api_ball_speed_frame():
                 'x': float(tracker_center[0]),
                 'y': float(tracker_center[1]),
                 't': float(now),
+                'frame_idx': int(session['frame_index']),
                 'confidence': float(det_conf),
                 'detected': bool(measured_center is not None),
             }
@@ -3886,7 +3946,7 @@ def api_ball_speed_frame():
             if len(session['frame_points']) >= 2:
                 prev = session['frame_points'][-2]
                 curr = session['frame_points'][-1]
-                dt_seconds = float(curr['t'] - prev['t'])
+                dt_seconds = _dt_seconds_between_tracked_points(prev, curr, camera_fps)
                 current_speed_kmh = estimate_speed_kmh(
                     start_center=(prev['x'], prev['y']),
                     end_center=(curr['x'], curr['y']),
@@ -3898,7 +3958,7 @@ def api_ball_speed_frame():
         avg_speed_kmh = float(np.mean(session['instant_speeds'])) if session['instant_speeds'] else 0.0
 
         # Cleanup stale sessions opportunistically
-        stale_before = now - 120.0
+        stale_before = now - 600.0
         with BALL_SPEED_SESSION_LOCK:
             stale_keys = [sid for sid, s in BALL_SPEED_SESSIONS.items() if s.get('last_seen', 0) < stale_before]
             for sid in stale_keys:
@@ -3916,6 +3976,8 @@ def api_ball_speed_frame():
             'average_confidence': float(np.mean(session['confidences'])) if session['confidences'] else 0.0,
             'meters_per_pixel': float(meters_per_pixel),
             'yolo_stride': int(yolo_stride),
+            'frame_points_count': len(session.get('frame_points', [])),
+            'kalman_initialized': bool(getattr(session['tracker'], 'initialized', False)),
         })
     except Exception as e:
         logger.error(f"Ball speed frame processing failed: {e}", exc_info=True)
@@ -3952,6 +4014,7 @@ def api_ball_speed_start_session():
                 'detected_frames': 0,
                 'frame_index': 0,
                 'last_seen': now,
+                'camera_fps': None,
             }
 
         return jsonify({'success': True, 'session_id': session_id})
@@ -3993,16 +4056,20 @@ def api_ball_speed_finalize_session(session_id):
     """Compute robust final speed from instantaneous multi-frame speeds."""
     try:
         data = request.get_json(silent=True) or {}
-        pitch_pixel_length = float(data.get('pitch_pixel_length') or 0.0)
-        meters_per_pixel = float(data.get('meters_per_pixel') or 0.015)
         confidence_threshold = float(data.get('confidence_threshold', DEFAULT_CONFIDENCE))
         min_speed_kmh = float(data.get('min_speed_kmh', MIN_VALID_SPEED_KMH))
         max_speed_kmh = float(data.get('max_speed_kmh', MAX_VALID_SPEED_KMH))
         final_method = str(data.get('final_method', 'median')).lower()
-        if pitch_pixel_length > 0:
-            meters_per_pixel = PITCH_LENGTH_METERS / pitch_pixel_length
-        if meters_per_pixel <= 0:
-            return jsonify({'success': False, 'error': 'Invalid calibration value'}), 400
+
+        meters_per_pixel = _resolve_ball_speed_meters_per_pixel(data)
+        if meters_per_pixel is None or meters_per_pixel <= 0:
+            return jsonify({
+                'success': False,
+                'error': (
+                    'Calibration required: set pitch_pixel_length (full pitch line width in pixels) '
+                    'or a positive meters_per_pixel value.'
+                ),
+            }), 400
 
         user_id = request.user['user_id']
         with BALL_SPEED_SESSION_LOCK:
@@ -4014,13 +4081,22 @@ def api_ball_speed_finalize_session(session_id):
             detected_frames = int(session.get('detected_frames', 0))
             frame_points = list(session.get('frame_points', []))
             confidences = list(session.get('confidences', []))
+            _ensure_session_camera_fps(session, data)
+            camera_fps = float(session.get('camera_fps') or 30.0)
 
         if len(frame_points) < 2:
             return jsonify({
                 'success': False,
-                'error': 'Insufficient tracking data. Ball was not detected.',
+                'error': (
+                    'Insufficient tracking data: need at least 2 tracked frames. '
+                    'The Kalman tracker only starts after YOLO finds the ball at least once, '
+                    'then needs at least one more frame. Keep the ball in view for 1–2 seconds, '
+                    'and ensure the camera is sending frames (check network). '
+                    'If YOLO never detects, lower confidence or use a cricket ball model.'
+                ),
                 'total_frames': total_frames,
                 'detected_frames': detected_frames,
+                'frame_points_count': len(frame_points),
             }), 400
 
         raw_speeds = []
@@ -4028,7 +4104,7 @@ def api_ball_speed_finalize_session(session_id):
         for i in range(1, len(frame_points)):
             prev = frame_points[i - 1]
             curr = frame_points[i]
-            dt_seconds = float(curr['t'] - prev['t'])
+            dt_seconds = _dt_seconds_between_tracked_points(prev, curr, camera_fps)
             speed_kmh = estimate_speed_kmh(
                 start_center=(prev['x'], prev['y']),
                 end_center=(curr['x'], curr['y']),
@@ -4045,12 +4121,34 @@ def api_ball_speed_finalize_session(session_id):
                 valid_speeds.append(float(speed_kmh))
 
         if not valid_speeds:
+            # Fallback: use median of raw speeds (speed only) if we have samples
+            if raw_speeds:
+                raw_filtered = [s for s in raw_speeds if min_speed_kmh <= s <= max_speed_kmh]
+                if raw_filtered:
+                    final_speed_kmh = float(np.median(raw_filtered))
+                    session_duration = float(max(0.0, frame_points[-1]['t'] - frame_points[0]['t']))
+                    average_confidence = float(np.mean(confidences)) if confidences else 0.0
+                    return jsonify({
+                        'success': True,
+                        'session_id': session_id,
+                        'final_speed_kmh': final_speed_kmh,
+                        'session_duration': session_duration,
+                        'total_frames': total_frames,
+                        'detected_frames': detected_frames,
+                        'average_confidence': average_confidence,
+                        'meters_per_pixel': float(meters_per_pixel),
+                        'final_method': 'median_raw_fallback',
+                        'valid_speed_samples': len(raw_filtered),
+                        'raw_speed_samples': len(raw_speeds),
+                        'warning': 'Confidence filter removed no samples; used speed-only median fallback.',
+                    })
             return jsonify({
                 'success': False,
                 'error': 'No valid speed samples after confidence/noise filtering.',
                 'total_frames': total_frames,
                 'detected_frames': detected_frames,
                 'raw_speed_samples': len(raw_speeds),
+                'frame_points_count': len(frame_points),
             }), 400
 
         if final_method == 'average':

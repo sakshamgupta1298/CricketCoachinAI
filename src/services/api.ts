@@ -881,7 +881,12 @@ class ApiService {
     image_base64: string;
     meters_per_pixel?: number;
     pitch_pixel_length?: number;
+    /** Used server-side for dt; avoids network jitter (prefer frame_interval_ms or camera_fps). */
+    frame_interval_ms?: number;
+    camera_fps?: number;
     confidence?: number;
+    yolo_stride?: number;
+    class_id?: number;
   }): Promise<ApiResponse<any>> {
     try {
       const response = await this.jsonApi.post('/api/ball-speed/frame', payload, {
@@ -954,7 +959,7 @@ class ApiService {
 
   async finalizeBallSpeedSession(
     sessionId: string,
-    payload: { meters_per_pixel?: number; pitch_pixel_length?: number }
+    payload: { meters_per_pixel?: number; pitch_pixel_length?: number; frame_interval_ms?: number; camera_fps?: number }
   ): Promise<ApiResponse<any>> {
     try {
       const response = await this.jsonApi.post(`/api/ball-speed/session/${sessionId}/finalize`, payload, {

@@ -63,7 +63,8 @@
         }
       ],
       "expo-router",
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      "react-native-vision-camera"
     ],
     "experiments": {
       "typedRoutes": true

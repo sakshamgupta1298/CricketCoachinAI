@@ -1,8 +1,9 @@
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useCameraPermissions } from 'expo-camera';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { Text, TextInput, useTheme } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { type BallSpeedCameraCaptureRef, BallSpeedCameraPreview } from '@/components/ball-speed';
 import { PremiumButton } from '../src/components/ui/PremiumButton';
 import { PremiumCard } from '../src/components/ui/PremiumCard';
 import apiService from '../src/services/api';
@@ -14,7 +15,7 @@ const PITCH_LENGTH_METERS = 20.12;
 export default function BallSpeedScreen() {
   const theme = useTheme();
   const [permission, requestPermission] = useCameraPermissions();
-  const cameraRef = useRef<CameraView | null>(null);
+  const cameraRef = useRef<BallSpeedCameraCaptureRef | null>(null);
   const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inFlightRef = useRef(false);
   const sessionIdRef = useRef<string>('');
@@ -31,7 +32,7 @@ export default function BallSpeedScreen() {
   const [trackingMode, setTrackingMode] = useState<'yolo' | 'fallback' | 'checking'>('checking');
   const [frameIntervalMsInput, setFrameIntervalMsInput] = useState('60');
 
-  const [metersPerPixelInput, setMetersPerPixelInput] = useState('0.015');
+  const [metersPerPixelInput, setMetersPerPixelInput] = useState('');
   const [pitchPixelLengthInput, setPitchPixelLengthInput] = useState('');
 
   const metersPerPixel = useMemo(() => {
@@ -39,8 +40,10 @@ export default function BallSpeedScreen() {
     if (pitchPixelLength > 0) {
       return PITCH_LENGTH_METERS / pitchPixelLength;
     }
-    const mpp = Number(metersPerPixelInput);
-    return mpp > 0 ? mpp : 0.015;
+    const trimmed = metersPerPixelInput.trim();
+    if (trimmed === '') return 0;
+    const mpp = Number(trimmed);
+    return mpp > 0 ? mpp : 0;
   }, [metersPerPixelInput, pitchPixelLengthInput]);
 
   const frameIntervalMs = useMemo(() => {
@@ -68,23 +71,21 @@ export default function BallSpeedScreen() {
     inFlightRef.current = true;
 
     try {
-      const frame = await cameraRef.current.takePictureAsync({
-        base64: true,
-        quality: 0.1,
-        skipProcessing: true,
-      });
+      const base64 = await cameraRef.current.captureBase64();
 
-      if (!frame?.base64) {
+      if (!base64) {
         setStatusText('No frame data captured');
         return;
       }
 
       const response = await apiService.processBallSpeedFrame({
         session_id: sessionIdRef.current,
-        image_base64: frame.base64,
+        image_base64: base64,
         meters_per_pixel: metersPerPixel,
         pitch_pixel_length: Number(pitchPixelLengthInput) || 0,
+        frame_interval_ms: frameIntervalMs,
         confidence: 0.25,
+        yolo_stride: 1,
       });
 
       if (!response.success || !response.data?.success) {
@@ -168,7 +169,10 @@ export default function BallSpeedScreen() {
   const startTracking = async () => {
     const mpp = Number.isFinite(metersPerPixel) ? metersPerPixel : 0;
     if (mpp <= 0) {
-      Alert.alert('Invalid calibration', 'Please provide a valid meters-per-pixel value.');
+      Alert.alert(
+        'Calibration required',
+        'Enter the full pitch line width in pixels (distance between creases as it appears in the image), or enter meters per pixel. Do not skip this — wrong scale makes speed wrong by a large factor.',
+      );
       return;
     }
 
@@ -207,6 +211,7 @@ export default function BallSpeedScreen() {
     const finalize = await apiService.finalizeBallSpeedSession(sessionIdRef.current, {
       meters_per_pixel: metersPerPixel,
       pitch_pixel_length: Number(pitchPixelLengthInput) || 0,
+      frame_interval_ms: frameIntervalMs,
     });
 
     if (!finalize.success || !finalize.data?.success) {
@@ -225,27 +230,29 @@ export default function BallSpeedScreen() {
     setStatusText('Final speed computed');
   };
 
-  if (!permission) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        <View style={styles.centeredContainer}>
-          <Text style={{ color: theme.colors.onBackground }}>Loading camera permissions...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  if (Platform.OS === 'web') {
+    if (!permission) {
+      return (
+        <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+          <View style={styles.centeredContainer}>
+            <Text style={{ color: theme.colors.onBackground }}>Loading camera permissions...</Text>
+          </View>
+        </SafeAreaView>
+      );
+    }
 
-  if (!permission.granted) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        <View style={styles.centeredContainer}>
-          <Text style={[styles.permissionText, { color: theme.colors.onBackground }]}>
-            Camera permission is required to check live ball speed.
-          </Text>
-          <PremiumButton title="Allow Camera Access" onPress={requestPermission} variant="primary" />
-        </View>
-      </SafeAreaView>
-    );
+    if (!permission.granted) {
+      return (
+        <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+          <View style={styles.centeredContainer}>
+            <Text style={[styles.permissionText, { color: theme.colors.onBackground }]}>
+              Camera permission is required to check live ball speed.
+            </Text>
+            <PremiumButton title="Allow Camera Access" onPress={requestPermission} variant="primary" />
+          </View>
+        </SafeAreaView>
+      );
+    }
   }
 
   return (
@@ -280,7 +287,7 @@ export default function BallSpeedScreen() {
 
         <PremiumCard variant="elevated" padding="medium" style={styles.card}>
           <View style={styles.cameraWrapper}>
-            <CameraView ref={cameraRef} style={styles.camera} facing="back" />
+            <BallSpeedCameraPreview ref={cameraRef} style={styles.camera} isActive />
             <View style={styles.overlayPanel}>
               <Text style={[styles.overlayText, { color: '#FFFFFF' }]}>
                 {isTracking ? 'Streaming frames to backend...' : 'Press Start Tracking'}
@@ -292,15 +299,8 @@ export default function BallSpeedScreen() {
 
         <PremiumCard variant="elevated" padding="large" style={styles.card}>
           <TextInput
-            label="Meters per pixel (default 0.015)"
-            value={metersPerPixelInput}
-            onChangeText={setMetersPerPixelInput}
-            keyboardType="decimal-pad"
-            mode="outlined"
-            style={styles.input}
-          />
-          <TextInput
-            label="Pitch pixel length (optional)"
+            label="Pitch line width (pixels)"
+            placeholder="e.g. measure crease-to-crease width in the photo"
             value={pitchPixelLengthInput}
             onChangeText={setPitchPixelLengthInput}
             keyboardType="decimal-pad"
@@ -308,7 +308,15 @@ export default function BallSpeedScreen() {
             style={styles.input}
           />
           <TextInput
-            label="Frame interval ms (recommended 30-80)"
+            label="Or meters per pixel (if not using pitch width)"
+            value={metersPerPixelInput}
+            onChangeText={setMetersPerPixelInput}
+            keyboardType="decimal-pad"
+            mode="outlined"
+            style={styles.input}
+          />
+          <TextInput
+            label="Frame interval ms (sets timing for speed; match your capture loop)"
             value={frameIntervalMsInput}
             onChangeText={setFrameIntervalMsInput}
             keyboardType="number-pad"
@@ -316,7 +324,9 @@ export default function BallSpeedScreen() {
             style={styles.input}
           />
           <Text style={[styles.calibrationText, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(12) }]}>
-            Active calibration: {metersPerPixel.toFixed(6)} meters/pixel
+            {metersPerPixel > 0
+              ? `Active calibration: ${metersPerPixel.toFixed(6)} m/px`
+              : 'Set pitch width (pixels) or meters per pixel before starting — required for correct speed.'}
           </Text>
         </PremiumCard>
 
