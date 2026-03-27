@@ -28,7 +28,7 @@ export default function BallSpeedScreen() {
   const [isBallDetected, setIsBallDetected] = useState(false);
   const [statusText, setStatusText] = useState('Ready');
   const [trackingMode, setTrackingMode] = useState<'yolo' | 'fallback' | 'checking'>('checking');
-  const [frameIntervalMsInput, setFrameIntervalMsInput] = useState('250');
+  const [frameIntervalMsInput, setFrameIntervalMsInput] = useState('100');
 
   const [metersPerPixelInput, setMetersPerPixelInput] = useState('0.015');
   const [pitchPixelLengthInput, setPitchPixelLengthInput] = useState('');
@@ -44,7 +44,7 @@ export default function BallSpeedScreen() {
 
   const frameIntervalMs = useMemo(() => {
     const val = Number(frameIntervalMsInput);
-    return val >= 120 ? val : 250;
+    return val >= 50 ? val : 100;
   }, [frameIntervalMsInput]);
 
   const stopTrackingInterval = () => {
@@ -68,7 +68,7 @@ export default function BallSpeedScreen() {
     try {
       const frame = await cameraRef.current.takePictureAsync({
         base64: true,
-        quality: 0.35,
+        quality: 0.2,
         skipProcessing: true,
       });
 
@@ -160,7 +160,7 @@ export default function BallSpeedScreen() {
     setIsTracking(true);
     stopTrackingInterval();
 
-    // Run first cycle immediately to reduce startup delay.
+    // Run first cycle immediately, then adaptive schedule for high throughput.
     void processOneFrame();
     pollIntervalRef.current = setInterval(() => {
       void processOneFrame();
@@ -281,7 +281,7 @@ export default function BallSpeedScreen() {
             style={styles.input}
           />
           <TextInput
-            label="Frame interval ms (recommended 200-300)"
+            label="Frame interval ms (recommended 60-120)"
             value={frameIntervalMsInput}
             onChangeText={setFrameIntervalMsInput}
             keyboardType="number-pad"

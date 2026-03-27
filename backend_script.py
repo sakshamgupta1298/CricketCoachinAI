@@ -295,24 +295,38 @@ def _get_ball_model():
 
 def _detect_ball_center(frame_bgr, confidence=0.25):
     """Return ((x, y), conf) or (None, 0.0). Uses YOLO if available, else contour fallback."""
+    original_h, original_w = frame_bgr.shape[:2]
+    infer_frame = frame_bgr
+    scale_x = 1.0
+    scale_y = 1.0
+
+    # Speed optimization: run detector on a smaller frame, then map center back.
+    max_infer_width = 640
+    if original_w > max_infer_width:
+        new_w = max_infer_width
+        new_h = max(1, int((original_h / max(1, original_w)) * new_w))
+        infer_frame = cv2.resize(frame_bgr, (new_w, new_h), interpolation=cv2.INTER_AREA)
+        scale_x = float(original_w) / float(new_w)
+        scale_y = float(original_h) / float(new_h)
+
     model = _get_ball_model()
     if model is not None:
         try:
-            results = model.predict(frame_bgr, classes=[32], conf=confidence, verbose=False)
+            results = model.predict(infer_frame, classes=[32], conf=confidence, verbose=False)
             result = results[0]
             if result.boxes is not None and len(result.boxes) > 0:
                 best_idx = int(result.boxes.conf.argmax().item())
                 box = result.boxes[best_idx]
                 x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
                 conf = float(box.conf.item())
-                center_x = float((x1 + x2) / 2.0)
-                center_y = float((y1 + y2) / 2.0)
+                center_x = float(((x1 + x2) / 2.0) * scale_x)
+                center_y = float(((y1 + y2) / 2.0) * scale_y)
                 return (center_x, center_y), conf
         except Exception as e:
             logger.warning(f"⚠️ [BALL_SPEED] YOLO inference failed, using fallback: {e}")
 
     # Fallback: detect small moving bright-ish object by contour (best-effort).
-    gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
+    gray = cv2.cvtColor(infer_frame, cv2.COLOR_BGR2GRAY)
     blur = cv2.GaussianBlur(gray, (7, 7), 0)
     edges = cv2.Canny(blur, 80, 180)
     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -341,7 +355,9 @@ def _detect_ball_center(frame_bgr, confidence=0.25):
     # Prefer slightly larger compact candidate in upper-mid frame where ball often appears.
     candidates.sort(key=lambda c: c[0], reverse=True)
     _, x, y, cw, ch = candidates[0]
-    return (float(x + cw / 2.0), float(y + ch / 2.0)), 0.2
+    cx = float((x + cw / 2.0) * scale_x)
+    cy = float((y + ch / 2.0) * scale_y)
+    return (cx, cy), 0.2
 
 def _try_open_video_with_opencv(video_path: str) -> bool:
     """Return True if OpenCV can open the video container/codec."""
