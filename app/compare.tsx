@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Alert, FlatList, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, RefreshControl, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { ActivityIndicator, Card, Chip, Surface, Text, useTheme } from 'react-native-paper';
 import Toast from 'react-native-toast-message';
 import apiService from '../src/services/api';
@@ -15,6 +15,13 @@ export default function CompareScreen() {
   const [selectedVideo1, setSelectedVideo1] = useState<HistoryItem | null>(null);
   const [selectedVideo2, setSelectedVideo2] = useState<HistoryItem | null>(null);
   const [comparing, setComparing] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadHistory();
+    setRefreshing(false);
+  };
 
   useEffect(() => {
     loadHistory();
@@ -286,6 +293,9 @@ export default function CompareScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       />
 
       {/* Compare Button */}

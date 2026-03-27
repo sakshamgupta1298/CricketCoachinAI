@@ -1,7 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Alert, Platform, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Menu, RadioButton, Text, TextInput, useTheme } from 'react-native-paper';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import Toast from 'react-native-toast-message';
@@ -9,6 +9,7 @@ import AnalysisScreen from '../../src/components/AnalysisScreen';
 import { PremiumButton } from '../../src/components/ui/PremiumButton';
 import { PremiumCard } from '../../src/components/ui/PremiumCard';
 import { useUpload } from '../../src/context/UploadContext';
+import { hasAiConsent, setAiConsentStatus } from '../../src/services/aiConsent';
 import apiService from '../../src/services/api';
 import { borderRadius, colors, spacing } from '../../src/theme';
 import { BowlerType, KeepingType, PlayerSide, PlayerType, UploadFormData } from '../../src/types';
@@ -33,6 +34,13 @@ export default function UploadScreen() {
     type: string;
   } | null>(null);
   const [analysisStatus, setAnalysisStatus] = useState<'uploading' | 'processing' | 'analyzing'>('uploading');
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await new Promise(resolve => setTimeout(resolve, 400));
+    setRefreshing(false);
+  };
 
   // Update analysis status based on progress
   useEffect(() => {
@@ -127,11 +135,8 @@ export default function UploadScreen() {
     }
   };
 
-  const handleUpload = async () => {
-    if (!selectedVideo) {
-      Alert.alert('No Video Selected', 'Please select a video first.');
-      return;
-    }
+  const performUpload = async () => {
+    if (!selectedVideo) return;
 
     try {
       const formData: UploadFormData = {
@@ -190,6 +195,47 @@ export default function UploadScreen() {
     }
   };
 
+  const requestAiConsentAndUpload = async () => {
+    if (!selectedVideo) {
+      Alert.alert('No Video Selected', 'Please select a video first.');
+      return;
+    }
+
+    // Apple App Review requires runtime consent/withdrawal for third-party AI sharing.
+    // We show/block behind this UX on iOS only.
+    if (Platform.OS !== 'ios') {
+      await performUpload();
+      return;
+    }
+
+    const consentGranted = await hasAiConsent();
+    if (consentGranted) {
+      await performUpload();
+      return;
+    }
+
+    Alert.alert(
+      'AI analysis permission',
+      'To generate personalized cricket coaching feedback and analysis using AI, we will:\n\n' +
+        '1) Upload your selected video to our backend for processing.\n' +
+        '2) Extract non-visual movement data (pose/keypoint coordinates and derived motion metrics).\n' +
+        '3) Send your processed movement/keypoint data (plus your selected context like player type/shot or bowling type/side) to our AI processing partner (Google Gemini, Google LLC) to generate the coaching feedback.\n\n' +
+        'Your raw video is not sent to our AI processing partner (Google Gemini, Google LLC).\n\n' +
+        'You can withdraw this consent anytime from Profile > AI Data Sharing.\n\n' +
+        'Do you allow CrickCoach AI to share this processed movement data with Google Gemini (Google LLC) to generate your analysis?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Allow',
+          onPress: async () => {
+            await setAiConsentStatus('granted');
+            await performUpload();
+          },
+        },
+      ]
+    );
+  };
+
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -210,6 +256,9 @@ export default function UploadScreen() {
       <ScrollView 
         style={[styles.container, { backgroundColor: theme.colors.background }]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
         <View style={styles.content}>
         {/* Header */}
@@ -456,6 +505,27 @@ export default function UploadScreen() {
           </Animated.View>
         )}
 
+        {/* Ball Speed Checker - Only for Bowler */}
+        {playerType === 'bowler' && (
+          <Animated.View entering={FadeInUp.delay(450).springify()}>
+            <PremiumCard variant="outlined" padding="large" style={styles.card}>
+              <Text style={[styles.cardTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(17) }]}>
+                Ball Speed
+              </Text>
+              <Text style={[styles.cardSubtitle, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(13) }]}>
+                Open live speed checker and track bowling speed in real-time.
+              </Text>
+              <PremiumButton
+                title="Check Ball Speed"
+                onPress={() => router.push('/ball-speed' as any)}
+                variant="secondary"
+                size="medium"
+                fullWidth
+              />
+            </PremiumCard>
+          </Animated.View>
+        )}
+
         {/* Keeping Type Selection */}
         {playerType === 'keeper' && (
           <Animated.View entering={FadeInUp.delay(400).springify()}>
@@ -565,7 +635,7 @@ export default function UploadScreen() {
         <Animated.View entering={FadeInUp.delay(600).springify()}>
           <PremiumButton
             title={isUploading ? 'Analyzing...' : 'Start Analysis'}
-            onPress={handleUpload}
+            onPress={requestAiConsentAndUpload}
             variant="primary"
             size="large"
             loading={isUploading}

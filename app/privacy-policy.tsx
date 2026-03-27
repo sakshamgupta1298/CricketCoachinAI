@@ -1,11 +1,19 @@
-import React from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import React, { useState } from 'react';
+import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Text, useTheme } from 'react-native-paper';
 import { spacing } from '../src/theme';
 import { getResponsiveFontSize, getResponsiveSize } from '../src/utils/responsive';
 
 export default function PrivacyPolicyScreen() {
   const theme = useTheme();
+  const [refreshing, setRefreshing] = useState(false);
+  const lastUpdated = 'March 20, 2026';
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await new Promise(resolve => setTimeout(resolve, 400));
+    setRefreshing(false);
+  };
 
   const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
     <View style={styles.section}>
@@ -42,6 +50,9 @@ export default function PrivacyPolicyScreen() {
     <ScrollView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
       contentContainerStyle={styles.contentContainer}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
     >
       <View style={styles.content}>
         {/* Header */}
@@ -50,180 +61,268 @@ export default function PrivacyPolicyScreen() {
             Privacy Policy
           </Text>
           <Text style={[styles.lastUpdated, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(12) }]}>
-            Last Updated: {new Date().toLocaleDateString()}
+            Last Updated: {lastUpdated}
           </Text>
         </View>
 
         {/* Introduction */}
         <Section title="Introduction">
           <Text style={[styles.textContent, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>
-            Welcome to CrickCoach AI ("we," "our," or "us"). We are committed to protecting your privacy and ensuring the security of your personal information. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our mobile application, website, and services (collectively, the "Service").
+            Welcome to CrickCoach AI ("we," "our," or "us"). We are committed to protecting your privacy and ensuring the security of your personal information.
             {'\n\n'}
-            By using our Service, you agree to the collection and use of information in accordance with this policy. If you do not agree with our policies and practices, please do not use our Service.
+            This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our mobile application, website, and services (collectively, the "Service").
+            {'\n\n'}
+            We provide clear in-app notices before personal data is sent to any third-party AI provider. Those notices identify the provider and the exact data categories being sent for the selected feature.
+            {'\n\n'}
+            By using our Service, and where required, providing explicit consent within the app, you agree to this Privacy Policy. If you do not agree, please do not use the Service.
           </Text>
         </Section>
 
         {/* Information We Collect */}
         <Section title="Information We Collect">
+          <Text style={[styles.textContent, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>
+            We collect only the data necessary to provide and improve our core services.
+          </Text>
+
           <SubSection title="1. Personal Information">
-            <ListItem text="Name and email address when you register or contact us" />
+            <ListItem text="Name and email address (when registering or contacting us)" />
             <ListItem text="Organization or academy name (if applicable)" />
-            <ListItem text="Contact information provided through partnership inquiries" />
           </SubSection>
 
-          <SubSection title="2. Video Content">
-            <ListItem text="Cricket technique videos you upload for analysis" />
-            <ListItem text="Video metadata (duration, file size, format)" />
-            <ListItem text="Analysis results and performance metrics generated from your videos" />
+          <SubSection title="2. Video Content & AI Processing">
+            <Text style={[styles.textContent, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
+              We allow users to upload cricket videos for technique analysis.
+              {'\n\n'}
+              Videos are processed using our pose detection system to extract structured data such as body keypoints and movement metrics.
+              {'\n\n'}
+              Important:
+            </Text>
+            <ListItem text="Raw video files are NOT shared with third-party AI services" />
+            <ListItem text="Videos are used only within our system for processing and analysis" />
+            <Text style={[styles.textContent, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14), marginTop: getResponsiveSize(spacing.xs) }]}>
+              After processing, only non-visual structured data may be sent to a third-party AI service to generate feedback and analysis.
+              {'\n\n'}
+              Specifically, when you tap "Allow" in the in-app permission prompt, we may send the following categories of data to our AI processing partner (Google Gemini, Google LLC):
+              {'\n'}
+              - Pose/keypoint time-series data (e.g., per-frame joint coordinates and confidence scores)
+              {'\n'}
+              - Derived motion/biomechanics metrics computed from those keypoints
+              {'\n'}
+              - Your selected coaching context (e.g., player type, playing side, shot/bowling/keeping type, requested plan length)
+              {'\n'}
+              - For optional features like training plans or comparisons: your prior analysis summaries/metrics needed to generate the requested output
+              {'\n\n'}
+              This processed data does not include your raw video file.
+            </Text>
           </SubSection>
 
           <SubSection title="3. Usage Data">
-            <ListItem text="Device information (model, operating system, unique device identifiers)" />
-            <ListItem text="App usage patterns and features accessed" />
-            <ListItem text="Performance analytics and improvement tracking data" />
+            <ListItem text="Device type, OS version" />
+            <ListItem text="App usage patterns and features used" />
+            <ListItem text="Performance and analytics data" />
           </SubSection>
 
-          <SubSection title="4. Technical Information">
-            <ListItem text="IP address and location data" />
-            <ListItem text="Browser type and version (for web services)" />
-            <ListItem text="Cookies and similar tracking technologies" />
+          <SubSection title="4. Technical Data">
+            <ListItem text="IP address (for security and diagnostics)" />
+            <ListItem text="Approximate location (derived from IP, not precise GPS)" />
+            <ListItem text="Cookies (for web services)" />
           </SubSection>
         </Section>
 
         {/* How We Use Your Information */}
         <Section title="How We Use Your Information">
-          <ListItem text="To provide, maintain, and improve our AI-powered cricket coaching services" />
-          <ListItem text="To analyze your cricket technique videos and generate personalized feedback" />
-          <ListItem text="To send you APK downloads, updates, and service-related communications" />
-          <ListItem text="To respond to your inquiries, partnership requests, and provide customer support" />
-          <ListItem text="To track your progress and provide performance analytics over time" />
-          <ListItem text="To enhance our AI models and improve analysis accuracy" />
-          <ListItem text="To detect, prevent, and address technical issues and security threats" />
-          <ListItem text="To comply with legal obligations and enforce our terms of service" />
+          <Text style={[styles.textContent, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>
+            We use your data only for legitimate purposes, including:
+          </Text>
+          <ListItem text="To provide AI-based cricket coaching and analysis" />
+          <ListItem text="To process videos and generate feedback" />
+          <ListItem text="To improve our AI models and accuracy" />
+          <ListItem text="To provide performance tracking and insights" />
+          <ListItem text="To communicate updates and support responses" />
+          <ListItem text="To ensure security and prevent misuse" />
+          <ListItem text="To comply with legal obligations" />
+          <Text style={[styles.textContent, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14), marginTop: getResponsiveSize(spacing.sm) }]}>
+            Text-to-Speech: Our app may use on-device text-to-speech to read analysis results. This processing occurs locally and no data is shared externally.
+          </Text>
         </Section>
 
-        {/* Data Storage and Security */}
-        <Section title="Data Storage and Security">
+        {/* User Consent */}
+        <Section title="User Consent">
           <Text style={[styles.textContent, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>
-            We implement appropriate technical and organizational security measures to protect your personal information and video content. However, no method of transmission over the internet or electronic storage is 100% secure.
+            We respect your right to control your data.
+            {'\n\n'}
+            Before we send any personal data to a third-party AI service (including processed movement data derived from your video), we present an in-app notice that explains what will be shared and with whom.
+            {'\n\n'}
+            Users must provide explicit consent before:
           </Text>
           <View style={styles.listContainer}>
-            <ListItem text="Your videos are encrypted during transmission and storage" />
-            <ListItem text="Access to your data is restricted to authorized personnel only" />
-            <ListItem text="We use secure servers and follow industry-standard security practices" />
-            <ListItem text="Regular security audits and updates are performed" />
+            <ListItem text="Uploading videos" />
+            <ListItem text="Using AI-powered analysis features" />
+            <ListItem text="Sharing processed data with third-party AI services" />
+          </View>
+          <Text style={[styles.textContent, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14), marginTop: getResponsiveSize(spacing.sm) }]}>
+            If you do not consent, you can still use non-AI parts of the app, but features that require third-party AI processing may be unavailable.
+            {'\n\n'}
+            You can withdraw consent at any time by declining future AI prompts ("Cancel"), by disabling AI-sharing controls in app settings when available, or by contacting us at admin@crickcoachai.com to revoke consent for future processing and request deletion of associated data.
+          </Text>
+        </Section>
+
+        {/* In-App Disclosure at Time of Use */}
+        <Section title="In-App Disclosure at Time of Use">
+          <Text style={[styles.textContent, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>
+            Before any third-party AI request is made, we show an in-app permission prompt that includes:
+          </Text>
+          <View style={styles.listContainer}>
+            <ListItem text="What data will be sent (specific categories for that feature)" />
+            <ListItem text="Who will receive it (for example, our AI processing partner (Google Gemini, Google LLC))" />
+            <ListItem text="Why it is needed (for example, generating technique analysis or training plans)" />
+            <ListItem text="A clear choice to Allow or Cancel before any transfer occurs" />
           </View>
         </Section>
 
         {/* Data Sharing and Disclosure */}
         <Section title="Data Sharing and Disclosure">
           <Text style={[styles.textContent, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>
-            We do not sell your personal information or video content. We may share your information only in the following circumstances:
+            We do NOT sell your data.
+            {'\n\n'}
+            We may share data only in the following cases:
           </Text>
           <View style={styles.listContainer}>
-            <SubSection title="Service Providers:">
+            <SubSection title="1. Third-Party AI Services">
               <Text style={[styles.textContent, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
-                With trusted third-party service providers who assist in operating our Service (e.g., cloud storage, email services, analytics)
+                If you provide permission in the app, we may share processed movement data (pose/keypoint time-series and derived metrics) and relevant user-selected context with our AI processing partner (Google Gemini, Google LLC) to generate personalized cricket analysis, comparisons, and training plans.
+              </Text>
+              <View style={styles.listContainer}>
+                <ListItem text="Do not receive raw video" />
+                <ListItem text="Receive only the minimum data needed to generate the requested output" />
+                <ListItem text="Are required to protect the data with safeguards that are equal to or stronger than those described in this policy" />
+              </View>
+            </SubSection>
+
+            <SubSection title="2. Authentication Providers">
+              <Text style={[styles.textContent, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
+                If you choose to sign in with Google or Apple, your sign-in is handled by Google LLC or Apple Inc. We receive basic profile information (such as name and email) from those providers to create/secure your account.
               </Text>
             </SubSection>
 
-            <SubSection title="Legal Requirements:">
+            <SubSection title="3. Email Delivery Providers">
               <Text style={[styles.textContent, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
-                When required by law, court order, or government regulation
+                If you request an email verification code or password reset, we share your email address and the email content with our email delivery provider (e.g., SMTP2GO) to send that message.
               </Text>
             </SubSection>
 
-            <SubSection title="Business Transfers:">
+            <SubSection title="4. Service Providers">
               <Text style={[styles.textContent, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
-                In connection with a merger, acquisition, or sale of assets (with notice to users)
+                We use service providers for hosting, storage, analytics, and infrastructure operations only as needed to provide and improve the Service. These providers are contractually required to use data only for our instructed purposes and to apply protection standards equal to this Privacy Policy.
               </Text>
             </SubSection>
 
-            <SubSection title="With Your Consent:">
+            <SubSection title="5. Legal Requirements">
               <Text style={[styles.textContent, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
-                When you explicitly authorize us to share your information
+                When required by law or government authorities
               </Text>
             </SubSection>
 
-            <SubSection title="Coaches/Academies:">
+            <SubSection title="6. Business Transfers">
               <Text style={[styles.textContent, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
-                If you are part of a coaching program, your data may be shared with your authorized coach or academy
+                In case of merger, acquisition, or sale (with notice)
               </Text>
             </SubSection>
+
+            <SubSection title="7. With Your Consent">
+              <Text style={[styles.textContent, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
+                When you explicitly approve sharing
+              </Text>
+            </SubSection>
+          </View>
+        </Section>
+
+        {/* Data Protection Standard */}
+        <Section title="Data Protection Standard">
+          <Text style={[styles.textContent, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>
+            All third-party service providers are contractually obligated to provide the same level of data protection as described in this Privacy Policy and in accordance with applicable privacy laws.
+          </Text>
+        </Section>
+
+        {/* Data Minimization */}
+        <Section title="Data Minimization">
+          <Text style={[styles.textContent, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>
+            We only collect and process data that is strictly necessary to deliver core app functionality.
+          </Text>
+        </Section>
+
+        {/* Data Storage and Security */}
+        <Section title="Data Storage and Security">
+          <Text style={[styles.textContent, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>
+            We implement strong security measures:
+          </Text>
+          <View style={styles.listContainer}>
+            <ListItem text="Encryption during data transmission and storage" />
+            <ListItem text="Restricted access to authorized personnel" />
+            <ListItem text="Secure cloud infrastructure" />
+            <ListItem text="Regular monitoring and updates" />
           </View>
         </Section>
 
         {/* Your Rights */}
         <Section title="Your Rights">
           <Text style={[styles.textContent, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>
-            You have the following rights regarding your personal information:
+            You have the right to:
           </Text>
           <View style={styles.listContainer}>
-            <ListItem text="Access: Request a copy of your personal data" />
-            <ListItem text="Correction: Request correction of inaccurate or incomplete information" />
-            <ListItem text="Deletion: Request deletion of your personal data and videos" />
-            <ListItem text="Portability: Request transfer of your data to another service" />
-            <ListItem text="Opt-out: Unsubscribe from marketing communications" />
-            <ListItem text="Objection: Object to processing of your data for certain purposes" />
+            <ListItem text="Access your data" />
+            <ListItem text="Correct inaccurate data" />
+            <ListItem text="Request deletion" />
+            <ListItem text="Object to certain processing" />
+            <ListItem text="Request data portability" />
           </View>
           <Text style={[styles.textContent, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14), marginTop: getResponsiveSize(spacing.md) }]}>
-            To exercise these rights, please contact us at admin@crickcoachai.com
+            To exercise these rights, contact: admin@crickcoachai.com
           </Text>
         </Section>
 
-        {/* Cookies and Tracking Technologies */}
-        <Section title="Cookies and Tracking Technologies">
+        {/* Account Deletion */}
+        <Section title="Account Deletion">
           <Text style={[styles.textContent, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>
-            We use cookies and similar tracking technologies to track activity on our Service and store certain information. You can instruct your browser to refuse all cookies or to indicate when a cookie is being sent.
-            {'\n\n'}
-            Types of cookies we use:
-          </Text>
-          <View style={styles.listContainer}>
-            <SubSection title="Essential Cookies:">
-              <Text style={[styles.textContent, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
-                Required for the Service to function properly
-              </Text>
-            </SubSection>
-
-            <SubSection title="Analytics Cookies:">
-              <Text style={[styles.textContent, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
-                Help us understand how users interact with our Service
-              </Text>
-            </SubSection>
-
-            <SubSection title="Preference Cookies:">
-              <Text style={[styles.textContent, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(14) }]}>
-                Remember your settings and preferences
-              </Text>
-            </SubSection>
-          </View>
-        </Section>
-
-        {/* Children's Privacy */}
-        <Section title="Children's Privacy">
-          <Text style={[styles.textContent, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>
-            Our Service is not intended for children under the age of 13. We do not knowingly collect personal information from children under 13. If you are a parent or guardian and believe your child has provided us with personal information, please contact us immediately. If we become aware that we have collected personal information from a child under 13, we will take steps to delete such information.
+            You can request account deletion at any time. (Ensure this feature is also available inside the app to comply with Apple guidelines.)
           </Text>
         </Section>
 
         {/* Data Retention */}
         <Section title="Data Retention">
           <Text style={[styles.textContent, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>
-            We retain your personal information and video content for as long as necessary to provide our services, comply with legal obligations, resolve disputes, and enforce our agreements. When you delete your account, we will delete or anonymize your personal data within 30 days, unless we are required to retain it for legal purposes.
+            We retain personal data only as long as needed for the purposes described in this policy.
+            {'\n\n'}
+            Retention principles:
+            {'\n'}
+            - Account/profile data: retained while your account is active
+            {'\n'}
+            - Analysis inputs/outputs and related metadata: retained to provide history and app functionality, unless you request deletion earlier
+            {'\n'}
+            - Security and operational logs: retained for limited periods required for abuse prevention, diagnostics, and legal compliance
+            {'\n\n'}
+            Upon account deletion or verified deletion request, personal data is deleted or irreversibly anonymized within 30 days, except where a longer period is required by law.
+          </Text>
+        </Section>
+
+        {/* Children's Privacy */}
+        <Section title="Children’s Privacy">
+          <Text style={[styles.textContent, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>
+            Our service is not intended for children under 13. We do not knowingly collect data from children. If detected, it will be deleted immediately.
           </Text>
         </Section>
 
         {/* International Data Transfers */}
         <Section title="International Data Transfers">
           <Text style={[styles.textContent, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>
-            Your information may be transferred to and processed in countries other than your country of residence. These countries may have data protection laws that differ from those in your country. By using our Service, you consent to the transfer of your information to these countries.
+            Your data may be processed in countries outside your location. We ensure appropriate safeguards are in place.
           </Text>
         </Section>
 
         {/* Changes to This Privacy Policy */}
         <Section title="Changes to This Privacy Policy">
           <Text style={[styles.textContent, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14) }]}>
-            We may update our Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page and updating the "Last Updated" date. You are advised to review this Privacy Policy periodically for any changes. Changes to this Privacy Policy are effective when they are posted on this page.
+            We may update this policy periodically. Updates will be posted with a revised "Last Updated" date.
           </Text>
         </Section>
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-**CrickCoach** is an AI-powered mobile application that provides comprehensive cricket technique analysis for both batsmen and bowlers. The system uses a combination of deep learning models, computer vision, and natural language processing to analyze cricket videos and provide personalized coaching feedback.
+**CrickCoach** is an AI-powered mobile application that provides comprehensive cricket technique analysis for **batsmen**, **bowlers**, and **wicket-keepers**. The system uses computer vision (pose detection) and natural language processing to analyze cricket videos and provide personalized coaching feedback. **Action recognition (e.g. automatic shot detection) is not used**—users select player type and context (shot type, bowler type, or keeping type) when uploading.
 
 ---
 
@@ -10,55 +10,21 @@
 
 CrickCoach analyzes cricket videos through a multi-stage AI pipeline:
 
-1. **Video Upload**: Users upload or record videos of their cricket performance (batting or bowling)
-2. **Action Recognition**: Identifies the specific cricket shot (for batsmen) or bowling style
-3. **Pose Detection**: Extracts body keypoints and movement patterns from every frame
-4. **Biomechanical Analysis**: Computes technical metrics (angles, distances, velocities)
-5. **AI-Powered Feedback**: Generates detailed coaching feedback using GPT-4
-6. **Training Plan Generation**: Creates personalized practice schedules
+1. **Video Upload**: Users upload or record videos of their cricket performance (batting, bowling, or keeping) and **select context** (e.g. shot type for batsmen, bowler type, or keeping type).
+2. **Pose Detection**: Extracts body keypoints and movement patterns from every frame (MoveNet Thunder).
+3. **Biomechanical Analysis**: Computes technical metrics (angles, distances, velocities) specific to the selected player type.
+4. **AI-Powered Feedback**: Generates detailed coaching feedback using GPT/Gemini.
+5. **Training Plan Generation**: Creates personalized practice schedules.
+
+**Note:** Automatic action/shot recognition (e.g. SlowFast) is **not** currently in use; users choose shot type, bowler type, or keeping type when uploading.
 
 ---
 
 ## Models Used in the System
 
-The system uses **three main AI models** working together:
+The system uses **pose detection and LLM-based feedback** (no action-recognition model in the live pipeline):
 
-### 1. **SlowFast R50 (PyTorch) - Shot Prediction Model**
-
-**What it is:**
-- A deep learning video classification model based on the SlowFast architecture
-- Pre-trained on cricket video data to recognize different batting shots
-- Uses a dual-pathway architecture (slow and fast pathways) to capture both spatial and temporal information
-
-**What it does:**
-- **Input**: Cricket video file (MP4, AVI, MOV, MKV)
-- **Process**:
-  - Extracts 32 frames from the video (randomly sampled if video has more than 32 frames)
-  - Resizes each frame to 224x224 pixels
-  - Normalizes pixel values
-  - Processes frames through two pathways:
-    - **Slow pathway**: Processes every 4th frame to capture long-term temporal patterns
-    - **Fast pathway**: Processes all frames to capture rapid movements
-  - Combines features from both pathways
-- **Output**: Predicts the cricket shot type
-  - Currently supports: `coverdrive` or `pull_shot`
-  - Returns one of these two shot classifications
-
-**Technical Details:**
-- Model file: `slowfast_cricket.pth` (downloaded from Google Drive if not present)
-- Framework: PyTorch with PyTorchVideo
-- Architecture: ResNet-50 backbone with SlowFast dual pathways
-- Input shape: [batch_size, channels, frames, height, width]
-- Output: Binary classification (2 classes)
-
-**Code Location:**
-- Model loading: `backend_script.py` lines 183-188
-- Prediction function: `backend_script.py` lines 199-247
-- Initialization: `backend_script.py` lines 158-164
-
----
-
-### 2. **MoveNet Thunder (TensorFlow) - Pose Detection Model**
+### 1. **MoveNet Thunder (TensorFlow) - Pose Detection Model**
 
 **What it is:**
 - Google's state-of-the-art pose estimation model
@@ -97,7 +63,7 @@ The system uses **three main AI models** working together:
 
 ---
 
-### 3. **GPT-4o (OpenAI) - Coaching Feedback Generator**
+### 2. **GPT-4o / Gemini - Coaching Feedback Generator**
 
 **What it is:**
 - OpenAI's GPT-4o (GPT-4 Optimized) large language model
@@ -106,7 +72,7 @@ The system uses **three main AI models** working together:
 **What it does:**
 - **Input**: 
   - CSV file containing pose keypoints for all video frames
-  - Shot type (for batting) or bowler type (for bowling)
+  - Shot type (batting), bowler type (bowling), or keeping type (wicket-keeping)
   - Player side (left/right)
 - **Process**:
   - Uploads keypoint CSV to OpenAI's file storage
@@ -152,10 +118,7 @@ The system uses **three main AI models** working together:
 #### **2. Video Processing (Backend)**
 
 **For Batsmen:**
-1. **Shot Prediction** (SlowFast R50):
-   - Extracts 32 frames from video
-   - Processes through SlowFast model
-   - Predicts shot type: `coverdrive` or `pull_shot`
+1. **Context**: User selects shot type (e.g. cover drive, pull shot) when uploading—no automatic action recognition.
 
 2. **Pose Extraction** (MoveNet Thunder):
    - Processes every frame of the video
@@ -177,7 +140,8 @@ The system uses **three main AI models** working together:
    - Receives detailed biomechanical analysis
 
 **For Bowlers:**
-1. **Pose Extraction** (MoveNet Thunder):
+1. **Context**: User selects bowler type (fast/spin) and side when uploading.
+2. **Pose Extraction** (MoveNet Thunder):
    - Same process as batsmen
    - Saves to CSV: `bowling_keypoints.csv`
 
@@ -188,10 +152,16 @@ The system uses **three main AI models** working together:
      - Follow-through analysis
    - Saves to CSV: `bowling_summary_stats.csv`
 
-3. **AI Feedback** (GPT-4o):
-   - Uploads keypoint CSV to OpenAI
+3. **AI Feedback** (GPT-4o/Gemini):
+   - Uploads keypoint CSV
    - Sends prompt with bowler type (fast_bowler/spin_bowler)
    - Receives detailed bowling analysis
+
+**For Wicket-Keepers:**
+1. **Context**: User selects keeping type (standing up, standing back, diving catch, stumping) and side when uploading.
+2. **Pose Extraction** (MoveNet Thunder): Saves to CSV: `keeping_keypoints.csv`
+3. **Feature Computation**: Keeping-specific metrics.
+4. **AI Feedback** (GPT-4o/Gemini): Detailed wicket-keeping technique analysis.
 
 #### **3. Report Generation**
 - Creates comprehensive text report
@@ -267,11 +237,9 @@ Mobile App → Flask Backend → AI Models → OpenAI API → Results → Mobile
 
 ## Model Integration Details
 
-### How Models Work Together:
+### How the Pipeline Works:
 
-1. **SlowFast R50** identifies WHAT action is being performed
-   - This context is crucial for GPT-4o to provide relevant feedback
-   - Different shots have different ideal biomechanics
+1. **User-provided context** (player type, shot/bowler/keeping type) tells the system what kind of action is in the video—no automatic action recognition is used.
 
 2. **MoveNet Thunder** extracts HOW the body moves
    - Provides raw data about body positioning
@@ -279,9 +247,9 @@ Mobile App → Flask Backend → AI Models → OpenAI API → Results → Mobile
 
 3. **Feature Computation** bridges raw keypoints to meaningful metrics
    - Converts 17 keypoints per frame into cricket-specific measurements
-   - Calculates angles, distances, and movement patterns
+   - Calculates angles, distances, and movement patterns (batting, bowling, or keeping)
 
-4. **GPT-4o** interprets and explains the data
+4. **GPT-4o/Gemini** interprets and explains the data
    - Understands cricket coaching principles
    - Compares observed values to ideal ranges
    - Provides human-readable feedback and recommendations
@@ -292,11 +260,9 @@ Mobile App → Flask Backend → AI Models → OpenAI API → Results → Mobile
 
 ### For a Cover Drive Shot:
 
-1. **Video uploaded**: `batsman_cover_drive.mp4`
+1. **Video uploaded**: `batsman_cover_drive.mp4`; user selects **shot type: cover drive**.
 
-2. **SlowFast predicts**: `coverdrive`
-
-3. **MoveNet extracts keypoints**:
+2. **MoveNet extracts keypoints**:
    ```
    Frame 0: nose(0.5, 0.3, 0.9), left_shoulder(0.4, 0.4, 0.95), ...
    Frame 1: nose(0.51, 0.31, 0.9), left_shoulder(0.41, 0.41, 0.95), ...
@@ -339,14 +305,13 @@ Mobile App → Flask Backend → AI Models → OpenAI API → Results → Mobile
 ## Performance Considerations
 
 ### Model Loading:
-- Models are loaded once at server startup
+- Pose detection model is loaded once at server startup
 - Stored in global variables for reuse
 - Reduces latency for subsequent requests
 
 ### Video Processing:
 - Frames are processed sequentially
 - MoveNet processes every frame (can be optimized with frame skipping)
-- SlowFast only needs 32 frames (efficient)
 
 ### API Calls:
 - OpenAI API calls are asynchronous
@@ -358,7 +323,7 @@ Mobile App → Flask Backend → AI Models → OpenAI API → Results → Mobile
 ## Future Enhancements
 
 ### Potential Improvements:
-1. **More Shot Types**: Expand SlowFast to recognize more cricket shots
+1. **Action Recognition**: Add automatic shot/action detection (e.g. SlowFast) so users don’t need to select shot type
 2. **Real-time Analysis**: Process video frames in real-time
 3. **3D Pose Estimation**: Add depth information for better analysis
 4. **Custom Model Training**: Fine-tune models on specific player data
@@ -380,11 +345,11 @@ Mobile App → Flask Backend → AI Models → OpenAI API → Results → Mobile
 
 ## Conclusion
 
-CrickCoach represents a sophisticated integration of multiple AI technologies:
-- **Computer Vision** (SlowFast, MoveNet) for understanding video content
-- **Biomechanical Analysis** for extracting meaningful metrics
-- **Natural Language Processing** (GPT-4o) for generating human-readable feedback
+CrickCoach represents a sophisticated integration of AI technologies:
+- **Computer Vision** (MoveNet pose detection) for extracting body movement from video
+- **Biomechanical Analysis** for extracting meaningful metrics (batting, bowling, keeping)
+- **Natural Language Processing** (GPT-4o/Gemini) for generating human-readable feedback
 
-The system provides professional-level cricket coaching analysis accessible through a mobile app, making advanced biomechanical analysis available to players at all skill levels.
+The system provides professional-level cricket coaching analysis for **batting, bowling, and wicket-keeping** through a mobile app, with user-selected context and no automatic action recognition in the current pipeline.
 
 

@@ -72,6 +72,16 @@ function ThemedApp() {
                 headerTintColor: theme.colors.onSurface,
               }}
             />
+            <Stack.Screen
+              name="ball-speed"
+              options={{
+                headerShown: true,
+                title: 'Ball Speed',
+                headerBackTitle: 'Back',
+                headerStyle: { backgroundColor: theme.colors.surface },
+                headerTintColor: theme.colors.onSurface,
+              }}
+            />
             <Stack.Screen 
               name="training-plan" 
               options={{
@@ -93,6 +103,16 @@ function ThemedApp() {
               options={{
                 headerShown: true,
                 title: 'Privacy Policy',
+                headerBackTitle: 'Back',
+                headerStyle: { backgroundColor: theme.colors.surface },
+                headerTintColor: theme.colors.onSurface,
+              }}
+            />
+            <Stack.Screen
+              name="ai-privacy-controls"
+              options={{
+                headerShown: true,
+                title: 'AI Data Sharing',
                 headerBackTitle: 'Back',
                 headerStyle: { backgroundColor: theme.colors.surface },
                 headerTintColor: theme.colors.onSurface,

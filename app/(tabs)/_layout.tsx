@@ -1,10 +1,12 @@
 import { Tabs } from 'expo-router';
 import { StyleSheet, Text } from 'react-native';
 import { useTheme } from 'react-native-paper';
-import { borderRadius, shadows } from '../../src/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { shadows } from '../../src/theme';
 
 export default function TabLayout() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
 
   const TabBarIcon = ({ name, color, focused }: { name: string; color: string; focused: boolean }) => {
     const getIcon = () => {
@@ -42,8 +44,8 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: theme.colors.surface,
           borderTopWidth: 0,
-          height: 70,
-          paddingBottom: 10,
+          height: 70 + insets.bottom,
+          paddingBottom: 10 + insets.bottom,
           paddingTop: 10,
           ...shadows.lg,
         },

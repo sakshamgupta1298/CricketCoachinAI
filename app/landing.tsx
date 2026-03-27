@@ -1,24 +1,33 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import React from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import React, { useState } from 'react';
+import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Text, useTheme } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { PremiumButton } from '../src/components/ui/PremiumButton';
 import { PremiumCard } from '../src/components/ui/PremiumCard';
 import { shadows, spacing } from '../src/theme';
 import {
-  getHeightPercentage,
-  getResponsiveFontSize,
-  getResponsiveSize,
-  getWidthPercentage,
-  screenWidth
+    getHeightPercentage,
+    getResponsiveFontSize,
+    getResponsiveSize,
+    getWidthPercentage,
+    screenWidth
 } from '../src/utils/responsive';
 
 export default function LandingScreen() {
   const theme = useTheme();
-  
+  const [refreshing, setRefreshing] = useState(false);
+  const insets = useSafeAreaInsets();
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await new Promise(resolve => setTimeout(resolve, 400));
+    setRefreshing(false);
+  };
+
   // Responsive dimensions
   const iconSize = getResponsiveSize(180);
   const iconMarginTop = getResponsiveSize(30);
@@ -54,7 +63,11 @@ export default function LandingScreen() {
   return (
     <ScrollView 
       style={[styles.container, { backgroundColor: theme.colors.background }]}
+      contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, getResponsiveSize(spacing.lg)) }}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
     >
       {/* Hero Section */}
       <LinearGradient

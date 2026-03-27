@@ -6,7 +6,7 @@ A React Native mobile application that integrates with a Flask backend to provid
 
 - **Video Upload**: Select cricket videos from device gallery
 - **Video Recording**: Record cricket videos directly in the app
-- **AI Analysis**: Get detailed biomechanical analysis of batting and bowling techniques
+- **AI Analysis**: Get detailed biomechanical analysis of **batting**, **bowling**, and **wicket-keeping** techniques (user selects player type and context; no automatic action recognition)
 - **Real-time Feedback**: Instant analysis results with improvement suggestions
 - **Progress Tracking**: View analysis history and track improvements
 - **Modern UI**: Clean, intuitive interface with Material Design 3
@@ -171,7 +171,7 @@ cricket-coach/
 
 - `GET /api/health` - Health check endpoint
 - `POST /api/upload` - Upload video for analysis
-  - Form data: `video` (file), `player_type` (string), `batter_side`/`bowler_side` (string)
+  - Form data: `video` (file), `player_type` (batsman/bowler/keeper), `batter_side`/`bowler_side`/`keeper_side`, `shot_type` (batsman), `bowler_type` (bowler), `keeping_type` (keeper)
 
 ### Mobile App Features
 
@@ -200,8 +200,8 @@ npm start
 
 1. **Upload Video**: 
    - Tap "Upload" tab
-   - Select player type (Batsman/Bowler)
-   - Choose batting/bowling side
+   - Select player type (Batsman/Bowler/Keeper)
+   - Choose side and context (e.g. shot type, bowler type, or keeping type)
    - Select video from gallery
    - Tap "Start Analysis"
 
@@ -212,7 +212,7 @@ npm start
    - Review and analyze
 
 3. **View Results**:
-   - Detailed biomechanical analysis
+   - Detailed biomechanical analysis (batting, bowling, or keeping)
    - Identified flaws and recommendations
    - General improvement tips
    - Injury risk assessment
@@ -221,6 +221,157 @@ npm start
    - View analysis history
    - Search and filter results
    - Monitor improvements over time
+
+## How Reviewers Can Test the App
+
+This section gives reviewers a clear path to run and test CrickCoach locally.
+
+---
+
+### For Apple (App Store) Reviewers — iOS Test Flow
+
+Use this flow when testing the app on **iOS** (TestFlight or App Store build). The app connects to our backend; no local setup required.
+
+**1. Open the app**  
+→ Launch CrickCoach on your iOS device.
+
+**2. Sign in**  
+→ Sign in with **Email** or **Continue with Google** (or use the test account provided in App Store Connect “Notes for Review,” if any).
+
+**3. Go to Upload**  
+→ Tap the **Upload** tab (or “Upload Video” from Home).
+
+**4. Choose analysis type**  
+→ **Player type:** Batsman / Bowler / Wicket-Keeper  
+→ **Side:** Left / Right  
+→ **Context:** e.g. Shot type (Cover drive, Pull, etc.), Bowler type (Fast/Spin), or Keeping type (Standing up, Diving, etc.)
+
+**5. Select video**  
+→ Tap to pick a short cricket video (5–15 seconds) from the device gallery, or use the sample video if provided in review notes.
+
+**6. Start analysis**  
+→ Tap **Start Analysis** and wait for processing (may take 30–90 seconds).
+
+**7. View results**  
+→ Confirm the **Results** screen shows: analysis summary, identified flaws, recommendations, and general tips.  
+→ Optionally tap **Generate Training Plan** to get a practice schedule.
+
+**8. (Optional) Record & analyze**  
+→ Open the **Camera** tab → set player type and side → record a short clip → run analysis and check results.
+
+**9. (Optional) History**  
+→ Open **History** and confirm past analyses are listed and open correctly.
+
+**Flow summary:**
+```
+Open app → Sign in → Upload tab → Select Batsman/Bowler/Keeper + side + context
+→ Pick video → Start Analysis → View Results (and optionally Training Plan)
+→ Optional: Camera tab (record → analyze) and History
+```
+
+If you need **test credentials** or a **demo video**, see the “Notes for Review” (or “App Review Information”) in App Store Connect for this build.
+
+---
+
+### Quick checklist (local testing)
+
+- **Backend**: Python 3.8+, virtual environment, dependencies, `.env` with `OPENAI_API_KEY`
+- **Mobile**: Node.js 16+, Expo, device/emulator on same network as host
+- **Network**: Backend and phone/emulator must reach each other (use host machine’s IP in mobile `.env`)
+
+### 1. One-time setup
+
+**Backend (from project root):**
+```bash
+# From project root (CricketCoachinAI)
+python -m venv venv
+# Activate: source venv/bin/activate (macOS/Linux) or venv\Scripts\activate (Windows)
+pip install -r requirements.txt
+pip install flask-cors torch torchvision tensorflow tensorflow-hub opencv-python pandas numpy openai
+```
+
+Create a `.env` in the project root (or next to `backend_script.py`):
+```env
+OPENAI_API_KEY=your_openai_api_key_here
+FLASK_ENV=development
+FLASK_DEBUG=True
+```
+
+**Mobile app:**
+```bash
+cd mobile-app
+npm install
+cp env.example .env
+```
+
+Edit `mobile-app/.env`: set `API_BASE_URL=https://YOUR_COMPUTER_IP:8000` (use your machine’s local IP, e.g. `192.168.1.x`). Same network as the device/emulator.
+
+### 2. Run and verify backend
+
+```bash
+# From project root, with venv activated
+python backend_script.py
+```
+
+Server should listen on port 8000. Quick check:
+
+```bash
+curl -k https://localhost:8000/api/health
+```
+
+(or open that URL in a browser; you may need to accept the self-signed cert).
+
+### 3. Run the mobile app
+
+```bash
+cd mobile-app
+npm start
+```
+
+- **Physical device**: Install “Expo Go”, scan the QR code, ensure device is on the same Wi‑Fi as the host.
+- **Android emulator**: `npm run android`.
+- **iOS simulator (macOS)**: `npm run ios`.
+
+### 4. Test flows in the app
+
+1. **Auth (if enabled)**  
+   Sign up or log in to confirm auth and navigation work.
+
+2. **Upload flow**  
+   - Open **Upload** (or equivalent).  
+   - Choose **player type**: Batsman / Bowler / Keeper.  
+   - Set **side** (e.g. left/right) and **context** (e.g. shot type, bowler type, keeping type).  
+   - Pick a short cricket video (e.g. 5–15 s) from gallery.  
+   - Start analysis and wait for the result screen.
+
+3. **Camera flow (optional)**  
+   - Open **Camera**, set player type and side, record a short clip, then run analysis.
+
+4. **Results**  
+   - Confirm that analysis text, flaws, and tips appear.  
+   - Optionally request a **training plan** and check that it generates.
+
+5. **History**  
+   - Open **History** and confirm past analyses are listed and open correctly.
+
+### 5. What to report
+
+- **Setup**: Any step that failed (with OS, Node/Python versions, and error messages).  
+- **Backend**: Does `GET /api/health` respond? Any errors in the terminal when running analysis?  
+- **Mobile**: Can you reach the app and see the UI? Does upload/camera → analysis → results work end-to-end?  
+- **Analysis**: Does feedback look sensible for the uploaded video (e.g. batting/bowling/keeping)?  
+- **Performance**: Approximate time from “Start Analysis” to results, and any timeouts or crashes.
+
+### 6. Minimal test without full analysis
+
+If you only want to confirm backend + app connectivity:
+
+1. Start backend and run `curl -k https://localhost:8000/api/health`.  
+2. Start the app with `API_BASE_URL` pointing at your machine’s IP.  
+3. In the app, try any screen that triggers an API call (e.g. login or upload).  
+4. Check backend logs for the request; no need to complete a full AI analysis.
+
+**Note:** The README also references a `backend` directory for some steps; in this repo the backend runs from the **project root** (`backend_script.py`, `requirements.txt`). Use the commands above when testing from a fresh clone.
 
 ## Troubleshooting
 

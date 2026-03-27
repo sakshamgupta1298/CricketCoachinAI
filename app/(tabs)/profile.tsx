@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Alert, Platform, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Avatar, Text, useTheme } from 'react-native-paper';
 import Toast from 'react-native-toast-message';
 import { useAuth } from '../../src/context/AuthContext';
@@ -12,24 +12,31 @@ export default function ProfileScreen() {
   const theme = useTheme();
   const { user: contextUser, logout: authLogout } = useAuth();
   const [user, setUser] = useState<any>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadUserData = async () => {
+    if (contextUser) {
+      setUser(contextUser);
+    } else {
+      try {
+        const storedUser = await apiService.getStoredUser();
+        if (storedUser) {
+          setUser(storedUser);
+        }
+      } catch (error) {
+        console.error('Error loading user data:', error);
+      }
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadUserData();
+    setRefreshing(false);
+  };
 
   // Load user data from storage if not in context
   useEffect(() => {
-    const loadUserData = async () => {
-      if (contextUser) {
-        setUser(contextUser);
-      } else {
-        // Try to load from storage
-        try {
-          const storedUser = await apiService.getStoredUser();
-          if (storedUser) {
-            setUser(storedUser);
-          }
-        } catch (error) {
-          console.error('Error loading user data:', error);
-        }
-      }
-    };
     loadUserData();
   }, [contextUser]);
 
@@ -88,6 +95,8 @@ export default function ProfileScreen() {
       router.push('/change-password');
     } else if (action === 'Privacy Policy') {
       router.push('/privacy-policy');
+    } else if (action === 'AI Data Sharing') {
+      router.push('/ai-privacy-controls');
     } else if (action === 'About') {
       router.push('/about');
     } else if (action === 'Help & Support') {
@@ -272,6 +281,9 @@ export default function ProfileScreen() {
     <ScrollView 
       style={[styles.container, { backgroundColor: theme.colors.background }]}
       contentContainerStyle={styles.contentContainer}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
     >
       {/* Profile Header */}
       <View style={styles.profileHeader}>
@@ -364,6 +376,13 @@ export default function ProfileScreen() {
             label="Privacy Policy"
             onPress={() => handleAccountAction('Privacy Policy')}
           />
+          {Platform.OS === 'ios' && (
+            <ActionItem
+              icon="🧠"
+              label="AI Data Sharing"
+              onPress={() => handleAccountAction('AI Data Sharing')}
+            />
+          )}
           <ActionItem
             icon="ℹ️"
             label="About"

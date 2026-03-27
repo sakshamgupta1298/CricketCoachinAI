@@ -1,13 +1,16 @@
 import { AVPlaybackStatus, ResizeMode, Video } from 'expo-av';
+import * as Speech from 'expo-speech';
+import { useFocusEffect } from '@react-navigation/native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Card, Chip, Surface, Text, useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { currentConfig } from '../config';
 import apiService from '../src/services/api';
 import { borderRadius, colors, shadows, spacing } from '../src/theme';
 import { AnalysisResult } from '../src/types';
+import { translateToHindi } from '../src/utils/translate';
 import { getResponsiveFontSize, getResponsiveSize, screenWidth } from '../src/utils/responsive';
 
 export default function ResultsScreen() {
@@ -16,7 +19,20 @@ export default function ResultsScreen() {
   const insets = useSafeAreaInsets();
   const [authToken, setAuthToken] = useState<string | null>(null);
   const videoRef = useRef<Video>(null);
-  
+
+  // Language: English or Hindi (translation)
+  type Lang = 'en' | 'hi';
+  const [language, setLanguage] = useState<Lang>('en');
+  const [translateLoading, setTranslateLoading] = useState(false);
+  const [translated, setTranslated] = useState<{
+    summary: string | null;
+    flawTexts: Array<{ issue: string; recommendation: string }> | null;
+    tips: string[] | null;
+    injuryRisks: string[] | null; // flattened "body_part - risk_level: reason" or plain strings
+  }>({ summary: null, flawTexts: null, tips: null, injuryRisks: null });
+  const [speaking, setSpeaking] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
   // Parse the result from params
   const result: AnalysisResult = params.result ? JSON.parse(params.result as string) : null;
 
@@ -28,6 +44,161 @@ export default function ResultsScreen() {
     };
     loadToken();
   }, []);
+
+  // Stop speech when user leaves this screen (back, tab switch, or any navigation)
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        Speech.stop();
+        setSpeaking(false);
+      };
+    }, [])
+  );
+
+  // Load Hindi translation when user switches to Hindi (once, then cached)
+  const loadHindiTranslation = useCallback(async () => {
+    if (!result?.gpt_feedback) return;
+    setTranslateLoading(true);
+    try {
+      const gf = result.gpt_feedback;
+      const summaryEn = gf.analysis_summary || gf.analysis || '';
+      const flaws = gf.technical_flaws || gf.flaws || [];
+      const tips = gf.general_tips || [];
+      const newRisks = gf.injury_risk_assessment || [];
+      const oldRisks = gf.injury_risks || [];
+
+      const [summaryHi, ...flawPairs] = await Promise.all([
+        summaryEn ? translateToHindi(summaryEn) : Promise.resolve(''),
+        ...flaws.flatMap((f: any) =>
+          [f.issue ? translateToHindi(f.issue) : Promise.resolve(''), translateToHindi(f.recommendation || '')]
+        ),
+      ]);
+      const flawTexts = flaws.map((_: any, i: number) => ({
+        issue: flawPairs[i * 2] ?? '',
+        recommendation: flawPairs[i * 2 + 1] ?? '',
+      }));
+      const tipsHi = await Promise.all(tips.map((t: string) => translateToHindi(t)));
+      const riskStrings: string[] = [];
+      if (newRisks.length > 0) {
+        for (const r of newRisks) {
+          riskStrings.push(await translateToHindi(`${r.body_part} - ${r.risk_level}. ${r.reason}`));
+        }
+      } else {
+        for (const r of oldRisks) riskStrings.push(await translateToHindi(r));
+      }
+      setTranslated({ summary: summaryHi || null, flawTexts, tips: tipsHi, injuryRisks: riskStrings });
+    } catch (e) {
+      console.warn('Hindi translation failed', e);
+    } finally {
+      setTranslateLoading(false);
+    }
+  }, [result]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    if (language === 'hi' && result?.gpt_feedback) {
+      await loadHindiTranslation();
+    }
+    setRefreshing(false);
+  }, [language, result, loadHindiTranslation]);
+
+  useEffect(() => {
+    if (language === 'hi' && result && translated.summary === null && !translateLoading) {
+      loadHindiTranslation();
+    }
+  }, [language, result, loadHindiTranslation, translateLoading]);
+
+  // Build full visible text in current language for Speak (includes headings)
+  const getFullTextForSpeech = useCallback((): string => {
+    if (!result?.gpt_feedback) return '';
+    const gf = result.gpt_feedback;
+    const isHi = language === 'hi';
+    const parts: string[] = [];
+    const t = translated;
+
+    const title = isHi ? 'विश्लेषण परिणाम.' : 'Analysis Result.';
+    const headingSummary = isHi ? 'विश्लेषण सारांश.' : 'Analysis Summary.';
+    const headingAreas = isHi ? 'सुधार के क्षेत्र.' : 'Areas for Improvement.';
+    const headingInjury = isHi ? 'चोट के जोखिम.' : 'Injury Risks.';
+    const headingTips = isHi ? 'सामान्य सुझाव.' : 'General Tips.';
+    const labelRecommendation = isHi ? 'सिफारिश:' : 'Recommendation:';
+    const labelIssue = isHi ? 'समस्या:' : 'Issue:';
+
+    const summary = gf.analysis_summary || gf.analysis || '';
+
+    // Start with a title so it sounds like a heading.
+    parts.push(title);
+
+    if (summary) {
+      parts.push(headingSummary);
+      parts.push(isHi && t.summary ? t.summary : summary);
+    }
+
+    const flaws = gf.technical_flaws || gf.flaws || [];
+    if (flaws.length === 0) {
+      parts.push(headingAreas);
+      parts.push(isHi ? 'बढ़िया तकनीक। कोई बड़ी कमी नहीं मिली।' : 'Great technique. No major flaws detected.');
+    } else {
+      parts.push(headingAreas);
+      flaws.forEach((f: any, i: number) => {
+        const featureName = (f.feature || '').replace(/_/g, ' ').toUpperCase();
+        const issue = isHi && t.flawTexts?.[i]?.issue != null ? t.flawTexts[i].issue : f.issue;
+        const rec = isHi && t.flawTexts?.[i]?.recommendation != null ? t.flawTexts[i].recommendation : f.recommendation;
+
+        parts.push(isHi ? `सुधार ${i + 1}.` : `Improvement ${i + 1}.`);
+        if (featureName) parts.push(featureName + '.');
+        if (issue) {
+          parts.push(labelIssue + ' ' + issue + '.');
+        }
+        if (rec) {
+          parts.push(labelRecommendation + ' ' + rec + '.');
+        }
+      });
+    }
+
+    const newRisks = gf.injury_risk_assessment || [];
+    const oldRisks = gf.injury_risks || [];
+    if (newRisks.length > 0 || oldRisks.length > 0) {
+      parts.push(headingInjury);
+      if (newRisks.length > 0) {
+        newRisks.forEach((r: any, i: number) => {
+          const s = isHi && t.injuryRisks?.[i] ? t.injuryRisks[i] : `${r.body_part} - ${r.risk_level}. ${r.reason}`;
+          parts.push(s);
+        });
+      } else {
+        (oldRisks as string[]).forEach((r, i) => {
+          parts.push(isHi && t.injuryRisks?.[i] ? t.injuryRisks[i] : r);
+        });
+      }
+    }
+
+    const tipsList = gf.general_tips || [];
+    if (tipsList.length > 0) {
+      parts.push(headingTips);
+      tipsList.forEach((tip: string, i: number) => {
+        parts.push(isHi && t.tips?.[i] != null ? t.tips[i] : tip);
+      });
+    }
+
+    // New lines create natural pauses so the user hears headings clearly.
+    return parts.filter(Boolean).join('\n');
+  }, [result, language, translated]);
+
+  const handleSpeak = useCallback(() => {
+    const text = getFullTextForSpeech();
+    if (!text.trim()) return;
+    if (speaking) {
+      Speech.stop();
+      setSpeaking(false);
+      return;
+    }
+    setSpeaking(true);
+    Speech.speak(text, {
+      language: language === 'hi' ? 'hi-IN' : 'en-US',
+      onDone: () => setSpeaking(false),
+      onError: () => setSpeaking(false),
+    });
+  }, [getFullTextForSpeech, language, speaking]);
 
   // Debug logging
   useEffect(() => {
@@ -71,15 +242,15 @@ export default function ResultsScreen() {
     const flaws = result.gpt_feedback.technical_flaws || result.gpt_feedback.flaws || [];
     
     if (flaws.length === 0) {
+      const noFlawsTitle = language === 'hi' ? '🎉 बढ़िया तकनीक!' : '🎉 Great Technique!';
+      const noFlawsDesc = language === 'hi'
+        ? 'आपकी तकनीक में कोई बड़ी कमी नहीं मिली। इसी तरह प्रैक्टिस करते रहें!'
+        : 'No major flaws detected in your technique. Keep up the good work!';
       return (
         <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
           <Card.Content>
-            <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
-              🎉 Great Technique!
-            </Text>
-            <Text style={[styles.cardDescription, { color: theme.colors.onSurfaceVariant }]}>
-              No major flaws detected in your technique. Keep up the good work!
-            </Text>
+            <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>{noFlawsTitle}</Text>
+            <Text style={[styles.cardDescription, { color: theme.colors.onSurfaceVariant }]}>{noFlawsDesc}</Text>
           </Card.Content>
         </Card>
       );
@@ -123,18 +294,22 @@ export default function ResultsScreen() {
             </Text>
           </View>
           
-          {flaw.issue && (
+          {(flaw.issue || (language === 'hi' && translated.flawTexts?.[index]?.issue)) && (
             <Text style={[styles.flawIssue, { color: theme.colors.onSurface }]}>
-              {flaw.issue}
+              {language === 'hi' && translated.flawTexts?.[index]?.issue != null
+                ? translated.flawTexts[index].issue
+                : flaw.issue}
             </Text>
           )}
           
           <View style={styles.recommendationContainer}>
             <Text style={[styles.recommendationLabel, { color: theme.colors.primary }]}>
-              💡 Recommendation:
+              {language === 'hi' ? '💡 सिफारिश:' : '💡 Recommendation:'}
             </Text>
             <Text style={[styles.recommendationText, { color: theme.colors.onSurface }]}>
-              {flaw.recommendation}
+              {language === 'hi' && translated.flawTexts?.[index]?.recommendation != null
+                ? translated.flawTexts[index].recommendation
+                : flaw.recommendation}
             </Text>
           </View>
         </Card.Content>
@@ -148,17 +323,16 @@ export default function ResultsScreen() {
       return null;
     }
 
+    const tipsTitle = language === 'hi' ? '💪 सामान्य सुझाव' : '💪 General Tips';
     return (
       <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
         <Card.Content>
-          <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
-            💪 General Tips
-          </Text>
+          <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>{tipsTitle}</Text>
           {result.gpt_feedback.general_tips.map((tip, index) => (
             <View key={index} style={styles.tipItem}>
               <Text style={styles.tipBullet}>•</Text>
               <Text style={[styles.tipText, { color: theme.colors.onSurface }]}>
-                {tip}
+                {language === 'hi' && translated.tips?.[index] != null ? translated.tips[index] : tip}
               </Text>
             </View>
           ))}
@@ -181,24 +355,30 @@ export default function ResultsScreen() {
       return null;
     }
 
+    const injuryTitle = language === 'hi' ? '⚠️ चोट के जोखिम' : '⚠️ Injury Risks';
     return (
       <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
         <Card.Content>
-          <Text style={[styles.cardTitle, { color: colors.error }]}>
-            ⚠️ Injury Risks
-          </Text>
-          {/* Render new format (objects) if available, otherwise old format (strings) */}
+          <Text style={[styles.cardTitle, { color: colors.error }]}>{injuryTitle}</Text>
           {hasNewFormat ? (
             newRisks.map((risk: any, index: number) => (
               <View key={`risk-${index}`} style={styles.riskItem}>
                 <Text style={styles.riskBullet}>⚠️</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.riskText, { color: theme.colors.onSurface, fontWeight: '600' }]}>
-                    {risk.body_part} - {risk.risk_level}
-                  </Text>
-                  <Text style={[styles.riskText, { color: theme.colors.onSurfaceVariant, fontSize: 12, marginTop: 4 }]}>
-                    {risk.reason}
-                  </Text>
+                  {language === 'hi' && translated.injuryRisks?.[index] ? (
+                    <Text style={[styles.riskText, { color: theme.colors.onSurface }]}>
+                      {translated.injuryRisks[index]}
+                    </Text>
+                  ) : (
+                    <>
+                      <Text style={[styles.riskText, { color: theme.colors.onSurface, fontWeight: '600' }]}>
+                        {risk.body_part} - {risk.risk_level}
+                      </Text>
+                      <Text style={[styles.riskText, { color: theme.colors.onSurfaceVariant, fontSize: 12, marginTop: 4 }]}>
+                        {risk.reason}
+                      </Text>
+                    </>
+                  )}
                 </View>
               </View>
             ))
@@ -207,7 +387,9 @@ export default function ResultsScreen() {
               <View key={`risk-${index}`} style={styles.riskItem}>
                 <Text style={styles.riskBullet}>⚠️</Text>
                 <Text style={[styles.riskText, { color: theme.colors.onSurface }]}>
-                  {risk}
+                  {language === 'hi' && translated.injuryRisks?.[index] != null
+                    ? translated.injuryRisks[index]
+                    : risk}
                 </Text>
               </View>
             ))
@@ -224,6 +406,9 @@ export default function ResultsScreen() {
         styles.scrollContent,
         { paddingBottom: Math.max(100, insets.bottom + 80) } // Ensure enough space for tab bar + safe area
       ]}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
     >
       <View style={styles.content}>
         {/* Header */}
@@ -322,15 +507,58 @@ export default function ResultsScreen() {
           })()}
         </Surface>
 
+        {/* Language toggle and Speak */}
+        <View style={styles.languageBar}>
+          <View style={styles.languageToggle}>
+            <TouchableOpacity
+              style={[
+                styles.langButton,
+                language === 'en' && styles.langButtonActive,
+                { borderColor: theme.colors.outline, backgroundColor: language === 'en' ? theme.colors.primary : theme.colors.surface },
+              ]}
+              onPress={() => setLanguage('en')}
+            >
+              <Text style={[styles.langButtonText, { color: language === 'en' ? 'white' : theme.colors.onSurface }]}>
+                English
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.langButton,
+                language === 'hi' && styles.langButtonActive,
+                { borderColor: theme.colors.outline, backgroundColor: language === 'hi' ? theme.colors.primary : theme.colors.surface },
+              ]}
+              onPress={() => setLanguage('hi')}
+              disabled={translateLoading}
+            >
+              {translateLoading ? (
+                <ActivityIndicator size="small" color={theme.colors.primary} />
+              ) : (
+                <Text style={[styles.langButtonText, { color: language === 'hi' ? 'white' : theme.colors.onSurface }]}>
+                  हिंदी
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity
+            style={[styles.speakButton, { backgroundColor: theme.colors.secondary }]}
+            onPress={handleSpeak}
+          >
+            <Text style={styles.speakButtonText}>{speaking ? '⏹ Stop' : '🔊 Speak'}</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Analysis Summary - Support both old (analysis) and new (analysis_summary) format */}
         {(result.gpt_feedback.analysis_summary || result.gpt_feedback.analysis) && (
           <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
             <Card.Content>
               <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
-                📊 Analysis Summary
+                {language === 'hi' ? '📊 विश्लेषण सारांश' : '📊 Analysis Summary'}
               </Text>
               <Text style={[styles.analysisText, { color: theme.colors.onSurface }]}>
-                {result.gpt_feedback.analysis_summary || result.gpt_feedback.analysis}
+                {language === 'hi' && translated.summary
+                  ? translated.summary
+                  : (result.gpt_feedback.analysis_summary || result.gpt_feedback.analysis)}
               </Text>
             </Card.Content>
           </Card>
@@ -339,7 +567,7 @@ export default function ResultsScreen() {
         {/* Flaws - Moved above Biomechanical Features */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
-            Areas for Improvement
+            {language === 'hi' ? 'सुधार के क्षेत्र' : 'Areas for Improvement'}
           </Text>
           {renderFlaws()}
         </View>
@@ -453,6 +681,43 @@ const styles = StyleSheet.create({
   },
   playerInfoText: {
     fontSize: getResponsiveFontSize(12),
+  },
+  languageBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: getResponsiveSize(spacing.md),
+    gap: spacing.md,
+  },
+  languageToggle: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  langButton: {
+    paddingVertical: getResponsiveSize(spacing.sm),
+    paddingHorizontal: getResponsiveSize(spacing.md),
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    minWidth: 72,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  langButtonActive: {},
+  langButtonText: {
+    fontSize: getResponsiveFontSize(14),
+    fontWeight: '600',
+  },
+  speakButton: {
+    paddingVertical: getResponsiveSize(spacing.sm),
+    paddingHorizontal: getResponsiveSize(spacing.md),
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  speakButtonText: {
+    fontSize: getResponsiveFontSize(14),
+    fontWeight: '600',
+    color: 'white',
   },
   card: {
     marginBottom: getResponsiveSize(spacing.lg),

@@ -708,9 +708,20 @@ class ApiService {
   async getAnalysisHistory(): Promise<ApiResponse<any[]>> {
     try {
       const response = await this.api.get('/api/history');
+      
+      // Axios validateStatus allows 4xx responses through (no throw),
+      // so we must treat non-200 as failure to avoid returning [] on 401.
+      if (response.status !== 200) {
+        return {
+          success: false,
+          error: response.data?.error || response.data?.message || `Failed to load history (${response.status})`,
+        };
+      }
+
+      const history = response.data?.history;
       return {
         success: true,
-        data: response.data.history || [],
+        data: Array.isArray(history) ? history : [],
       };
     } catch (error: any) {
       console.error('History Error:', error);
@@ -861,6 +872,64 @@ class ApiService {
       return {
         success: false,
         error: error.response?.data?.error || error.message || 'Failed to compare videos. Please check your connection and try again.',
+      };
+    }
+  }
+
+  async processBallSpeedFrame(payload: {
+    session_id: string;
+    image_base64: string;
+    meters_per_pixel?: number;
+    pitch_pixel_length?: number;
+    confidence?: number;
+  }): Promise<ApiResponse<any>> {
+    try {
+      const response = await this.jsonApi.post('/api/ball-speed/frame', payload, {
+        timeout: 20000,
+      });
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error: any) {
+      console.error('Ball Speed Frame Error:', error);
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message || 'Failed to process ball speed frame.',
+      };
+    }
+  }
+
+  async getBallSpeedStatus(): Promise<ApiResponse<any>> {
+    try {
+      const response = await this.jsonApi.get('/api/ball-speed/status', {
+        timeout: 10000,
+      });
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error: any) {
+      console.error('Ball Speed Status Error:', error);
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message || 'Failed to fetch ball speed status.',
+      };
+    }
+  }
+
+  async endBallSpeedSession(sessionId: string): Promise<ApiResponse<any>> {
+    try {
+      const response = await this.jsonApi.delete(`/api/ball-speed/session/${sessionId}`);
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error: any) {
+      console.error('End Ball Speed Session Error:', error);
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message || 'Failed to end ball speed session.',
       };
     }
   }
@@ -1173,14 +1242,16 @@ class ApiService {
       });
       
       // If verification successful, refresh token expiration
-      if (response.status === 200) {
-        await this.refreshTokenExpiration();
+      if (response.status !== 200) {
+        return {
+          success: false,
+          error: response.data?.error || response.data?.message || `Token verification failed (${response.status})`,
+        };
       }
+
+      await this.refreshTokenExpiration();
       
-      return {
-        success: true,
-        data: response.data,
-      };
+      return { success: true, data: response.data };
     } catch (error: any) {
       console.error('Token Verification Error:', error);
       return {

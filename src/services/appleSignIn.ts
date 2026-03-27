@@ -47,6 +47,13 @@ export const signInWithApple = async (): Promise<AppleUserInfo> => {
     if (error && error.code === 'ERR_REQUEST_CANCELED') {
       throw new Error('Apple Sign In was cancelled.');
     }
+    if (error && error.code === 'ERR_REQUEST_UNKNOWN') {
+      // This most commonly happens when the app is missing the Sign in with Apple entitlement,
+      // or when the simulator/device isn't properly set up (e.g., not signed into an Apple ID).
+      throw new Error(
+        'Apple Sign In failed due to an iOS configuration issue. If you are on Simulator, make sure the Simulator is signed into an Apple ID. If you are on a local build, ensure the iOS project has the "Sign In with Apple" capability/entitlement enabled, then rebuild (npx expo run:ios).'
+      );
+    }
     console.error('Apple Sign In error:', error);
     throw new Error(error?.message || 'Apple Sign In failed.');
   }

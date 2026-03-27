@@ -1,5 +1,6 @@
 import os
 import json
+import base64
 import torch
 import torch.nn as nn
 import cv2
@@ -34,6 +35,12 @@ import random
 import string
 import subprocess
 import shutil
+from collections import deque
+
+try:
+    from ultralytics import YOLO
+except Exception:
+    YOLO = None
 
 # ==================== LOGGING CONFIGURATION ====================
 # Create logging directory if it doesn't exist
@@ -208,6 +215,133 @@ keypoints_names = ["nose", "left_eye", "right_eye", "left_ear", "right_ear", "le
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'mp4', 'avi', 'mov', 'mkv'}
 JOBS_SUBFOLDER = 'jobs'
+PITCH_LENGTH_METERS = 20.12
+
+# Real-time ball speed tracking state
+BALL_SPEED_SESSIONS = {}
+BALL_SPEED_SESSION_LOCK = threading.Lock()
+BALL_MODEL = None
+BALL_MODEL_LOCK = threading.Lock()
+
+
+class BallKalmanTracker:
+    """Simple constant-velocity Kalman tracker for ball center (x, y)."""
+
+    def __init__(self):
+        self.kf = cv2.KalmanFilter(4, 2)
+        self.kf.measurementMatrix = np.array(
+            [[1, 0, 0, 0], [0, 1, 0, 0]], dtype=np.float32
+        )
+        self.kf.transitionMatrix = np.array(
+            [[1, 0, 1, 0], [0, 1, 0, 1], [0, 0, 1, 0], [0, 0, 0, 1]],
+            dtype=np.float32,
+        )
+        self.kf.processNoiseCov = np.eye(4, dtype=np.float32) * 0.03
+        self.kf.measurementNoiseCov = np.eye(2, dtype=np.float32) * 0.5
+        self.kf.errorCovPost = np.eye(4, dtype=np.float32)
+        self.initialized = False
+
+    def update(self, measured_center):
+        if not self.initialized:
+            if measured_center is None:
+                return None
+            x, y = measured_center
+            self.kf.statePost = np.array([[x], [y], [0], [0]], dtype=np.float32)
+            self.initialized = True
+            return measured_center
+
+        predicted = self.kf.predict()
+        predicted_center = (float(predicted[0]), float(predicted[1]))
+
+        if measured_center is not None:
+            measurement = np.array(
+                [[np.float32(measured_center[0])], [np.float32(measured_center[1])]]
+            )
+            corrected = self.kf.correct(measurement)
+            return (float(corrected[0]), float(corrected[1]))
+
+        return predicted_center
+
+
+def estimate_speed_kmh(start_center, end_center, dt_seconds, meters_per_pixel):
+    if start_center is None or end_center is None or dt_seconds <= 0 or meters_per_pixel <= 0:
+        return 0.0
+
+    dx = end_center[0] - start_center[0]
+    dy = end_center[1] - start_center[1]
+    distance_pixels = float(np.sqrt(dx * dx + dy * dy))
+    distance_meters = distance_pixels * meters_per_pixel
+    speed_mps = distance_meters / dt_seconds
+    return speed_mps * 3.6
+
+
+def _get_ball_model():
+    """Load YOLO model lazily so backend startup remains fast."""
+    global BALL_MODEL
+    if YOLO is None:
+        return None
+    if BALL_MODEL is not None:
+        return BALL_MODEL
+    with BALL_MODEL_LOCK:
+        if BALL_MODEL is None:
+            try:
+                BALL_MODEL = YOLO("yolov8n.pt")
+                logger.info("✅ [BALL_SPEED] YOLO model loaded successfully")
+            except Exception as e:
+                logger.warning(f"⚠️ [BALL_SPEED] Failed to load YOLO model, using fallback detection: {e}")
+                BALL_MODEL = None
+    return BALL_MODEL
+
+
+def _detect_ball_center(frame_bgr, confidence=0.25):
+    """Return ((x, y), conf) or (None, 0.0). Uses YOLO if available, else contour fallback."""
+    model = _get_ball_model()
+    if model is not None:
+        try:
+            results = model.predict(frame_bgr, classes=[32], conf=confidence, verbose=False)
+            result = results[0]
+            if result.boxes is not None and len(result.boxes) > 0:
+                best_idx = int(result.boxes.conf.argmax().item())
+                box = result.boxes[best_idx]
+                x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                conf = float(box.conf.item())
+                center_x = float((x1 + x2) / 2.0)
+                center_y = float((y1 + y2) / 2.0)
+                return (center_x, center_y), conf
+        except Exception as e:
+            logger.warning(f"⚠️ [BALL_SPEED] YOLO inference failed, using fallback: {e}")
+
+    # Fallback: detect small moving bright-ish object by contour (best-effort).
+    gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
+    blur = cv2.GaussianBlur(gray, (7, 7), 0)
+    edges = cv2.Canny(blur, 80, 180)
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return None, 0.0
+
+    h, w = gray.shape[:2]
+    min_area = max(8, int((w * h) * 0.00002))
+    max_area = max(min_area + 1, int((w * h) * 0.005))
+    candidates = []
+    for contour in contours:
+        area = cv2.contourArea(contour)
+        if area < min_area or area > max_area:
+            continue
+        x, y, cw, ch = cv2.boundingRect(contour)
+        if cw <= 0 or ch <= 0:
+            continue
+        ratio = max(cw, ch) / max(1, min(cw, ch))
+        if ratio > 2.5:
+            continue
+        candidates.append((area, x, y, cw, ch))
+
+    if not candidates:
+        return None, 0.0
+
+    # Prefer slightly larger compact candidate in upper-mid frame where ball often appears.
+    candidates.sort(key=lambda c: c[0], reverse=True)
+    _, x, y, cw, ch = candidates[0]
+    return (float(x + cw / 2.0), float(y + ch / 2.0)), 0.2
 
 def _try_open_video_with_opencv(video_path: str) -> bool:
     """Return True if OpenCV can open the video container/codec."""
@@ -3588,6 +3722,126 @@ def api_health():
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
     response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
     return response
+
+
+@app.route('/api/ball-speed/frame', methods=['POST'])
+@require_auth
+def api_ball_speed_frame():
+    """Process one frame and return live/smoothed ball speed for a session."""
+    try:
+        data = request.get_json(silent=True) or {}
+        session_id = (data.get('session_id') or '').strip()
+        image_base64 = data.get('image_base64')
+        confidence = float(data.get('confidence', 0.25))
+        pitch_pixel_length = float(data.get('pitch_pixel_length') or 0.0)
+        meters_per_pixel = float(data.get('meters_per_pixel') or 0.015)
+
+        if not session_id:
+            return jsonify({'success': False, 'error': 'session_id is required'}), 400
+        if not image_base64:
+            return jsonify({'success': False, 'error': 'image_base64 is required'}), 400
+
+        if pitch_pixel_length > 0:
+            meters_per_pixel = PITCH_LENGTH_METERS / pitch_pixel_length
+        if meters_per_pixel <= 0:
+            return jsonify({'success': False, 'error': 'Invalid calibration value'}), 400
+
+        # Strip data URL prefix if provided
+        if isinstance(image_base64, str) and image_base64.startswith('data:image'):
+            image_base64 = image_base64.split(',', 1)[1]
+
+        try:
+            frame_bytes = base64.b64decode(image_base64)
+            nparr = np.frombuffer(frame_bytes, np.uint8)
+            frame_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        except Exception:
+            return jsonify({'success': False, 'error': 'Invalid base64 image payload'}), 400
+
+        if frame_bgr is None:
+            return jsonify({'success': False, 'error': 'Failed to decode image frame'}), 400
+
+        user_id = request.user['user_id']
+        now = time.time()
+
+        with BALL_SPEED_SESSION_LOCK:
+            session = BALL_SPEED_SESSIONS.get(session_id)
+            if session is None or session.get('user_id') != user_id:
+                session = {
+                    'user_id': user_id,
+                    'tracker': BallKalmanTracker(),
+                    'tracked_history': deque(maxlen=6),
+                    'speed_buffer': deque(maxlen=6),
+                    'last_seen': now,
+                }
+                BALL_SPEED_SESSIONS[session_id] = session
+            else:
+                session['last_seen'] = now
+
+        measured_center, det_conf = _detect_ball_center(frame_bgr, confidence=confidence)
+        tracker_center = session['tracker'].update(measured_center)
+        current_speed_kmh = 0.0
+
+        if tracker_center is not None:
+            session['tracked_history'].append((float(tracker_center[0]), float(tracker_center[1]), now))
+
+        if len(session['tracked_history']) >= 6:
+            start = session['tracked_history'][0]
+            end = session['tracked_history'][-1]
+            dt_seconds = float(end[2] - start[2])
+            current_speed_kmh = estimate_speed_kmh(
+                start_center=(start[0], start[1]),
+                end_center=(end[0], end[1]),
+                dt_seconds=dt_seconds,
+                meters_per_pixel=meters_per_pixel,
+            )
+            if current_speed_kmh > 0:
+                session['speed_buffer'].append(current_speed_kmh)
+
+        avg_speed_kmh = float(np.mean(session['speed_buffer'])) if session['speed_buffer'] else 0.0
+
+        # Cleanup stale sessions opportunistically
+        stale_before = now - 120.0
+        with BALL_SPEED_SESSION_LOCK:
+            stale_keys = [sid for sid, s in BALL_SPEED_SESSIONS.items() if s.get('last_seen', 0) < stale_before]
+            for sid in stale_keys:
+                BALL_SPEED_SESSIONS.pop(sid, None)
+
+        return jsonify({
+            'success': True,
+            'session_id': session_id,
+            'detected': measured_center is not None,
+            'detection_confidence': float(det_conf),
+            'current_speed_kmh': float(current_speed_kmh),
+            'smoothed_speed_kmh': float(avg_speed_kmh),
+            'meters_per_pixel': float(meters_per_pixel),
+        })
+    except Exception as e:
+        logger.error(f"Ball speed frame processing failed: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': f'Ball speed processing failed: {str(e)}'}), 500
+
+
+@app.route('/api/ball-speed/status', methods=['GET'])
+@require_auth
+def api_ball_speed_status():
+    """Return ball speed model availability."""
+    model = _get_ball_model()
+    return jsonify({
+        'success': True,
+        'yolo_available': model is not None,
+        'mode': 'yolo' if model is not None else 'fallback'
+    })
+
+
+@app.route('/api/ball-speed/session/<session_id>', methods=['DELETE'])
+@require_auth
+def api_ball_speed_end_session(session_id):
+    """End a real-time speed session and clear tracker state."""
+    user_id = request.user['user_id']
+    with BALL_SPEED_SESSION_LOCK:
+        existing = BALL_SPEED_SESSIONS.get(session_id)
+        if existing and existing.get('user_id') == user_id:
+            BALL_SPEED_SESSIONS.pop(session_id, None)
+    return jsonify({'success': True, 'session_id': session_id})
 
 @app.route('/api/history', methods=['GET'])
 @require_auth

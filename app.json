@@ -15,8 +15,9 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.saksham5.cricketcoachmobile",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "NSCameraUsageDescription": "This app needs access to camera to record cricket videos for analysis.",
         "NSPhotoLibraryUsageDescription": "This app needs access to photo library to select cricket videos for analysis.",

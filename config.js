@@ -19,6 +19,7 @@ const config = {
     // Alternative (direct backend): 'https://api.crickcoachai.com:3000'
     API_BASE_URL: 'https://api.crickcoachai.com',
     API_TIMEOUT: 600000, // 10 minutes for video uploads and processing
+    GOOGLE_TRANSLATE_API_KEY: "AIzaSyCu_IwIOUfT8L0Dv6YZSv4hgLljSgnaLyc"
   },
   
   // Production configuration
@@ -30,6 +31,7 @@ const config = {
     // Alternative (direct backend): 'https://api.crickcoachai.com:3000'
     API_BASE_URL: 'https://api.crickcoachai.com',
     API_TIMEOUT: 600000, // 10 minutes for video uploads and processing
+    GOOGLE_TRANSLATE_API_KEY: "AIzaSyCu_IwIOUfT8L0Dv6YZSv4hgLljSgnaLyc"
   },
   
   // Test configuration
@@ -38,6 +40,7 @@ const config = {
     // Using Nginx proxy on port 80
     API_BASE_URL: 'https://api.crickcoachai.com',
     API_TIMEOUT: 600000, // 10 minutes for video uploads and processing
+    GOOGLE_TRANSLATE_API_KEY: "AIzaSyCu_IwIOUfT8L0Dv6YZSv4hgLljSgnaLyc"
   }
 };
 

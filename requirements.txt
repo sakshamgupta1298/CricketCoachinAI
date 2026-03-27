@@ -19,6 +19,7 @@ tensorflow
 tensorflow-hub
 opencv-python
 pytorchvideo
+ultralytics
 
 # Data processing
 pandas
