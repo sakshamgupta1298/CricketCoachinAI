@@ -225,12 +225,25 @@ BALL_MODEL_LOCK = threading.Lock()
 
 # Timing-based ball speed (release → striker / crease)
 BALL_SPEED_RELEASE_THRESHOLD_PX = 15.0
+# Release = velocity spike only after stable low-motion tracking + confident detections + toward-striker dx
+BALL_SPEED_STABLE_VELOCITY_MAX_PX = 7.0
+BALL_SPEED_MIN_STABLE_LOW_MOTION_FRAMES = 3
+BALL_SPEED_MIN_KALMAN_FRAMES = 3  # consecutive frames with Kalman output before release allowed
+BALL_SPEED_SPIKE_VS_RECENT_MULT = 1.45
+BALL_SPEED_DIR_MIN_DX_PX = 2.5
+BALL_SPEED_RECENT_VELOCITY_MAX = 6
 BALL_SPEED_BOWL_DISTANCE_M = 17.68
 BALL_SPEED_BOUNCE_DISTANCE_M = 11.0
 BALL_SPEED_BOUNCE_FALLBACK_SCALE = 1.18
 BALL_SPEED_MIN_KMH = 40.0
 BALL_SPEED_MAX_KMH = 170.0
 BALL_SPEED_DEFAULT_STRIKER_X_RATIO = 0.62
+# Striker / crease: require this many consecutive Kalman frames past the line (not a single-frame flicker)
+BALL_SPEED_STRIKER_CONFIRM_FRAMES = 3
+# Minimum |reach_x - release_x| in pixels (Kalman) before accepting a timing speed sample
+BALL_SPEED_MIN_RELEASE_TO_REACH_PX = 48.0
+# After a delivery is finalized, wait this many more frames before clearing delivery state (overlap / trajectory tail)
+BALL_SPEED_POST_DELIVERY_RESET_DELAY_FRAMES = 2
 
 
 class BallKalmanTracker:
@@ -280,8 +293,41 @@ def _ball_speed_reset_delivery_timestamps(session):
     """Clear per-delivery markers after a completed timing sample (next delivery)."""
     session['release_timestamp'] = None
     session['reach_timestamp'] = None
+    session['reach_candidate_timestamp'] = None
+    session['release_ball_xy'] = None
+    session['reach_candidate_xy'] = None
     session['bounce_timestamp'] = None
     session['prev_dy'] = None
+    session['stable_low_motion_frames'] = 0
+    session['consecutive_kalman_frames'] = 0
+    session['striker_beyond_streak'] = 0
+    rv = session.get('release_recent_velocities')
+    if rv is not None:
+        rv.clear()
+    session['post_delivery_reset_countdown'] = 0
+
+
+def _ball_speed_release_spike_ok(velocity_pixels, recent_velocities):
+    if velocity_pixels <= BALL_SPEED_RELEASE_THRESHOLD_PX:
+        return False
+    if recent_velocities is None or len(recent_velocities) < 2:
+        return True
+    mean_recent = float(np.mean(recent_velocities))
+    if mean_recent <= 0.5:
+        return velocity_pixels > BALL_SPEED_RELEASE_THRESHOLD_PX
+    return velocity_pixels >= mean_recent * BALL_SPEED_SPIKE_VS_RECENT_MULT
+
+
+def _ball_speed_toward_striker_dx_ok(dx, dy, prev_x, batsman_x, min_dx=BALL_SPEED_DIR_MIN_DX_PX):
+    """Toward striker by horizontal sign; require abs(dx) > abs(dy) so bounce/vertical motion does not qualify."""
+    if abs(dx) <= abs(dy):
+        return False
+    toward = float(batsman_x) - float(prev_x)
+    if toward > 1.0:
+        return dx >= min_dx
+    if toward < -1.0:
+        return dx <= -min_dx
+    return abs(dx) >= min_dx
 
 
 def _ball_speed_reset_session_timing(session):
@@ -293,6 +339,12 @@ def _ball_speed_reset_session_timing(session):
     session['release_detected_ever'] = False
     session['bounce_detected_ever'] = False
     session['reach_detected_ever'] = False
+    session['stable_low_motion_frames'] = 0
+    session['consecutive_kalman_frames'] = 0
+    session['striker_beyond_streak'] = 0
+    rv = session.get('release_recent_velocities')
+    if rv is not None:
+        rv.clear()
 
 
 def _ball_speed_new_session_dict(user_id, now):
@@ -308,6 +360,9 @@ def _ball_speed_new_session_dict(user_id, now):
         'last_seen': now,
         'release_timestamp': None,
         'reach_timestamp': None,
+        'reach_candidate_timestamp': None,
+        'release_ball_xy': None,
+        'reach_candidate_xy': None,
         'bounce_timestamp': None,
         'speed_samples': [],
         'prev_ball_center': None,
@@ -316,6 +371,11 @@ def _ball_speed_new_session_dict(user_id, now):
         'release_detected_ever': False,
         'bounce_detected_ever': False,
         'reach_detected_ever': False,
+        'stable_low_motion_frames': 0,
+        'consecutive_kalman_frames': 0,
+        'striker_beyond_streak': 0,
+        'post_delivery_reset_countdown': 0,
+        'release_recent_velocities': deque(maxlen=BALL_SPEED_RECENT_VELOCITY_MAX),
     }
 
 
@@ -3811,6 +3871,14 @@ def api_ball_speed_frame():
         except (TypeError, ValueError):
             timestamp_ms = time.time() * 1000.0
 
+        try:
+            frame_interval_ms = float(data.get('frame_interval_ms') or 0.0)
+        except (TypeError, ValueError):
+            frame_interval_ms = 0.0
+        if frame_interval_ms < 0:
+            frame_interval_ms = 0.0
+        event_timestamp_ms = float(timestamp_ms) - frame_interval_ms * 2.0
+
         # Strip data URL prefix if provided
         if isinstance(image_base64, str) and image_base64.startswith('data:image'):
             image_base64 = image_base64.split(',', 1)[1]
@@ -3856,22 +3924,42 @@ def api_ball_speed_frame():
                 session['last_seen'] = now
 
             for key in (
-                'release_timestamp', 'reach_timestamp', 'bounce_timestamp', 'speed_samples',
+                'release_timestamp', 'reach_timestamp', 'reach_candidate_timestamp',
+                'release_ball_xy', 'reach_candidate_xy', 'bounce_timestamp', 'speed_samples',
                 'prev_ball_center', 'prev_ball_timestamp', 'prev_dy',
                 'release_detected_ever', 'bounce_detected_ever', 'reach_detected_ever',
+                'stable_low_motion_frames', 'consecutive_kalman_frames', 'striker_beyond_streak',
+                'post_delivery_reset_countdown',
             ):
                 if key not in session:
                     if key == 'speed_samples':
                         session[key] = []
                     elif key in ('release_detected_ever', 'bounce_detected_ever', 'reach_detected_ever'):
                         session[key] = False
+                    elif key in (
+                        'stable_low_motion_frames',
+                        'consecutive_kalman_frames',
+                        'striker_beyond_streak',
+                        'post_delivery_reset_countdown',
+                    ):
+                        session[key] = 0
                     else:
                         session[key] = None
+            if 'release_recent_velocities' not in session:
+                session['release_recent_velocities'] = deque(maxlen=BALL_SPEED_RECENT_VELOCITY_MAX)
+            if 'consecutive_kalman_frames' not in session:
+                session['consecutive_kalman_frames'] = int(session.get('consecutive_confident_det_frames', 0))
+                session.pop('consecutive_confident_det_frames', None)
+
+            cd = int(session.get('post_delivery_reset_countdown', 0))
+            if cd > 0:
+                session['post_delivery_reset_countdown'] = cd - 1
+                if session['post_delivery_reset_countdown'] == 0:
+                    _ball_speed_reset_delivery_timestamps(session)
 
             session['total_frames'] = int(session.get('total_frames', 0)) + 1
 
             tracker_center = session['tracker'].update(measured_center)
-            center = tracker_center if tracker_center is not None else measured_center
 
             legacy_now = now
             pixel_speed_kmh = 0.0
@@ -3901,26 +3989,54 @@ def api_ball_speed_frame():
                 if pixel_speed_kmh > 0:
                     session['speed_buffer'].append(pixel_speed_kmh)
 
-            if center is not None:
-                x, y = float(center[0]), float(center[1])
+            # Release / bounce / reach: Kalman-smoothed positions only (avoids raw detector jitter).
+            if tracker_center is not None:
+                x, y = float(tracker_center[0]), float(tracker_center[1])
+                session['consecutive_kalman_frames'] = int(session.get('consecutive_kalman_frames', 0)) + 1
+
                 prev = session.get('prev_ball_center')
                 prev_dy_stored = session.get('prev_dy')
 
                 if prev is not None:
                     px, py = float(prev[0]), float(prev[1])
-                    velocity_pixels = float(np.hypot(x - px, y - py))
-                    if session.get('release_timestamp') is None and velocity_pixels > BALL_SPEED_RELEASE_THRESHOLD_PX:
-                        session['release_timestamp'] = timestamp_ms
-                        session['release_detected_ever'] = True
-
+                    dx = x - px
                     dy_curr = y - py
+                    velocity_pixels = float(np.hypot(dx, dy_curr))
+                    recent_vel = session.get('release_recent_velocities')
+
+                    if session.get('release_timestamp') is None:
+                        spike_ok = _ball_speed_release_spike_ok(velocity_pixels, recent_vel)
+                        stable_ok = (
+                            int(session.get('stable_low_motion_frames', 0))
+                            >= BALL_SPEED_MIN_STABLE_LOW_MOTION_FRAMES
+                        )
+                        kalman_ok = (
+                            int(session.get('consecutive_kalman_frames', 0))
+                            >= BALL_SPEED_MIN_KALMAN_FRAMES
+                        )
+                        dir_ok = _ball_speed_toward_striker_dx_ok(dx, dy_curr, px, batsman_x)
+                        if spike_ok and stable_ok and kalman_ok and dir_ok:
+                            session['release_timestamp'] = event_timestamp_ms
+                            session['release_detected_ever'] = True
+                            session['release_ball_xy'] = (x, y)
+
+                    if velocity_pixels <= BALL_SPEED_STABLE_VELOCITY_MAX_PX:
+                        session['stable_low_motion_frames'] = (
+                            int(session.get('stable_low_motion_frames', 0)) + 1
+                        )
+                    else:
+                        session['stable_low_motion_frames'] = 0
+
+                    if recent_vel is not None:
+                        recent_vel.append(velocity_pixels)
+
                     if (
                         session.get('bounce_timestamp') is None
                         and prev_dy_stored is not None
                         and prev_dy_stored < 0
                         and dy_curr > 0
                     ):
-                        session['bounce_timestamp'] = timestamp_ms
+                        session['bounce_timestamp'] = event_timestamp_ms
                         session['bounce_detected_ever'] = True
                 else:
                     dy_curr = None
@@ -3929,24 +4045,63 @@ def api_ball_speed_frame():
                     reach_hit = x >= batsman_x
                     if popping_crease_x is not None and x >= popping_crease_x:
                         reach_hit = True
-                    if reach_hit:
-                        session['reach_timestamp'] = timestamp_ms
-                        session['reach_detected_ever'] = True
+                    prev_line = session.get('prev_ball_center')
+                    motion_toward_ok = False
+                    if prev_line is not None:
+                        plx = float(prev_line[0])
+                        ply = float(prev_line[1])
+                        dx_step = x - plx
+                        dy_step = y - ply
+                        motion_toward_ok = _ball_speed_toward_striker_dx_ok(dx_step, dy_step, plx, batsman_x)
+                    if reach_hit and motion_toward_ok:
+                        streak = int(session.get('striker_beyond_streak', 0)) + 1
+                        session['striker_beyond_streak'] = streak
+                        if streak == 1:
+                            session['reach_candidate_timestamp'] = event_timestamp_ms
+                            session['reach_candidate_xy'] = (x, y)
+                        if streak >= BALL_SPEED_STRIKER_CONFIRM_FRAMES:
+                            cand = session.get('reach_candidate_timestamp')
+                            session['reach_timestamp'] = (
+                                float(cand) if cand is not None else event_timestamp_ms
+                            )
+                            session['reach_detected_ever'] = True
+                    else:
+                        session['striker_beyond_streak'] = 0
+                        session['reach_candidate_timestamp'] = None
+                        session['reach_candidate_xy'] = None
 
-                if session.get('release_timestamp') is not None and session.get('reach_timestamp') is not None:
+                if (
+                    session.get('release_timestamp') is not None
+                    and session.get('reach_timestamp') is not None
+                    and int(session.get('post_delivery_reset_countdown', 0)) == 0
+                ):
+                    rel_xy = session.get('release_ball_xy')
+                    rch_xy = session.get('reach_candidate_xy')
+                    travel_ok = False
+                    if rel_xy is not None and rch_xy is not None:
+                        travel_x = float(rch_xy[0]) - float(rel_xy[0])
+                        if abs(travel_x) >= BALL_SPEED_MIN_RELEASE_TO_REACH_PX:
+                            travel_ok = True
                     dt_ms = float(session['reach_timestamp'] - session['release_timestamp'])
-                    if dt_ms > 0:
+                    if travel_ok and dt_ms > 0:
                         dt_s = dt_ms / 1000.0
                         speed_mps = BALL_SPEED_BOWL_DISTANCE_M / dt_s
                         speed_kmh_sample = speed_mps * 3.6
                         if _ball_speed_valid_sample_kmh(speed_kmh_sample):
                             session['speed_samples'].append(speed_kmh_sample)
-                    _ball_speed_reset_delivery_timestamps(session)
+                    session['post_delivery_reset_countdown'] = BALL_SPEED_POST_DELIVERY_RESET_DELAY_FRAMES
 
                 session['prev_ball_center'] = (x, y)
-                session['prev_ball_timestamp'] = timestamp_ms
+                session['prev_ball_timestamp'] = event_timestamp_ms
                 if prev is not None and dy_curr is not None:
                     session['prev_dy'] = dy_curr
+
+            else:
+                session['consecutive_kalman_frames'] = 0
+                session['stable_low_motion_frames'] = 0
+                session['striker_beyond_streak'] = 0
+                session['reach_candidate_timestamp'] = None
+                session['reach_candidate_xy'] = None
 
             stale_keys = [
                 sid for sid, s in BALL_SPEED_SESSIONS.items()

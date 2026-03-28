@@ -881,6 +881,8 @@ class ApiService {
     image_base64: string;
     /** Client monotonic clock ms (e.g. Date.now()) — used for release→reach timing. */
     timestamp?: number;
+    /** Same ms as between frame captures; backend uses timestamp − 2×interval for event times. */
+    frame_interval_ms?: number;
     meters_per_pixel?: number;
     pitch_pixel_length?: number;
     confidence?: number;
