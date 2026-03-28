@@ -223,6 +223,15 @@ BALL_SPEED_SESSION_LOCK = threading.Lock()
 BALL_MODEL = None
 BALL_MODEL_LOCK = threading.Lock()
 
+# Timing-based ball speed (release → striker / crease)
+BALL_SPEED_RELEASE_THRESHOLD_PX = 15.0
+BALL_SPEED_BOWL_DISTANCE_M = 17.68
+BALL_SPEED_BOUNCE_DISTANCE_M = 11.0
+BALL_SPEED_BOUNCE_FALLBACK_SCALE = 1.18
+BALL_SPEED_MIN_KMH = 40.0
+BALL_SPEED_MAX_KMH = 170.0
+BALL_SPEED_DEFAULT_STRIKER_X_RATIO = 0.62
+
 
 class BallKalmanTracker:
     """Simple constant-velocity Kalman tracker for ball center (x, y)."""
@@ -261,6 +270,53 @@ class BallKalmanTracker:
             return (float(corrected[0]), float(corrected[1]))
 
         return predicted_center
+
+
+def _ball_speed_valid_sample_kmh(speed_kmh):
+    return BALL_SPEED_MIN_KMH <= speed_kmh <= BALL_SPEED_MAX_KMH
+
+
+def _ball_speed_reset_delivery_timestamps(session):
+    """Clear per-delivery markers after a completed timing sample (next delivery)."""
+    session['release_timestamp'] = None
+    session['reach_timestamp'] = None
+    session['bounce_timestamp'] = None
+    session['prev_dy'] = None
+
+
+def _ball_speed_reset_session_timing(session):
+    """Clear all timing state (new session or post-finalize cleanup)."""
+    _ball_speed_reset_delivery_timestamps(session)
+    session['speed_samples'] = []
+    session['prev_ball_center'] = None
+    session['prev_ball_timestamp'] = None
+    session['release_detected_ever'] = False
+    session['bounce_detected_ever'] = False
+    session['reach_detected_ever'] = False
+
+
+def _ball_speed_new_session_dict(user_id, now):
+    return {
+        'user_id': user_id,
+        'tracker': BallKalmanTracker(),
+        'tracked_history': deque(maxlen=6),
+        'speed_buffer': deque(maxlen=6),
+        'first_tracked': None,
+        'last_tracked': None,
+        'total_frames': 0,
+        'detected_frames': 0,
+        'last_seen': now,
+        'release_timestamp': None,
+        'reach_timestamp': None,
+        'bounce_timestamp': None,
+        'speed_samples': [],
+        'prev_ball_center': None,
+        'prev_ball_timestamp': None,
+        'prev_dy': None,
+        'release_detected_ever': False,
+        'bounce_detected_ever': False,
+        'reach_detected_ever': False,
+    }
 
 
 def estimate_speed_kmh(start_center, end_center, dt_seconds, meters_per_pixel):
@@ -3727,7 +3783,7 @@ def api_health():
 @app.route('/api/ball-speed/frame', methods=['POST'])
 @require_auth
 def api_ball_speed_frame():
-    """Process one frame and return live/smoothed ball speed for a session."""
+    """Process one frame: timing-based speed (release → reach) plus legacy rolling estimate."""
     try:
         data = request.get_json(silent=True) or {}
         session_id = (data.get('session_id') or '').strip()
@@ -3746,6 +3802,15 @@ def api_ball_speed_frame():
         if meters_per_pixel <= 0:
             return jsonify({'success': False, 'error': 'Invalid calibration value'}), 400
 
+        raw_ts = data.get('timestamp')
+        try:
+            if raw_ts is not None:
+                timestamp_ms = float(raw_ts)
+            else:
+                timestamp_ms = time.time() * 1000.0
+        except (TypeError, ValueError):
+            timestamp_ms = time.time() * 1000.0
+
         # Strip data URL prefix if provided
         if isinstance(image_base64, str) and image_base64.startswith('data:image'):
             image_base64 = image_base64.split(',', 1)[1]
@@ -3760,73 +3825,168 @@ def api_ball_speed_frame():
         if frame_bgr is None:
             return jsonify({'success': False, 'error': 'Failed to decode image frame'}), 400
 
+        _frame_h, frame_w = frame_bgr.shape[:2]
+        ratio = float(data.get('striker_zone_x_ratio', BALL_SPEED_DEFAULT_STRIKER_X_RATIO))
+        batsman_x = data.get('batsman_x')
+        if batsman_x is not None:
+            try:
+                batsman_x = float(batsman_x)
+            except (TypeError, ValueError):
+                batsman_x = float(frame_w) * ratio
+        else:
+            batsman_x = float(frame_w) * ratio
+        popping_crease_x = data.get('popping_crease_x')
+        if popping_crease_x is not None:
+            try:
+                popping_crease_x = float(popping_crease_x)
+            except (TypeError, ValueError):
+                popping_crease_x = None
+
         user_id = request.user['user_id']
         now = time.time()
+        measured_center, det_conf = _detect_ball_center(frame_bgr, confidence=confidence)
 
+        stale_before = now - 120.0
         with BALL_SPEED_SESSION_LOCK:
             session = BALL_SPEED_SESSIONS.get(session_id)
             if session is None or session.get('user_id') != user_id:
-                session = {
-                    'user_id': user_id,
-                    'tracker': BallKalmanTracker(),
-                    'tracked_history': deque(maxlen=6),
-                    'speed_buffer': deque(maxlen=6),
-                    'first_tracked': None,
-                    'last_tracked': None,
-                    'total_frames': 0,
-                    'detected_frames': 0,
-                    'last_seen': now,
-                }
+                session = _ball_speed_new_session_dict(user_id, now)
                 BALL_SPEED_SESSIONS[session_id] = session
             else:
                 session['last_seen'] = now
-                session['total_frames'] = int(session.get('total_frames', 0))
-                session['detected_frames'] = int(session.get('detected_frames', 0))
 
-        session['total_frames'] += 1
+            for key in (
+                'release_timestamp', 'reach_timestamp', 'bounce_timestamp', 'speed_samples',
+                'prev_ball_center', 'prev_ball_timestamp', 'prev_dy',
+                'release_detected_ever', 'bounce_detected_ever', 'reach_detected_ever',
+            ):
+                if key not in session:
+                    if key == 'speed_samples':
+                        session[key] = []
+                    elif key in ('release_detected_ever', 'bounce_detected_ever', 'reach_detected_ever'):
+                        session[key] = False
+                    else:
+                        session[key] = None
 
-        measured_center, det_conf = _detect_ball_center(frame_bgr, confidence=confidence)
-        tracker_center = session['tracker'].update(measured_center)
-        current_speed_kmh = 0.0
+            session['total_frames'] = int(session.get('total_frames', 0)) + 1
 
-        if tracker_center is not None:
-            session['detected_frames'] += 1
-            session['tracked_history'].append((float(tracker_center[0]), float(tracker_center[1]), now))
-            if session.get('first_tracked') is None:
-                session['first_tracked'] = (float(tracker_center[0]), float(tracker_center[1]), now)
-            session['last_tracked'] = (float(tracker_center[0]), float(tracker_center[1]), now)
+            tracker_center = session['tracker'].update(measured_center)
+            center = tracker_center if tracker_center is not None else measured_center
 
-        if len(session['tracked_history']) >= 6:
-            start = session['tracked_history'][0]
-            end = session['tracked_history'][-1]
-            dt_seconds = float(end[2] - start[2])
-            current_speed_kmh = estimate_speed_kmh(
-                start_center=(start[0], start[1]),
-                end_center=(end[0], end[1]),
-                dt_seconds=dt_seconds,
-                meters_per_pixel=meters_per_pixel,
-            )
-            if current_speed_kmh > 0:
-                session['speed_buffer'].append(current_speed_kmh)
+            legacy_now = now
+            pixel_speed_kmh = 0.0
+            if tracker_center is not None:
+                session['detected_frames'] = int(session.get('detected_frames', 0)) + 1
+                session['tracked_history'].append(
+                    (float(tracker_center[0]), float(tracker_center[1]), legacy_now)
+                )
+                if session.get('first_tracked') is None:
+                    session['first_tracked'] = (
+                        float(tracker_center[0]), float(tracker_center[1]), legacy_now
+                    )
+                session['last_tracked'] = (
+                    float(tracker_center[0]), float(tracker_center[1]), legacy_now
+                )
 
-        avg_speed_kmh = float(np.mean(session['speed_buffer'])) if session['speed_buffer'] else 0.0
+            if len(session['tracked_history']) >= 6:
+                start = session['tracked_history'][0]
+                end = session['tracked_history'][-1]
+                dt_seconds = float(end[2] - start[2])
+                pixel_speed_kmh = estimate_speed_kmh(
+                    start_center=(start[0], start[1]),
+                    end_center=(end[0], end[1]),
+                    dt_seconds=dt_seconds,
+                    meters_per_pixel=meters_per_pixel,
+                )
+                if pixel_speed_kmh > 0:
+                    session['speed_buffer'].append(pixel_speed_kmh)
 
-        # Cleanup stale sessions opportunistically
-        stale_before = now - 120.0
-        with BALL_SPEED_SESSION_LOCK:
-            stale_keys = [sid for sid, s in BALL_SPEED_SESSIONS.items() if s.get('last_seen', 0) < stale_before]
+            if center is not None:
+                x, y = float(center[0]), float(center[1])
+                prev = session.get('prev_ball_center')
+                prev_dy_stored = session.get('prev_dy')
+
+                if prev is not None:
+                    px, py = float(prev[0]), float(prev[1])
+                    velocity_pixels = float(np.hypot(x - px, y - py))
+                    if session.get('release_timestamp') is None and velocity_pixels > BALL_SPEED_RELEASE_THRESHOLD_PX:
+                        session['release_timestamp'] = timestamp_ms
+                        session['release_detected_ever'] = True
+
+                    dy_curr = y - py
+                    if (
+                        session.get('bounce_timestamp') is None
+                        and prev_dy_stored is not None
+                        and prev_dy_stored < 0
+                        and dy_curr > 0
+                    ):
+                        session['bounce_timestamp'] = timestamp_ms
+                        session['bounce_detected_ever'] = True
+                else:
+                    dy_curr = None
+
+                if session.get('release_timestamp') is not None and session.get('reach_timestamp') is None:
+                    reach_hit = x >= batsman_x
+                    if popping_crease_x is not None and x >= popping_crease_x:
+                        reach_hit = True
+                    if reach_hit:
+                        session['reach_timestamp'] = timestamp_ms
+                        session['reach_detected_ever'] = True
+
+                if session.get('release_timestamp') is not None and session.get('reach_timestamp') is not None:
+                    dt_ms = float(session['reach_timestamp'] - session['release_timestamp'])
+                    if dt_ms > 0:
+                        dt_s = dt_ms / 1000.0
+                        speed_mps = BALL_SPEED_BOWL_DISTANCE_M / dt_s
+                        speed_kmh_sample = speed_mps * 3.6
+                        if _ball_speed_valid_sample_kmh(speed_kmh_sample):
+                            session['speed_samples'].append(speed_kmh_sample)
+                    _ball_speed_reset_delivery_timestamps(session)
+
+                session['prev_ball_center'] = (x, y)
+                session['prev_ball_timestamp'] = timestamp_ms
+                if prev is not None and dy_curr is not None:
+                    session['prev_dy'] = dy_curr
+
+            stale_keys = [
+                sid for sid, s in BALL_SPEED_SESSIONS.items()
+                if sid != session_id and s.get('last_seen', 0) < stale_before
+            ]
             for sid in stale_keys:
                 BALL_SPEED_SESSIONS.pop(sid, None)
+
+            samples = session.get('speed_samples') or []
+            valid_samples = [s for s in samples if _ball_speed_valid_sample_kmh(s)]
+            timing_median_kmh = float(np.median(valid_samples)) if valid_samples else 0.0
+
+            total_frames = int(session.get('total_frames', 0))
+            detected_frames = int(session.get('detected_frames', 0))
+
+            avg_pixel_speed_kmh = float(np.mean(session['speed_buffer'])) if session['speed_buffer'] else 0.0
+
+            release_flag = bool(
+                session.get('release_timestamp') is not None or session.get('release_detected_ever')
+            )
+            bounce_flag = bool(
+                session.get('bounce_timestamp') is not None or session.get('bounce_detected_ever')
+            )
+            reach_flag = bool(
+                session.get('reach_timestamp') is not None or session.get('reach_detected_ever')
+            )
 
         return jsonify({
             'success': True,
             'session_id': session_id,
             'detected': measured_center is not None,
             'detection_confidence': float(det_conf),
-            'current_speed_kmh': float(current_speed_kmh),
-            'smoothed_speed_kmh': float(avg_speed_kmh),
-            'total_frames': int(session.get('total_frames', 0)),
-            'detected_frames': int(session.get('detected_frames', 0)),
+            'speed_kmh': float(timing_median_kmh),
+            'release_detected': release_flag,
+            'bounce_detected': bounce_flag,
+            'reach_detected': reach_flag,
+            'current_speed_kmh': float(pixel_speed_kmh),
+            'smoothed_speed_kmh': float(avg_pixel_speed_kmh),
+            'total_frames': total_frames,
+            'detected_frames': detected_frames,
             'meters_per_pixel': float(meters_per_pixel),
         })
     except Exception as e:
@@ -3852,17 +4012,7 @@ def api_ball_speed_start_session():
             if existing and existing.get('user_id') != user_id:
                 return jsonify({'success': False, 'error': 'Session belongs to another user'}), 403
 
-            BALL_SPEED_SESSIONS[session_id] = {
-                'user_id': user_id,
-                'tracker': BallKalmanTracker(),
-                'tracked_history': deque(maxlen=6),
-                'speed_buffer': deque(maxlen=6),
-                'first_tracked': None,
-                'last_tracked': None,
-                'total_frames': 0,
-                'detected_frames': 0,
-                'last_seen': now,
-            }
+            BALL_SPEED_SESSIONS[session_id] = _ball_speed_new_session_dict(user_id, now)
 
         return jsonify({'success': True, 'session_id': session_id})
     except Exception as e:
@@ -3897,7 +4047,7 @@ def api_ball_speed_end_session(session_id):
 @app.route('/api/ball-speed/session/<session_id>/finalize', methods=['POST'])
 @require_auth
 def api_ball_speed_finalize_session(session_id):
-    """Compute one final speed over the full tracked session (first tracked -> last tracked)."""
+    """Finalize session: median timing-based speed, bounce fallback, then clear timing state."""
     try:
         data = request.get_json(silent=True) or {}
         pitch_pixel_length = float(data.get('pitch_pixel_length') or 0.0)
@@ -3913,39 +4063,77 @@ def api_ball_speed_finalize_session(session_id):
             if not session or session.get('user_id') != user_id:
                 return jsonify({'success': False, 'error': 'Session not found'}), 404
 
-            first = session.get('first_tracked')
-            last = session.get('last_tracked')
             total_frames = int(session.get('total_frames', 0))
             detected_frames = int(session.get('detected_frames', 0))
 
-        if first is None or last is None:
-            return jsonify({
-                'success': False,
-                'error': 'Insufficient tracking data. Ball was not detected.',
-                'total_frames': total_frames,
-                'detected_frames': detected_frames,
-            }), 400
+            samples = list(session.get('speed_samples') or [])
+            valid_samples = [s for s in samples if _ball_speed_valid_sample_kmh(s)]
+            release_ts = session.get('release_timestamp')
+            reach_ts = session.get('reach_timestamp')
+            bounce_ts = session.get('bounce_timestamp')
 
-        dt_seconds = float(last[2] - first[2])
-        final_speed_kmh = estimate_speed_kmh(
-            start_center=(first[0], first[1]),
-            end_center=(last[0], last[1]),
-            dt_seconds=dt_seconds,
-            meters_per_pixel=meters_per_pixel,
-        )
+            release_ever = bool(session.get('release_detected_ever'))
+            bounce_ever = bool(session.get('bounce_detected_ever'))
+            reach_ever = bool(session.get('reach_detected_ever'))
+
+            final_speed_kmh = 0.0
+            duration_seconds = 0.0
+            used_fallback = False
+
+            if valid_samples:
+                final_speed_kmh = float(np.median(valid_samples))
+                if release_ts is not None and reach_ts is not None:
+                    duration_seconds = max(0.0, (float(reach_ts) - float(release_ts)) / 1000.0)
+            elif (
+                bounce_ts is not None
+                and reach_ts is None
+                and release_ts is not None
+            ):
+                dt_ms = float(bounce_ts) - float(release_ts)
+                if dt_ms > 0:
+                    dt_s = dt_ms / 1000.0
+                    raw_kmh = (BALL_SPEED_BOUNCE_DISTANCE_M / dt_s) * 3.6
+                    candidate = raw_kmh * BALL_SPEED_BOUNCE_FALLBACK_SCALE
+                    if _ball_speed_valid_sample_kmh(candidate):
+                        final_speed_kmh = float(candidate)
+                        duration_seconds = dt_s
+                        used_fallback = True
+
+            release_detected = bool(release_ts is not None or release_ever or len(valid_samples) > 0)
+            bounce_detected = bool(bounce_ts is not None or bounce_ever)
+            reach_detected = bool(reach_ts is not None or reach_ever or len(valid_samples) > 0)
+
+            insufficient = (
+                detected_frames <= 0
+                and len(valid_samples) == 0
+                and final_speed_kmh <= 0
+            )
+            if insufficient:
+                return jsonify({
+                    'success': False,
+                    'error': 'Insufficient tracking data. Ball was not detected.',
+                    'total_frames': total_frames,
+                    'detected_frames': detected_frames,
+                }), 400
+
+            _ball_speed_reset_session_timing(session)
 
         return jsonify({
             'success': True,
             'session_id': session_id,
+            'speed_kmh': float(final_speed_kmh),
             'final_speed_kmh': float(final_speed_kmh),
-            'duration_seconds': float(max(0.0, dt_seconds)),
+            'release_detected': release_detected,
+            'bounce_detected': bounce_detected,
+            'reach_detected': reach_detected,
+            'duration_seconds': float(duration_seconds),
             'total_frames': total_frames,
             'detected_frames': detected_frames,
             'meters_per_pixel': float(meters_per_pixel),
+            'used_bounce_fallback': used_fallback,
             'debug': {
-                'has_first': first is not None,
-                'has_last': last is not None,
-                'dt_seconds': float(dt_seconds),
+                'valid_sample_count': len(valid_samples),
+                'used_bounce_fallback': used_fallback,
             }
         })
     except Exception as e:

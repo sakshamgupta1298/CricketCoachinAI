@@ -80,6 +80,7 @@ export default function BallSpeedScreen() {
       const response = await apiService.processBallSpeedFrame({
         session_id: sessionIdRef.current,
         image_base64: frame.base64,
+        timestamp: Date.now(),
         meters_per_pixel: metersPerPixel,
         pitch_pixel_length: Number(pitchPixelLengthInput) || 0,
         confidence: 0.25,

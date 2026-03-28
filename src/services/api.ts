@@ -879,9 +879,14 @@ class ApiService {
   async processBallSpeedFrame(payload: {
     session_id: string;
     image_base64: string;
+    /** Client monotonic clock ms (e.g. Date.now()) — used for release→reach timing. */
+    timestamp?: number;
     meters_per_pixel?: number;
     pitch_pixel_length?: number;
     confidence?: number;
+    batsman_x?: number;
+    popping_crease_x?: number;
+    striker_zone_x_ratio?: number;
   }): Promise<ApiResponse<any>> {
     try {
       const response = await this.jsonApi.post('/api/ball-speed/frame', payload, {
