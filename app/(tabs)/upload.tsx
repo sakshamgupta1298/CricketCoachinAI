@@ -505,6 +505,28 @@ export default function UploadScreen() {
           </Animated.View>
         )}
 
+        {/* Ball Speed - Only for Bowler */}
+        {playerType === 'bowler' && (
+          <Animated.View entering={FadeInUp.delay(450).springify()}>
+            <PremiumCard variant="elevated" padding="large" style={styles.card}>
+              <Text style={[styles.cardTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(17) }]}>
+                Ball Speed
+              </Text>
+              <Text style={[styles.cardSubtitle, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(12) }]}>
+                Open speed checker and track bowling speed in real-time.
+              </Text>
+
+              <PremiumButton
+                title="Check Ball Speed"
+                onPress={() => router.push('/ball-speed' as any)}
+                variant="primary"
+                size="large"
+                fullWidth
+              />
+            </PremiumCard>
+          </Animated.View>
+        )}
+
         {/* Keeping Type Selection */}
         {playerType === 'keeper' && (
           <Animated.View entering={FadeInUp.delay(400).springify()}>
