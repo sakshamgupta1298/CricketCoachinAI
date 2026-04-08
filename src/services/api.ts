@@ -3,7 +3,7 @@ import axios, { AxiosInstance } from 'axios';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 import { currentConfig } from '../../config';
-import { AnalysisResult, ApiResponse, JobStatusResponse, UploadFormData, UploadJobResponse } from '../types';
+import { AnalysisResult, ApiResponse, Entitlements, JobStatusResponse, PlanId, RazorpayCreateOrderResponse, UploadFormData, UploadJobResponse } from '../types';
 
 class ApiService {
   private api: AxiosInstance;
@@ -1942,6 +1942,66 @@ class ApiService {
       return {
         success: false,
         error: error.response?.data?.message || error.message,
+      };
+    }
+  }
+
+  // ===== Entitlements / Plans / Payments =====
+  async getEntitlements(): Promise<ApiResponse<Entitlements>> {
+    try {
+      const response = await this.jsonApi.get('/api/me/entitlements');
+      if (response.status !== 200) {
+        return {
+          success: false,
+          error: response.data?.error || response.data?.message || `Failed to load entitlements (${response.status})`,
+        };
+      }
+      return { success: true, data: response.data?.entitlements };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message,
+      };
+    }
+  }
+
+  async createRazorpayOrder(planId: PlanId): Promise<ApiResponse<RazorpayCreateOrderResponse>> {
+    try {
+      const response = await this.jsonApi.post('/api/payments/razorpay/create-order', { plan_id: planId });
+      if (response.status !== 200) {
+        return {
+          success: false,
+          error: response.data?.error || response.data?.message || `Failed to create order (${response.status})`,
+        };
+      }
+      return { success: true, data: response.data };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message,
+      };
+    }
+  }
+
+  async verifyRazorpayPayment(input: {
+    plan_id: PlanId;
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+  }): Promise<ApiResponse<{ entitlements: Entitlements }>> {
+    try {
+      const response = await this.jsonApi.post('/api/payments/razorpay/verify', input);
+      if (response.status !== 200) {
+        return {
+          success: false,
+          error: response.data?.error || response.data?.message || `Payment verification failed (${response.status})`,
+        };
+      }
+      return { success: true, data: response.data };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message,
       };
     }
   }

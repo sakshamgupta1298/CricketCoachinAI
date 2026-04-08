@@ -19,7 +19,9 @@ const config = {
     // Alternative (direct backend): 'https://api.crickcoachai.com:3000'
     API_BASE_URL: 'https://api.crickcoachai.com',
     API_TIMEOUT: 600000, // 10 minutes for video uploads and processing
-    GOOGLE_TRANSLATE_API_KEY: "AIzaSyCu_IwIOUfT8L0Dv6YZSv4hgLljSgnaLyc"
+    GOOGLE_TRANSLATE_API_KEY: "AIzaSyCu_IwIOUfT8L0Dv6YZSv4hgLljSgnaLyc",
+    // Public Razorpay key id (safe to ship in the app). Set this to your Razorpay Key ID.
+    RAZORPAY_KEY_ID: ""
   },
   
   // Production configuration
@@ -31,7 +33,8 @@ const config = {
     // Alternative (direct backend): 'https://api.crickcoachai.com:3000'
     API_BASE_URL: 'https://api.crickcoachai.com',
     API_TIMEOUT: 600000, // 10 minutes for video uploads and processing
-    GOOGLE_TRANSLATE_API_KEY: "AIzaSyCu_IwIOUfT8L0Dv6YZSv4hgLljSgnaLyc"
+    GOOGLE_TRANSLATE_API_KEY: "AIzaSyCu_IwIOUfT8L0Dv6YZSv4hgLljSgnaLyc",
+    RAZORPAY_KEY_ID: ""
   },
   
   // Test configuration
@@ -40,7 +43,8 @@ const config = {
     // Using Nginx proxy on port 80
     API_BASE_URL: 'https://api.crickcoachai.com',
     API_TIMEOUT: 600000, // 10 minutes for video uploads and processing
-    GOOGLE_TRANSLATE_API_KEY: "AIzaSyCu_IwIOUfT8L0Dv6YZSv4hgLljSgnaLyc"
+    GOOGLE_TRANSLATE_API_KEY: "AIzaSyCu_IwIOUfT8L0Dv6YZSv4hgLljSgnaLyc",
+    RAZORPAY_KEY_ID: ""
   }
 };
 

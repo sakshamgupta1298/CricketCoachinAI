@@ -93,6 +93,8 @@ export default function ProfileScreen() {
   const handleAccountAction = (action: string) => {
     if (action === 'Change Password') {
       router.push('/change-password');
+    } else if (action === 'Plans & Billing') {
+      router.push('/plans' as any);
     } else if (action === 'Privacy Policy') {
       router.push('/privacy-policy');
     } else if (action === 'AI Data Sharing') {
@@ -361,6 +363,11 @@ export default function ProfileScreen() {
           Account Actions
             </Text>
         <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+          <ActionItem
+            icon="💳"
+            label="Plans & Billing"
+            onPress={() => handleAccountAction('Plans & Billing')}
+          />
           <ActionItem
             icon="🔒"
             label="Change Password"

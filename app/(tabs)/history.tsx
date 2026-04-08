@@ -1,15 +1,17 @@
 import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, FlatList, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { ActivityIndicator, Card, Chip, Searchbar, Surface, Text, useTheme } from 'react-native-paper';
 import Toast from 'react-native-toast-message';
 import apiService from '../../src/services/api';
+import { useEntitlements } from '../../src/context/EntitlementsContext';
 import { borderRadius, colors, shadows, spacing } from '../../src/theme';
 import { HistoryItem } from '../../src/types';
 import { getResponsiveFontSize, getResponsiveSize } from '../../src/utils/responsive';
 
 export default function HistoryScreen() {
   const theme = useTheme();
+  const { entitlements } = useEntitlements();
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [filteredHistory, setFilteredHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -290,11 +292,27 @@ export default function HistoryScreen() {
           {/* Compare Button */}
           <View style={styles.compareButtonContainer}>
             <TouchableOpacity
-              style={[styles.compareButton, { backgroundColor: theme.colors.primary }]}
-              onPress={() => router.push('/compare')}
+              style={[
+                styles.compareButton,
+                { backgroundColor: entitlements.feature_compare ? theme.colors.primary : '#CCCCCC' },
+              ]}
+              onPress={() => {
+                if (!entitlements.feature_compare) {
+                  Alert.alert(
+                    'Upgrade required',
+                    'Comparing performance is available in Plan 2 (and above).',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'View plans', onPress: () => router.push('/plans' as any) },
+                    ]
+                  );
+                  return;
+                }
+                router.push('/compare');
+              }}
             >
               <Text style={[styles.compareButtonText, { fontSize: getResponsiveFontSize(16) }]}>
-                Compare Videos
+                {entitlements.feature_compare ? 'Compare Videos' : 'Compare (Plan 2+)'}
               </Text>
             </TouchableOpacity>
           </View>

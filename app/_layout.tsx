@@ -10,6 +10,7 @@ import React from 'react';
 
 // Import context
 import { AuthProvider } from '../src/context/AuthContext';
+import { EntitlementsProvider } from '../src/context/EntitlementsContext';
 import { UploadProvider } from '../src/context/UploadContext';
 
 // Import theme
@@ -32,14 +33,15 @@ function ThemedApp() {
   return (
     <PaperProvider theme={theme}>
       <AuthProvider>
-        <UploadProvider>
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: theme.colors.background },
-            }}
-            initialRouteName="splash"
-          >
+        <EntitlementsProvider>
+          <UploadProvider>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: theme.colors.background },
+              }}
+              initialRouteName="splash"
+            >
             <Stack.Screen 
               name="splash" 
               options={{ 
@@ -131,7 +133,8 @@ function ThemedApp() {
           </Stack>
           <Toast />
           <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-        </UploadProvider>
+          </UploadProvider>
+        </EntitlementsProvider>
       </AuthProvider>
     </PaperProvider>
   );

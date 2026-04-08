@@ -34,6 +34,13 @@ import random
 import string
 import subprocess
 import shutil
+import hmac
+import hashlib
+
+try:
+    import razorpay
+except Exception:
+    razorpay = None
 
 # ==================== LOGGING CONFIGURATION ====================
 # Create logging directory if it doesn't exist
@@ -111,6 +118,49 @@ def init_database():
         cursor.execute('ALTER TABLE users ADD COLUMN apple_id TEXT')
     except sqlite3.OperationalError:
         pass  # Column already exists
+
+    # Entitlements (analysis credits + feature flags)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_entitlements (
+            user_id INTEGER PRIMARY KEY,
+            analysis_credits_remaining INTEGER NOT NULL DEFAULT 20,
+            feature_compare INTEGER NOT NULL DEFAULT 0,
+            feature_ball_speed INTEGER NOT NULL DEFAULT 0,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    ''')
+
+    # Razorpay orders/payments
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS razorpay_transactions (
+            order_id TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            plan_id TEXT NOT NULL,
+            amount_paise INTEGER NOT NULL,
+            currency TEXT NOT NULL DEFAULT 'INR',
+            status TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            verified_at TIMESTAMP,
+            payment_id TEXT,
+            signature TEXT,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    ''')
+
+    # Backfill entitlements rows for existing users (idempotent)
+    try:
+        cursor.execute('SELECT id FROM users')
+        rows = cursor.fetchall() or []
+        for r in rows:
+            uid = r[0]
+            cursor.execute(
+                'INSERT OR IGNORE INTO user_entitlements (user_id, analysis_credits_remaining, feature_compare, feature_ball_speed) VALUES (?, 20, 0, 0)',
+                (uid,)
+            )
+    except Exception as e:
+        logger.warning(f"Entitlements backfill skipped: {e}")
+
     conn.commit()
     conn.close()
     logger.info("Database initialized successfully")
@@ -120,6 +170,115 @@ def get_db_connection():
     conn = sqlite3.connect(DATABASE_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+# ==================== SUBSCRIPTION / ENTITLEMENTS ====================
+PLAN_DEFINITIONS = {
+    "plan1": {"price_inr": 199, "amount_paise": 199 * 100, "analysis_credits": 40, "feature_compare": 0, "feature_ball_speed": 0},
+    "plan2": {"price_inr": 299, "amount_paise": 299 * 100, "analysis_credits": 100, "feature_compare": 1, "feature_ball_speed": 0},
+    "plan3": {"price_inr": 399, "amount_paise": 399 * 100, "analysis_credits": 210, "feature_compare": 1, "feature_ball_speed": 1},
+}
+
+
+def _ensure_entitlements_row(conn, user_id: int):
+    cur = conn.cursor()
+    cur.execute(
+        'INSERT OR IGNORE INTO user_entitlements (user_id, analysis_credits_remaining, feature_compare, feature_ball_speed) VALUES (?, 20, 0, 0)',
+        (user_id,)
+    )
+
+
+def get_entitlements(user_id: int):
+    conn = get_db_connection()
+    try:
+        _ensure_entitlements_row(conn, user_id)
+        cur = conn.cursor()
+        cur.execute('SELECT analysis_credits_remaining, feature_compare, feature_ball_speed FROM user_entitlements WHERE user_id = ?', (user_id,))
+        row = cur.fetchone()
+        if not row:
+            return {"analysis_credits_remaining": 0, "feature_compare": False, "feature_ball_speed": False}
+        return {
+            "analysis_credits_remaining": int(row["analysis_credits_remaining"] or 0),
+            "feature_compare": bool(row["feature_compare"]),
+            "feature_ball_speed": bool(row["feature_ball_speed"]),
+        }
+    finally:
+        conn.close()
+
+
+def consume_one_analysis_credit(user_id: int) -> (bool, dict):
+    """Atomically consume 1 analysis credit. Returns (ok, entitlements_after)."""
+    conn = get_db_connection()
+    try:
+        _ensure_entitlements_row(conn, user_id)
+        cur = conn.cursor()
+        cur.execute('BEGIN IMMEDIATE')
+        cur.execute('SELECT analysis_credits_remaining, feature_compare, feature_ball_speed FROM user_entitlements WHERE user_id = ?', (user_id,))
+        row = cur.fetchone()
+        remaining = int(row["analysis_credits_remaining"] or 0) if row else 0
+        if remaining <= 0:
+            conn.rollback()
+            return False, {
+                "analysis_credits_remaining": remaining,
+                "feature_compare": bool(row["feature_compare"]) if row else False,
+                "feature_ball_speed": bool(row["feature_ball_speed"]) if row else False,
+            }
+
+        new_remaining = remaining - 1
+        cur.execute(
+            'UPDATE user_entitlements SET analysis_credits_remaining = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
+            (new_remaining, user_id)
+        )
+        conn.commit()
+        return True, {
+            "analysis_credits_remaining": new_remaining,
+            "feature_compare": bool(row["feature_compare"]),
+            "feature_ball_speed": bool(row["feature_ball_speed"]),
+        }
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        logger.error(f"Failed to consume credit for user {user_id}: {e}", exc_info=True)
+        return False, get_entitlements(user_id)
+    finally:
+        conn.close()
+
+
+def apply_plan_purchase(user_id: int, plan_id: str) -> dict:
+    plan = PLAN_DEFINITIONS.get(plan_id)
+    if not plan:
+        raise ValueError("Invalid plan_id")
+    conn = get_db_connection()
+    try:
+        _ensure_entitlements_row(conn, user_id)
+        cur = conn.cursor()
+        cur.execute('BEGIN IMMEDIATE')
+        cur.execute('SELECT analysis_credits_remaining, feature_compare, feature_ball_speed FROM user_entitlements WHERE user_id = ?', (user_id,))
+        row = cur.fetchone()
+        remaining = int(row["analysis_credits_remaining"] or 0) if row else 0
+        feature_compare = max(int(row["feature_compare"] or 0), int(plan["feature_compare"]))
+        feature_ball_speed = max(int(row["feature_ball_speed"] or 0), int(plan["feature_ball_speed"]))
+        new_remaining = remaining + int(plan["analysis_credits"])
+        cur.execute(
+            'UPDATE user_entitlements SET analysis_credits_remaining = ?, feature_compare = ?, feature_ball_speed = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
+            (new_remaining, feature_compare, feature_ball_speed, user_id)
+        )
+        conn.commit()
+        return {
+            "analysis_credits_remaining": new_remaining,
+            "feature_compare": bool(feature_compare),
+            "feature_ball_speed": bool(feature_ball_speed),
+        }
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
+    finally:
+        conn.close()
 
 def normalize_feature(name: str) -> str:
     return name.lower().strip()
@@ -3345,19 +3504,27 @@ def api_upload_file():
         return jsonify({'error': 'No video file selected'}), 400
     
     if file and allowed_file(file.filename):
+        # Validate required form fields before consuming credit (fail fast)
+        if player_type == 'batsman':
+            shot_type = request.form.get('shot_type', '').strip()
+            if not shot_type:
+                logger.warning("Shot type not provided by user")
+                return jsonify({'error': 'Shot type is required. Please select a shot type.'}), 400
+
+        # Enforce quota: first 20 analyses are free, then user must buy credits.
+        ok, ent_after = consume_one_analysis_credit(int(user_id))
+        if not ok:
+            return jsonify({
+                "error": "Free limit reached. Please purchase a plan to continue analysis.",
+                "entitlements": ent_after,
+            }), 402
+
         filename = secure_filename(file.filename)
         
         # Get user's upload folder and save file there
         user_folder = get_user_upload_folder(user_id)
         filepath = os.path.join(user_folder, filename)
         file.save(filepath)
-        
-        # Validate required form fields before enqueueing (so we can fail fast)
-        if player_type == 'batsman':
-            shot_type = request.form.get('shot_type', '').strip()
-            if not shot_type:
-                logger.warning("Shot type not provided by user")
-                return jsonify({'error': 'Shot type is required. Please select a shot type.'}), 400
                 
         expo_push_token = request.form.get('expo_push_token') or request.form.get('push_token')
         job_id = uuid.uuid4().hex
@@ -3590,6 +3757,135 @@ def api_health():
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
     response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
     return response
+
+
+@app.route('/api/me/entitlements', methods=['GET'])
+@require_auth
+def me_entitlements():
+    """Return current user's analysis credits and feature flags."""
+    try:
+        user_id = int(request.user['user_id'])
+        ent = get_entitlements(user_id)
+        return jsonify({"success": True, "entitlements": ent})
+    except Exception as e:
+        logger.error(f"Failed to get entitlements: {e}", exc_info=True)
+        return jsonify({"success": False, "error": "Failed to load entitlements"}), 500
+
+
+def _get_razorpay_client():
+    key_id = os.environ.get("RAZORPAY_KEY_ID", "").strip()
+    key_secret = os.environ.get("RAZORPAY_KEY_SECRET", "").strip()
+    if not key_id or not key_secret:
+        raise RuntimeError("Razorpay keys not configured")
+    if razorpay is None:
+        raise RuntimeError("razorpay Python SDK is not installed")
+    return razorpay.Client(auth=(key_id, key_secret)), key_id, key_secret
+
+
+@app.route('/api/payments/razorpay/create-order', methods=['POST'])
+@require_auth
+def razorpay_create_order():
+    """Create a Razorpay order for a plan purchase."""
+    try:
+        user_id = int(request.user['user_id'])
+        data = request.get_json(silent=True) or {}
+        plan_id = (data.get("plan_id") or "").strip()
+        if plan_id not in PLAN_DEFINITIONS:
+            return jsonify({"error": "Invalid plan_id"}), 400
+
+        plan = PLAN_DEFINITIONS[plan_id]
+        client, key_id, _secret = _get_razorpay_client()
+
+        order = client.order.create({
+            "amount": int(plan["amount_paise"]),
+            "currency": "INR",
+            "payment_capture": 1,
+            "notes": {
+                "user_id": str(user_id),
+                "plan_id": plan_id,
+            }
+        })
+
+        order_id = order.get("id")
+        if not order_id:
+            raise RuntimeError("Razorpay order creation failed")
+
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                'INSERT OR REPLACE INTO razorpay_transactions (order_id, user_id, plan_id, amount_paise, currency, status) VALUES (?, ?, ?, ?, ?, ?)',
+                (order_id, user_id, plan_id, int(plan["amount_paise"]), "INR", "created")
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        return jsonify({
+            "order_id": order_id,
+            "amount": int(plan["amount_paise"]),
+            "currency": "INR",
+            "key_id": key_id,
+            "plan_id": plan_id,
+        })
+    except Exception as e:
+        logger.error(f"Create order failed: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/payments/razorpay/verify', methods=['POST'])
+@require_auth
+def razorpay_verify_payment():
+    """Verify Razorpay payment signature and apply plan entitlements."""
+    try:
+        user_id = int(request.user['user_id'])
+        data = request.get_json(silent=True) or {}
+        plan_id = (data.get("plan_id") or "").strip()
+        order_id = (data.get("razorpay_order_id") or "").strip()
+        payment_id = (data.get("razorpay_payment_id") or "").strip()
+        signature = (data.get("razorpay_signature") or "").strip()
+
+        if plan_id not in PLAN_DEFINITIONS:
+            return jsonify({"error": "Invalid plan_id"}), 400
+        if not order_id or not payment_id or not signature:
+            return jsonify({"error": "Missing payment fields"}), 400
+
+        _client, _key_id, key_secret = _get_razorpay_client()
+
+        # Verify signature: HMAC_SHA256(order_id|payment_id, key_secret)
+        payload = f"{order_id}|{payment_id}".encode("utf-8")
+        expected = hmac.new(key_secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected, signature):
+            return jsonify({"error": "Invalid payment signature"}), 400
+
+        # Ensure order belongs to this user and is not already verified
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute('SELECT user_id, plan_id, status FROM razorpay_transactions WHERE order_id = ?', (order_id,))
+            row = cur.fetchone()
+            if not row:
+                return jsonify({"error": "Order not found"}), 404
+            if int(row["user_id"]) != user_id:
+                return jsonify({"error": "Access denied"}), 403
+            if row["status"] == "verified":
+                ent = get_entitlements(user_id)
+                return jsonify({"success": True, "entitlements": ent})
+
+            # Mark verified
+            cur.execute(
+                'UPDATE razorpay_transactions SET status = ?, verified_at = CURRENT_TIMESTAMP, payment_id = ?, signature = ? WHERE order_id = ?',
+                ("verified", payment_id, signature, order_id)
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        ent = apply_plan_purchase(user_id, plan_id)
+        return jsonify({"success": True, "entitlements": ent})
+    except Exception as e:
+        logger.error(f"Verify payment failed: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route('/api/history', methods=['GET'])
@@ -4009,6 +4305,13 @@ def compare_videos():
     try:
         user_id = request.user['user_id']
         username = request.user['username']
+
+        ent = get_entitlements(int(user_id))
+        if not ent.get("feature_compare"):
+            return jsonify({
+                'error': 'Compare is locked. Please upgrade to Plan 2 (or above).',
+                'entitlements': ent
+            }), 402
         
         data = request.get_json()
         filename1 = data.get('filename1')

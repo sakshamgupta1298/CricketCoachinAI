@@ -34,6 +34,7 @@ sqlite3
 python-dotenv
 requests
 Pillow
+razorpay
 
 # Development and testing (optional)
 pytest
