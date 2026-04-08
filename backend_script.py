@@ -3773,8 +3773,8 @@ def me_entitlements():
 
 
 def _get_razorpay_client():
-    key_id = os.environ.get("RAZORPAY_KEY_ID", "").strip()
-    key_secret = os.environ.get("RAZORPAY_KEY_SECRET", "").strip()
+    key_id = "rzp_test_Sb5yJF2AjR63PO"
+    key_secret = "V78s4WUtReKfFgBpO9M1NWG1"
     if not key_id or not key_secret:
         raise RuntimeError("Razorpay keys not configured")
     if razorpay is None:
