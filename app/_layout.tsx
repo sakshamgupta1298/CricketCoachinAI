@@ -10,7 +10,6 @@ import React from 'react';
 
 // Import context
 import { AuthProvider } from '../src/context/AuthContext';
-import { EntitlementsProvider } from '../src/context/EntitlementsContext';
 import { UploadProvider } from '../src/context/UploadContext';
 
 // Import theme
@@ -33,108 +32,106 @@ function ThemedApp() {
   return (
     <PaperProvider theme={theme}>
       <AuthProvider>
-        <EntitlementsProvider>
-          <UploadProvider>
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                contentStyle: { backgroundColor: theme.colors.background },
-              }}
-              initialRouteName="splash"
-            >
-            <Stack.Screen 
-              name="splash" 
-              options={{ 
-                headerShown: false,
-                gestureEnabled: false,
-              }} 
-            />
-            <Stack.Screen 
-              name="landing" 
-              options={{ 
-                headerShown: false,
-                gestureEnabled: false,
-              }} 
-            />
-            <Stack.Screen 
-              name="login" 
-              options={{ 
-                headerShown: false,
-                gestureEnabled: false,
-              }} 
-            />
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen 
-              name="results" 
-              options={{
-                headerShown: true,
-                title: 'Analysis Results',
-                headerBackTitle: 'Back',
-                headerStyle: { backgroundColor: theme.colors.surface },
-                headerTintColor: theme.colors.onSurface,
-              }}
-            />
-            <Stack.Screen 
-              name="training-plan" 
-              options={{
-                headerShown: false,
-              }}
-            />
-            <Stack.Screen 
-              name="change-password" 
-              options={{
-                headerShown: true,
-                title: 'Change Password',
-                headerBackTitle: 'Back',
-                headerStyle: { backgroundColor: theme.colors.surface },
-                headerTintColor: theme.colors.onSurface,
-              }}
-            />
-            <Stack.Screen 
-              name="privacy-policy" 
-              options={{
-                headerShown: true,
-                title: 'Privacy Policy',
-                headerBackTitle: 'Back',
-                headerStyle: { backgroundColor: theme.colors.surface },
-                headerTintColor: theme.colors.onSurface,
-              }}
-            />
-            <Stack.Screen
-              name="ai-privacy-controls"
-              options={{
-                headerShown: true,
-                title: 'AI Data Sharing',
-                headerBackTitle: 'Back',
-                headerStyle: { backgroundColor: theme.colors.surface },
-                headerTintColor: theme.colors.onSurface,
-              }}
-            />
-            <Stack.Screen 
-              name="about" 
-              options={{
-                headerShown: true,
-                title: 'About Us',
-                headerBackTitle: 'Back',
-                headerStyle: { backgroundColor: theme.colors.surface },
-                headerTintColor: theme.colors.onSurface,
-              }}
-            />
-            <Stack.Screen 
-              name="help-and-support" 
-              options={{
-                headerShown: true,
-                title: 'Help & Support',
-                headerBackTitle: 'Back',
-                headerStyle: { backgroundColor: theme.colors.surface },
-                headerTintColor: theme.colors.onSurface,
-              }}
-            />
-          </Stack>
-          <Toast />
-          <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-          </UploadProvider>
-        </EntitlementsProvider>
+        <UploadProvider>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: theme.colors.background },
+            }}
+            initialRouteName="splash"
+          >
+          <Stack.Screen 
+            name="splash" 
+            options={{ 
+              headerShown: false,
+              gestureEnabled: false,
+            }} 
+          />
+          <Stack.Screen 
+            name="landing" 
+            options={{ 
+              headerShown: false,
+              gestureEnabled: false,
+            }} 
+          />
+          <Stack.Screen 
+            name="login" 
+            options={{ 
+              headerShown: false,
+              gestureEnabled: false,
+            }} 
+          />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen 
+            name="results" 
+            options={{
+              headerShown: true,
+              title: 'Analysis Results',
+              headerBackTitle: 'Back',
+              headerStyle: { backgroundColor: theme.colors.surface },
+              headerTintColor: theme.colors.onSurface,
+            }}
+          />
+          <Stack.Screen 
+            name="training-plan" 
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen 
+            name="change-password" 
+            options={{
+              headerShown: true,
+              title: 'Change Password',
+              headerBackTitle: 'Back',
+              headerStyle: { backgroundColor: theme.colors.surface },
+              headerTintColor: theme.colors.onSurface,
+            }}
+          />
+          <Stack.Screen 
+            name="privacy-policy" 
+            options={{
+              headerShown: true,
+              title: 'Privacy Policy',
+              headerBackTitle: 'Back',
+              headerStyle: { backgroundColor: theme.colors.surface },
+              headerTintColor: theme.colors.onSurface,
+            }}
+          />
+          <Stack.Screen
+            name="ai-privacy-controls"
+            options={{
+              headerShown: true,
+              title: 'AI Data Sharing',
+              headerBackTitle: 'Back',
+              headerStyle: { backgroundColor: theme.colors.surface },
+              headerTintColor: theme.colors.onSurface,
+            }}
+          />
+          <Stack.Screen 
+            name="about" 
+            options={{
+              headerShown: true,
+              title: 'About Us',
+              headerBackTitle: 'Back',
+              headerStyle: { backgroundColor: theme.colors.surface },
+              headerTintColor: theme.colors.onSurface,
+            }}
+          />
+          <Stack.Screen 
+            name="help-and-support" 
+            options={{
+              headerShown: true,
+              title: 'Help & Support',
+              headerBackTitle: 'Back',
+              headerStyle: { backgroundColor: theme.colors.surface },
+              headerTintColor: theme.colors.onSurface,
+            }}
+          />
+        </Stack>
+        <Toast />
+        <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+        </UploadProvider>
       </AuthProvider>
     </PaperProvider>
   );

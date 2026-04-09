@@ -3511,14 +3511,6 @@ def api_upload_file():
                 logger.warning("Shot type not provided by user")
                 return jsonify({'error': 'Shot type is required. Please select a shot type.'}), 400
 
-        # Enforce quota: first 20 analyses are free, then user must buy credits.
-        ok, ent_after = consume_one_analysis_credit(int(user_id))
-        if not ok:
-            return jsonify({
-                "error": "Free limit reached. Please purchase a plan to continue analysis.",
-                "entitlements": ent_after,
-            }), 402
-
         filename = secure_filename(file.filename)
         
         # Get user's upload folder and save file there
@@ -4305,13 +4297,6 @@ def compare_videos():
     try:
         user_id = request.user['user_id']
         username = request.user['username']
-
-        ent = get_entitlements(int(user_id))
-        if not ent.get("feature_compare"):
-            return jsonify({
-                'error': 'Compare is locked. Please upgrade to Plan 2 (or above).',
-                'entitlements': ent
-            }), 402
         
         data = request.get_json()
         filename1 = data.get('filename1')

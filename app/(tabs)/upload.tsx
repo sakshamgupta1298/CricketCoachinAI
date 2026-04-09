@@ -8,7 +8,6 @@ import Toast from 'react-native-toast-message';
 import AnalysisScreen from '../../src/components/AnalysisScreen';
 import { PremiumButton } from '../../src/components/ui/PremiumButton';
 import { PremiumCard } from '../../src/components/ui/PremiumCard';
-import { useEntitlements } from '../../src/context/EntitlementsContext';
 import { useUpload } from '../../src/context/UploadContext';
 import { hasAiConsent, setAiConsentStatus } from '../../src/services/aiConsent';
 import apiService from '../../src/services/api';
@@ -19,7 +18,6 @@ import { getResponsiveFontSize, getResponsiveSize } from '../../src/utils/respon
 export default function UploadScreen() {
   const theme = useTheme();
   const { isUploading, progress, startUpload, updateProgress, completeUpload } = useUpload();
-  const { entitlements, refresh: refreshEntitlements } = useEntitlements();
 
   const [playerType, setPlayerType] = useState<PlayerType>('batsman');
   const [playerSide, setPlayerSide] = useState<PlayerSide>('right');
@@ -141,22 +139,6 @@ export default function UploadScreen() {
     if (!selectedVideo) return;
 
     try {
-      // Guard on client (server also enforces).
-      await refreshEntitlements();
-      const latest = await apiService.getEntitlements();
-      const latestEntitlements = latest.success && latest.data ? latest.data : entitlements;
-      if (latestEntitlements.analysis_credits_remaining <= 0) {
-        Alert.alert(
-          'Free limit reached',
-          'Your first 20 analyses are free. To continue, please choose a plan.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'View plans', onPress: () => router.push('/plans' as any) },
-          ]
-        );
-        return;
-      }
-
       const formData: UploadFormData = {
         player_type: playerType,
         video_uri: selectedVideo.uri,
@@ -210,16 +192,10 @@ export default function UploadScreen() {
     } catch (error: any) {
       console.error('Upload error:', error);
       const message = error?.message || 'Failed to upload video. Please try again.';
-      const looksLikeCredits = /credit|limit|plan|subscription|payment/i.test(message);
       Alert.alert(
-        looksLikeCredits ? 'Upgrade required' : 'Upload Failed',
+        'Upload Failed',
         message,
-        looksLikeCredits
-          ? [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'View plans', onPress: () => router.push('/plans' as any) },
-            ]
-          : [{ text: 'OK' }]
+        [{ text: 'OK' }]
       );
     }
   };
@@ -546,19 +522,8 @@ export default function UploadScreen() {
               </Text>
 
               <PremiumButton
-                title={entitlements.feature_ball_speed ? 'Check Ball Speed' : 'Ball Speed (Plan 3)'}
+                title="Check Ball Speed"
                 onPress={() => {
-                  if (!entitlements.feature_ball_speed) {
-                    Alert.alert(
-                      'Upgrade required',
-                      'Ball Speed is available in Plan 3.',
-                      [
-                        { text: 'Cancel', style: 'cancel' },
-                        { text: 'View plans', onPress: () => router.push('/plans' as any) },
-                      ]
-                    );
-                    return;
-                  }
                   router.push('/ball-speed' as any);
                 }}
                 variant="primary"

@@ -212,28 +212,3 @@ export interface AuthResponse {
   token: string;
   user: AuthUser;
 }
-
-export interface Entitlements {
-  analysis_credits_remaining: number;
-  feature_compare: boolean;
-  feature_ball_speed: boolean;
-}
-
-export type PlanId = 'plan1' | 'plan2' | 'plan3';
-
-export interface PlanDefinition {
-  id: PlanId;
-  title: string;
-  price_inr: number;
-  analysis_credits: number;
-  enables_compare: boolean;
-  enables_ball_speed: boolean;
-}
-
-export interface RazorpayCreateOrderResponse {
-  order_id: string;
-  amount: number; // paise
-  currency: string;
-  key_id: string;
-  plan_id: PlanId;
-}

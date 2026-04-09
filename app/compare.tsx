@@ -4,14 +4,12 @@ import { Alert, FlatList, RefreshControl, StyleSheet, TouchableOpacity, View } f
 import { ActivityIndicator, Card, Chip, Surface, Text, useTheme } from 'react-native-paper';
 import Toast from 'react-native-toast-message';
 import apiService from '../src/services/api';
-import { useEntitlements } from '../src/context/EntitlementsContext';
 import { borderRadius, colors, shadows, spacing } from '../src/theme';
 import { HistoryItem } from '../src/types';
 import { getResponsiveFontSize, getResponsiveSize } from '../src/utils/responsive';
 
 export default function CompareScreen() {
   const theme = useTheme();
-  const { entitlements } = useEntitlements();
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedVideo1, setSelectedVideo1] = useState<HistoryItem | null>(null);
@@ -26,16 +24,8 @@ export default function CompareScreen() {
   };
 
   useEffect(() => {
-    if (!entitlements.feature_compare) {
-      Alert.alert(
-        'Upgrade required',
-        'Comparing performance is available in Plan 2 (and above).',
-        [{ text: 'View plans', onPress: () => router.replace('/plans' as any) }]
-      );
-      return;
-    }
     loadHistory();
-  }, [entitlements.feature_compare]);
+  }, []);
 
   const loadHistory = async () => {
     try {
