@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Alert, NativeModules, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { ActivityIndicator, Text, useTheme } from 'react-native-paper';
 import Toast from 'react-native-toast-message';
 import { PremiumButton } from '../src/components/ui/PremiumButton';
@@ -13,9 +13,15 @@ import type { PlanDefinition, PlanId } from '../src/types';
 let RazorpayCheckout: any = null;
 try {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  RazorpayCheckout = require('react-native-razorpay').default;
+  const mod = require('react-native-razorpay');
+  RazorpayCheckout = (mod && (mod.default ?? mod)) || null;
 } catch {
   RazorpayCheckout = null;
+}
+
+function isRazorpayNativeAvailable() {
+  const nm = NativeModules as any;
+  return Boolean(nm?.RazorpayCheckout || nm?.RNRazorpayCheckout || nm?.RNazorpayCheckout);
 }
 
 export default function PlansScreen() {
@@ -54,10 +60,10 @@ export default function PlansScreen() {
   );
 
   const startCheckout = async (planId: PlanId) => {
-    if (!RazorpayCheckout) {
+    if (!RazorpayCheckout || typeof RazorpayCheckout.open !== 'function' || !isRazorpayNativeAvailable()) {
       Alert.alert(
         'Razorpay not available',
-        'This build does not include Razorpay native module. Please run a dev-client / production build.',
+        'This build does not include the Razorpay native module. If you are using Expo Go, payments will not work.\n\nBuild a dev-client / production app and try again.',
         [{ text: 'OK' }]
       );
       return;
@@ -72,6 +78,9 @@ export default function PlansScreen() {
       }
 
       const order = orderResp.data;
+      if (!order.order_id) {
+        throw new Error('Failed to create order (missing order_id)');
+      }
       const options = {
         key: order.key_id || (currentConfig as any)?.RAZORPAY_KEY_ID,
         amount: order.amount,
@@ -83,7 +92,14 @@ export default function PlansScreen() {
         theme: { color: theme.colors.primary },
       };
 
+      if (!options.key) {
+        throw new Error('Razorpay key missing in app config / server response');
+      }
+
       const payment = await RazorpayCheckout.open(options);
+      if (!payment) {
+        throw new Error('Payment cancelled');
+      }
 
       const verifyResp = await apiService.verifyRazorpayPayment({
         plan_id: planId,
@@ -99,7 +115,11 @@ export default function PlansScreen() {
       await refresh();
       Toast.show({ type: 'success', text1: 'Payment successful', text2: 'Your plan has been activated.' });
     } catch (e: any) {
-      const msg = e?.message || 'Payment failed. Please try again.';
+      const raw = e?.message || 'Payment failed. Please try again.';
+      const msg =
+        /open' of null/i.test(raw) || /native module/i.test(raw)
+          ? 'Razorpay native module is not available in this build. Use a dev-client / production build (not Expo Go) and try again.'
+          : raw;
       Alert.alert('Payment failed', msg, [{ text: 'OK' }]);
     } finally {
       setBusyPlanId(null);
