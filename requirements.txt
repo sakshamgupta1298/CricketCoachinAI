@@ -35,6 +35,7 @@ python-dotenv
 requests
 Pillow
 razorpay
+boto3
 
 # Development and testing (optional)
 pytest

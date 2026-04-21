@@ -36,11 +36,20 @@ import subprocess
 import shutil
 import hmac
 import hashlib
+import tempfile
+from dotenv import load_dotenv
 
 try:
     import razorpay
 except Exception:
     razorpay = None
+
+try:
+    import boto3
+    from botocore.exceptions import BotoCoreError, ClientError
+except Exception:
+    boto3 = None
+    BotoCoreError = ClientError = Exception
 
 # ==================== LOGGING CONFIGURATION ====================
 # Create logging directory if it doesn't exist
@@ -65,6 +74,10 @@ logger.info("=" * 80)
 logger.info("CrickCoach Backend Application Starting")
 logger.info(f"Log file: {log_filename}")
 logger.info("=" * 80)
+
+# Load environment variables from a .env file if present (recommended for local/dev and simple deployments).
+# Do NOT hardcode secrets in this file.
+load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = 'cricket_shot_prediction_secret_key'
@@ -367,6 +380,62 @@ keypoints_names = ["nose", "left_eye", "right_eye", "left_ear", "right_ear", "le
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'mp4', 'avi', 'mov', 'mkv'}
 JOBS_SUBFOLDER = 'jobs'
+
+S3_BUCKET = (os.getenv("S3_BUCKET") or os.getenv("AWS_S3_BUCKET") or "").strip() or None
+AWS_REGION = (os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "").strip() or None
+S3_BASE_PREFIX = (os.getenv("S3_BASE_PREFIX") or "").strip().strip("/")
+
+
+def _sanitize_s3_folder_component(value: str) -> str:
+    """
+    Make a safe single path component for S3 keys.
+    We keep alnum, underscore, dash and dot; everything else becomes underscore.
+    """
+    value = (value or "").strip()
+    value = re.sub(r"[^A-Za-z0-9_.-]+", "_", value)
+    value = value.strip("._-")
+    return value or "user"
+
+
+def _build_s3_video_key(username: str, filename: str, job_id=None) -> str:
+    user_folder = _sanitize_s3_folder_component(username)
+    safe_filename = secure_filename(filename) or "upload.mp4"
+    unique_prefix = f"{job_id}_" if job_id else ""
+    key = f"{user_folder}/{unique_prefix}{safe_filename}"
+    if S3_BASE_PREFIX:
+        key = f"{S3_BASE_PREFIX}/{key}"
+    return key
+
+
+def upload_video_to_s3(local_path: str, username: str, filename: str, *, job_id=None, content_type=None) -> dict:
+    """
+    Upload a local file to S3 under a username folder and return upload metadata.
+    Requires env var S3_BUCKET (or AWS_S3_BUCKET). Uses default AWS credential resolution chain.
+    """
+    if not S3_BUCKET:
+        raise RuntimeError("S3_BUCKET is not configured on the server.")
+    if boto3 is None:
+        raise RuntimeError("boto3 is not installed on the server. Please add it to your dependencies.")
+
+    key = _build_s3_video_key(username, filename, job_id=job_id)
+    client = boto3.client("s3", region_name=AWS_REGION) if AWS_REGION else boto3.client("s3")
+    extra_args = {}
+    if content_type:
+        extra_args["ContentType"] = content_type
+
+    try:
+        if extra_args:
+            client.upload_file(local_path, S3_BUCKET, key, ExtraArgs=extra_args)
+        else:
+            client.upload_file(local_path, S3_BUCKET, key)
+    except (BotoCoreError, ClientError) as e:
+        raise RuntimeError(f"Failed to upload to S3 (bucket={S3_BUCKET}, key={key}): {e}")
+
+    return {
+        "bucket": S3_BUCKET,
+        "key": key,
+        "uri": f"s3://{S3_BUCKET}/{key}",
+    }
 
 
 
@@ -779,6 +848,16 @@ def process_analysis_job(job_id, user_id, username, filepath, filename, form, ex
             body="There was an error processing your video.",
             data={"job_id": job_id, "filename": filename, "error": str(e)},
         )
+    finally:
+        # Best-effort cleanup of temp uploads (we keep job/results artifacts).
+        try:
+            tmp_root = os.path.abspath(os.path.join(UPLOAD_FOLDER, "_tmp"))
+            abs_path = os.path.abspath(filepath) if filepath else ""
+            if abs_path and os.path.exists(abs_path):
+                if os.path.commonpath([abs_path, tmp_root]) == tmp_root:
+                    os.remove(abs_path)
+        except Exception as cleanup_err:
+            logger.warning(f"⚠️ [JOB {job_id}] Temp cleanup failed: {cleanup_err}")
 
 # Model configuration
 MODEL_PATH = "slowfast_cricket.pth"
@@ -3512,15 +3591,36 @@ def api_upload_file():
                 return jsonify({'error': 'Shot type is required. Please select a shot type.'}), 400
 
         filename = secure_filename(file.filename)
-        
-        # Get user's upload folder and save file there
-        user_folder = get_user_upload_folder(user_id)
-        filepath = os.path.join(user_folder, filename)
-        file.save(filepath)
-                
-        expo_push_token = request.form.get('expo_push_token') or request.form.get('push_token')
+
+        # Create job id early so we can use it for unique S3 keys / local temp names
         job_id = uuid.uuid4().hex
         now = datetime.utcnow().isoformat() + "Z"
+
+        # Save to a local temp path for analysis, and upload the canonical copy to S3
+        tmp_dir = os.path.join(UPLOAD_FOLDER, "_tmp")
+        os.makedirs(tmp_dir, exist_ok=True)
+        filepath = os.path.join(tmp_dir, f"{user_id}_{job_id}_{filename}")
+        file.save(filepath)
+
+        try:
+            s3_info = upload_video_to_s3(
+                filepath,
+                username,
+                filename,
+                job_id=job_id,
+                content_type=getattr(file, "mimetype", None),
+            )
+            logger.info(f"☁️ Uploaded video to S3: {s3_info['uri']}")
+        except Exception as e:
+            try:
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+            except Exception:
+                pass
+            logger.error(f"❌ S3 upload failed for user {username}: {e}", exc_info=True)
+            return jsonify({"error": "Failed to upload video to S3", "details": str(e)}), 500
+
+        expo_push_token = request.form.get('expo_push_token') or request.form.get('push_token')
 
         job = {
             "job_id": job_id,
@@ -3531,6 +3631,9 @@ def api_upload_file():
             "username": username,
             "filename": filename,
             "player_type": player_type,
+            "video_s3_bucket": s3_info.get("bucket"),
+            "video_s3_key": s3_info.get("key"),
+            "video_s3_uri": s3_info.get("uri"),
         }
         save_job(user_id, job)
 
@@ -3547,6 +3650,8 @@ def api_upload_file():
             "job_id": job_id,
             "filename": filename,
             "status": "queued",
+            "video_s3_bucket": s3_info.get("bucket"),
+            "video_s3_key": s3_info.get("key"),
         })
     
     logger.warning("Invalid file type")
