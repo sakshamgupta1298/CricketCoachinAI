@@ -37,6 +37,7 @@ import shutil
 import hmac
 import hashlib
 import tempfile
+from urllib.parse import quote_plus
 from dotenv import load_dotenv
 
 try:
@@ -877,7 +878,16 @@ CHECKPOINT_PATH = MODEL_PATH
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Gemini client
-client = genai.Client(api_key="AIzaSyCNmpg89-pwOyrimMEmgyt4aT9d07MzYYc")
+_gemini_api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+if not _gemini_api_key:
+    raise RuntimeError("Missing GEMINI_API_KEY (or GOOGLE_API_KEY) in environment")
+client = genai.Client(api_key=_gemini_api_key)
+
+def build_youtube_search_url(query: str) -> str:
+    q = (query or "").strip()
+    if not q:
+        q = "cricket drill"
+    return f"https://www.youtube.com/results?search_query={quote_plus(q)}"
 
 def extract_json_from_response(text: str) -> str:
     """
@@ -3179,7 +3189,12 @@ DETAILED REPORT (READ THIS CAREFULLY - IT CONTAINS THE COMPLETE ANALYSIS):
 TRAINING PLAN REQUIREMENTS:
 - Output must be valid JSON only.
 - The top-level JSON must contain a key "plan" whose value is a list of days (1..{days}).
-- Each day should include: "day" (int), "focus" (short string describing the main focus for that day), "warmup" (list of warmup steps), "drills" (list of drill objects with "name", "reps"/"sets"/"duration", and "notes"), "progression" (what to increase next session), and "notes" (short coaching notes).
+- Each day should include: "day" (int), "focus" (short string describing the main focus for that day), "warmup" (list of warmup steps), "drills" (list of drill objects), "progression" (what to increase next session), and "notes" (short coaching notes).
+- Each drill object MUST include:
+  - "name"
+  - "reps" and/or "sets" and/or "duration" (use strings like "3x10", "15 min")
+  - "notes"
+  - "youtube_search_query" (a concise YouTube search query to find a video for THIS exact drill; include "cricket" and the shot/bowling context)
 - Add a short "overall_notes" field at the top level with recovery and weekly tips.
 - Never return null values.
 - Respond ONLY in valid JSON.
@@ -3225,6 +3240,19 @@ Example JSON structure:
         raw = response.text
         json_text = extract_json_from_response(raw)
         plan_json = json.loads(json_text)
+        # Ensure every drill has a usable YouTube link (avoid relying on the model for valid URLs)
+        for day in plan_json.get("plan", []):
+            drills = day.get("drills", [])
+            if not isinstance(drills, list):
+                continue
+            for drill in drills:
+                if not isinstance(drill, dict):
+                    continue
+                if not drill.get("youtube_search_query"):
+                    drill_name = (drill.get("name") or "").strip()
+                    context = shot_type or bowler_type or player_type
+                    drill["youtube_search_query"] = f"{drill_name} cricket drill {context}".strip()
+                drill["youtube_url"] = build_youtube_search_url(drill.get("youtube_search_query"))
         return plan_json
     except Exception as e:
         logger.exception("Failed to generate training plan from Gemini")
