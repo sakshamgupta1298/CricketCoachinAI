@@ -116,6 +116,8 @@ export interface TrainingDrill {
   name: string;
   reps: string;
   notes?: string;
+  youtube_search_query?: string;
+  youtube_url?: string;
 }
 
 export interface TrainingDay {

@@ -889,6 +889,54 @@ def build_youtube_search_url(query: str) -> str:
         q = "cricket drill"
     return f"https://www.youtube.com/results?search_query={quote_plus(q)}"
 
+_youtube_api_key = os.getenv("YOUTUBE_API_KEY")
+_youtube_resolve_max = int(os.getenv("YOUTUBE_RESOLVE_MAX", "12") or "12")
+_youtube_cache: dict[str, str] = {}
+
+def resolve_youtube_watch_url(query: str) -> str | None:
+    """
+    Resolve a search query to a specific YouTube watch URL using YouTube Data API v3.
+    Returns None if no API key is configured or resolution fails.
+    """
+    if not _youtube_api_key:
+        return None
+    q = (query or "").strip()
+    if not q:
+        return None
+
+    cached = _youtube_cache.get(q)
+    if cached:
+        return cached
+
+    try:
+        resp = requests.get(
+            "https://www.googleapis.com/youtube/v3/search",
+            params={
+                "part": "snippet",
+                "type": "video",
+                "maxResults": 1,
+                "q": q,
+                "key": _youtube_api_key,
+                "safeSearch": "strict",
+                "videoEmbeddable": "true",
+            },
+            timeout=12,
+        )
+        if resp.status_code != 200:
+            return None
+        data = resp.json() or {}
+        items = data.get("items") or []
+        if not items:
+            return None
+        video_id = (items[0].get("id") or {}).get("videoId")
+        if not video_id:
+            return None
+        url = f"https://www.youtube.com/watch?v={video_id}"
+        _youtube_cache[q] = url
+        return url
+    except Exception:
+        return None
+
 def extract_json_from_response(text: str) -> str:
     """
     Extract JSON from Gemini response text, handling various formats:
@@ -3241,6 +3289,7 @@ Example JSON structure:
         json_text = extract_json_from_response(raw)
         plan_json = json.loads(json_text)
         # Ensure every drill has a usable YouTube link (avoid relying on the model for valid URLs)
+        resolved_count = 0
         for day in plan_json.get("plan", []):
             drills = day.get("drills", [])
             if not isinstance(drills, list):
@@ -3252,7 +3301,15 @@ Example JSON structure:
                     drill_name = (drill.get("name") or "").strip()
                     context = shot_type or bowler_type or player_type
                     drill["youtube_search_query"] = f"{drill_name} cricket drill {context}".strip()
+                # Default: always provide a search URL
                 drill["youtube_url"] = build_youtube_search_url(drill.get("youtube_search_query"))
+
+                # Optional: resolve to a specific watch URL (cap to protect quota/latency)
+                if resolved_count < max(0, _youtube_resolve_max):
+                    watch_url = resolve_youtube_watch_url(drill.get("youtube_search_query"))
+                    if watch_url:
+                        drill["youtube_url"] = watch_url
+                    resolved_count += 1
         return plan_json
     except Exception as e:
         logger.exception("Failed to generate training plan from Gemini")

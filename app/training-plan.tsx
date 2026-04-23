@@ -2,7 +2,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Speech from 'expo-speech';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Platform, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Platform, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Button, Card, Chip, Divider, IconButton, Surface, Text, useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
@@ -40,7 +40,7 @@ export default function TrainingPlanScreen() {
       {
         focus: string;
         warmup: string[];
-        drills: Array<{ name: string; reps: string; notes?: string }>;
+        drills: Array<{ name: string; reps: string; notes?: string; youtube_url?: string }>;
         progression: string;
         notes?: string;
       }
@@ -248,7 +248,7 @@ export default function TrainingPlanScreen() {
         {
           focus: string;
           warmup: string[];
-          drills: Array<{ name: string; reps: string; notes?: string }>;
+          drills: Array<{ name: string; reps: string; notes?: string; youtube_url?: string }>;
           progression: string;
           notes?: string;
         }
@@ -265,7 +265,7 @@ export default function TrainingPlanScreen() {
                 ? await translateToHindi(drill.name)
                 : drill?.name || 'Drill';
               const notesHi = drill?.notes ? await translateToHindi(drill.notes) : undefined;
-              return { name: nameHi, reps: drill?.reps || 'N/A', notes: notesHi };
+              return { name: nameHi, reps: drill?.reps || 'N/A', notes: notesHi, youtube_url: drill?.youtube_url };
             })
           );
 
@@ -290,6 +290,24 @@ export default function TrainingPlanScreen() {
       setHindiTranslated(true);
     }
   }, [trainingPlan]);
+
+  const openDrillYoutube = useCallback(async (drill: any) => {
+    try {
+      const urlFromApi = typeof drill?.youtube_url === 'string' ? drill.youtube_url : '';
+      const name = typeof drill?.name === 'string' ? drill.name : 'cricket drill';
+      const fallback = `https://www.youtube.com/results?search_query=${encodeURIComponent(name + ' cricket drill')}`;
+      const url = urlFromApi || fallback;
+
+      const canOpen = await Linking.canOpenURL(url);
+      if (!canOpen) {
+        Toast.show({ type: 'error', text1: 'Error', text2: 'Cannot open YouTube link on this device' });
+        return;
+      }
+      await Linking.openURL(url);
+    } catch (e: any) {
+      Toast.show({ type: 'error', text1: 'Error', text2: e?.message || 'Failed to open YouTube link' });
+    }
+  }, []);
 
   useEffect(() => {
     if (language === 'hi' && trainingPlan && !hindiTranslated && !translateLoading) {
@@ -541,9 +559,17 @@ export default function TrainingPlanScreen() {
                       ? translatedDay.drills[index].name
                       : drill?.name || 'Drill'}
                   </Text>
-                  <Chip mode="outlined" compact>
-                    {drill?.reps || 'N/A'}
-                  </Chip>
+                  <View style={styles.drillHeaderRight}>
+                    <IconButton
+                      icon="youtube"
+                      size={18}
+                      onPress={() => openDrillYoutube(drill)}
+                      accessibilityLabel="Open drill video on YouTube"
+                    />
+                    <Chip mode="outlined" compact>
+                      {drill?.reps || 'N/A'}
+                    </Chip>
+                  </View>
                 </View>
                 {drill?.notes && (
                   <Text style={[styles.drillNotes, { color: theme.colors.onSurfaceVariant }]}>
@@ -985,6 +1011,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: spacing.xs,
+  },
+  drillHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
   },
   drillName: {
     fontSize: 12,
