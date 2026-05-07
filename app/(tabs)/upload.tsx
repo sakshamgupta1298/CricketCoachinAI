@@ -35,7 +35,6 @@ export default function UploadScreen() {
   } | null>(null);
   const [analysisStatus, setAnalysisStatus] = useState<'uploading' | 'processing' | 'analyzing'>('uploading');
   const [refreshing, setRefreshing] = useState(false);
-  const [isBallBatContactRunning, setIsBallBatContactRunning] = useState(false);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -201,47 +200,6 @@ export default function UploadScreen() {
     }
   };
 
-  const performBallBatContact = async () => {
-    if (!selectedVideo) return;
-    setIsBallBatContactRunning(true);
-
-    try {
-      const formData: UploadFormData = {
-        player_type: 'batsman',
-        batter_side: playerSide,
-        shot_type:
-          shotType === 'other'
-            ? (customShotType.trim() ? customShotType.trim().toLowerCase().replace(/\s+/g, '_') : 'ball_bat_contact')
-            : (shotType || 'ball_bat_contact'),
-        video_uri: selectedVideo.uri,
-        video_name: selectedVideo.name,
-        video_size: selectedVideo.size,
-        video_type: selectedVideo.type,
-      };
-
-      const resp = await apiService.ballBatContact(formData);
-      if (!resp.success || !resp.data) {
-        throw new Error(resp.error || 'Ball-bat contact failed.');
-      }
-
-      Toast.show({
-        type: 'success',
-        text1: 'Ball–Bat Contact Complete!',
-        text2: 'Contact analysis is ready.',
-      });
-
-      router.push({
-        pathname: '/results',
-        params: { result: JSON.stringify(resp.data) },
-      });
-    } catch (e: any) {
-      const msg = e?.message || 'Ball-bat contact failed. Please try again.';
-      Alert.alert('Ball–Bat Contact Failed', msg, [{ text: 'OK' }]);
-    } finally {
-      setIsBallBatContactRunning(false);
-    }
-  };
-
   const requestAiConsentAndUpload = async () => {
     if (!selectedVideo) {
       Alert.alert('No Video Selected', 'Please select a video first.');
@@ -277,44 +235,6 @@ export default function UploadScreen() {
           onPress: async () => {
             await setAiConsentStatus('granted');
             await performUpload();
-          },
-        },
-      ]
-    );
-  };
-
-  const requestAiConsentAndBallBatContact = async () => {
-    if (!selectedVideo) {
-      Alert.alert('No Video Selected', 'Please select a video first.');
-      return;
-    }
-
-    // Same third-party AI sharing policy as main analysis (Gemini)
-    if (Platform.OS !== 'ios') {
-      await performBallBatContact();
-      return;
-    }
-
-    const consentGranted = await hasAiConsent();
-    if (consentGranted) {
-      await performBallBatContact();
-      return;
-    }
-
-    Alert.alert(
-      'AI analysis permission',
-      'To generate ball–bat contact feedback using AI, we will:\n\n' +
-        '1) Upload your selected video to our backend for processing.\n' +
-        '2) Send derived contact/speed metrics to our AI processing partner (Google Gemini, Google LLC) to generate the contact report.\n\n' +
-        'You can withdraw this consent anytime from Profile > AI Data Sharing.\n\n' +
-        'Do you allow CrickCoach AI to share this processed data with Google Gemini (Google LLC) to generate your analysis?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Allow',
-          onPress: async () => {
-            await setAiConsentStatus('granted');
-            await performBallBatContact();
           },
         },
       ]
@@ -668,30 +588,6 @@ export default function UploadScreen() {
                   </Text>
                 </TouchableOpacity>
               )}
-            </PremiumCard>
-          </Animated.View>
-        )}
-
-        {/* Ball-Bat Contact - Only for Batsman */}
-        {playerType === 'batsman' && (
-          <Animated.View entering={FadeInUp.delay(450).springify()}>
-            <PremiumCard variant="elevated" padding="large" style={styles.card}>
-              <Text style={[styles.cardTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(17) }]}>
-                Ball–Bat Contact
-              </Text>
-              <Text style={[styles.cardSubtitle, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(12) }]}>
-                Detect the exact contact point on the bat and generate a contact report.
-              </Text>
-
-              <PremiumButton
-                title={isBallBatContactRunning ? 'Analyzing...' : 'Ball–Bat Contact'}
-                onPress={requestAiConsentAndBallBatContact}
-                variant="primary"
-                size="large"
-                fullWidth
-                loading={isBallBatContactRunning}
-                disabled={!selectedVideo || isUploading || isBallBatContactRunning}
-              />
             </PremiumCard>
           </Animated.View>
         )}

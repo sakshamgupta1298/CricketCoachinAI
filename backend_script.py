@@ -713,6 +713,36 @@ def process_analysis_job(job_id, user_id, username, filepath, filename, form, ex
             batter_side = form.get("batter_side", "right")
 
             logger.info(f"🎬 [JOB {job_id}] Batting analysis started for {filename}")
+
+            # Optional: run bat-ball contact analysis (no video output) to surface:
+            # 1) bat speed
+            # 2) contact location on bat
+            ball_bat_contact = {
+                "detected": False,
+                "bat_speed_kmh": None,
+                "bat_speed_mps": None,
+                "contact_location": None,
+            }
+            try:
+                # Import lazily (ultralytics is heavy) and call directly.
+                # NOTE: module filename must be importable (no hyphens), e.g. `bat_ball_contact.py`.
+                from bat_ball_contact import analyze_ball_bat_contact  # type: ignore
+
+                logger.info(f"🏏 [JOB {job_id}] Running ball-bat contact (no video) via import")
+                parsed = analyze_ball_bat_contact(
+                    analysis_video_path,
+                    show_video=False,
+                    save_video=False,
+                ) or {}
+                contact = parsed.get("contact") or None
+                if contact:
+                    ball_bat_contact["detected"] = True
+                    ball_bat_contact["bat_speed_kmh"] = contact.get("bat_speed_kmh")
+                    ball_bat_contact["bat_speed_mps"] = contact.get("bat_speed_mps")
+                    ball_bat_contact["contact_location"] = contact.get("contact_location")
+            except Exception as e:
+                logger.warning(f"⚠️ [JOB {job_id}] ball-bat contact skipped: {e}")
+
             keypoints_path, annotated_video_path = extract_pose_keypoints(analysis_video_path, "batting")
             _ = compute_features(keypoints_path, batter_side, "batting")
             try:
@@ -733,6 +763,7 @@ def process_analysis_job(job_id, user_id, username, filepath, filename, form, ex
                 "filename": filename,
                 "annotated_video_path": annotated_video_path,
             }
+            results["ball_bat_contact"] = ball_bat_contact
 
             try:
                 report_path = generate_report(results, "batsman", shot_type, batter_side, None, None, filename, user_id=user_id)
