@@ -636,58 +636,65 @@ class ApiService {
     }
   }
 
-  // Upload batting video to detect bat-ball contact (returns contact image immediately)
-  async uploadBatContact(formData: UploadFormData): Promise<ApiResponse<AnalysisResult>> {
+  // Ball-bat contact analysis (batsman only)
+  async ballBatContact(formData: UploadFormData): Promise<ApiResponse<AnalysisResult>> {
     try {
       const token = await this.getStoredToken();
       if (!token) {
         return { success: false, error: 'Authentication required. Please login first.' };
       }
 
-      // Verify token before request
-      const tokenVerification = await this.verifyToken();
-      if (!tokenVerification.success) {
-        await this.clearAuthData();
-        this.notifyUnauthorized();
-        return { success: false, error: 'Your session has expired. Please login again.' };
-      }
-
-      if (formData.player_type !== 'batsman') {
-        return { success: false, error: 'Bat-ball contact is only available for batsman uploads.' };
-      }
-
+      // Build FormData
       const data = new FormData();
       const videoFile = {
         uri: formData.video_uri,
         name: formData.video_name || 'video.mp4',
         type: formData.video_type || 'video/mp4',
       } as any;
-
       data.append('video', videoFile);
-      data.append('player_type', 'batsman');
+
+      // Optional context
       if (formData.batter_side) data.append('batter_side', formData.batter_side);
+      if (formData.shot_type) data.append('shot_type', formData.shot_type);
 
-      const response = await this.api.post('/api/bat-contact', data, {
-        timeout: 300000, // 5 minutes (runs YOLO locally on backend)
-        headers: {
-          Authorization: `Bearer ${token}`,
-          // DO NOT set Content-Type for FormData
-        } as any,
-      });
+      const url = `${this.baseURL}/api/ball-bat-contact`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15 * 60 * 1000); // 15 min
 
-      if (response.status >= 200 && response.status < 300 && response.data?.success) {
-        return { success: true, data: response.data.data };
+      try {
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: data,
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        const text = await resp.text();
+        let json: any = null;
+        try {
+          json = text ? JSON.parse(text) : null;
+        } catch {
+          // ignore
+        }
+
+        if (!resp.ok) {
+          const errMsg = json?.error || json?.message || text || `Request failed (${resp.status})`;
+          return { success: false, error: errMsg };
+        }
+
+        return { success: true, data: json };
+      } catch (e: any) {
+        clearTimeout(timeoutId);
+        if (e?.name === 'AbortError') {
+          return { success: false, error: 'Ball-bat contact timed out. Please try again.' };
+        }
+        return { success: false, error: e?.message || 'Ball-bat contact failed. Please try again.' };
       }
-
-      return {
-        success: false,
-        error: response.data?.error || response.data?.message || 'Bat contact request failed',
-      };
     } catch (error: any) {
-      return {
-        success: false,
-        error: error.response?.data?.error || error.message || 'Bat contact request failed',
-      };
+      return { success: false, error: error?.message || 'Ball-bat contact failed. Please try again.' };
     }
   }
 

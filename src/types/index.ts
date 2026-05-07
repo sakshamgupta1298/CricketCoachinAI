@@ -7,12 +7,12 @@ export interface User {
 
 export interface AnalysisResult {
   success: boolean;
-  player_type: 'batsman' | 'bowler' | 'keeper';
+  player_type: 'batsman' | 'bowler';
   shot_type?: string;
   batter_side?: string;
   bowler_side?: string;
   bowler_type?: string;
-  gpt_feedback?: {
+  gpt_feedback: {
     // Old format support
     analysis?: string;
     flaws?: Array<{
@@ -58,18 +58,6 @@ export interface AnalysisResult {
   report_path?: string;
   annotated_video_path?: string;
   job_id?: string;
-  bat_contact?: {
-    contact_detected: boolean;
-    message?: string;
-    frame?: number | null;
-    contact_location?: string | null;
-    contact_point?: [number, number] | null;
-    ball_speed_kmh?: number | null;
-    bat_speed_kmh?: number | null;
-    image_filename?: string | null;
-    image_base64?: string | null;
-    debug?: Record<string, any>;
-  };
 }
 
 export interface UploadJobResponse {
