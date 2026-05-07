@@ -3,15 +3,14 @@ import cv2
 import numpy as np
 import json
 import time
-import google.generativeai as genai
 import os
 import argparse
 from typing import Any, Dict, Optional, Tuple
+from google import genai
 
 # Configure Gemini via env var (do not hardcode secrets in repo)
 _GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-if _GEMINI_API_KEY:
-    genai.configure(api_key=_GEMINI_API_KEY)
+_GEMINI_CLIENT = genai.Client(api_key=_GEMINI_API_KEY) if _GEMINI_API_KEY else None
 
 # Load YOLO once (expensive)
 _YOLO_MODEL = None
@@ -109,7 +108,7 @@ def send_to_gemini(contact_data):
         str: Gemini's analysis response
     """
     try:
-        if not _GEMINI_API_KEY:
+        if not _GEMINI_CLIENT:
             return "Gemini API key not configured on server (set GEMINI_API_KEY)."
         # Create prompt
         prompt = f"""Analyze this cricket/baseball bat-ball contact data and provide a detailed report:
@@ -131,18 +130,17 @@ Please provide:
 3. Any additional insights about the contact quality
 
 Format your response clearly and concisely."""
-        
-        # Get response from Gemini using GenerativeModel with config
-        model_gemini = genai.GenerativeModel(
-            model_name="gemini-2.5-pro",
-            generation_config={
+
+        response = _GEMINI_CLIENT.models.generate_content(
+            model="gemini-2.5-pro",
+            contents=prompt,
+            config={
                 "temperature": 0,
                 "top_p": 1,
-                "top_k": 1
-            }
+                "top_k": 1,
+            },
         )
-        response = model_gemini.generate_content(prompt)
-        return response.text
+        return getattr(response, "text", "") or ""
     except Exception as e:
         return f"Error calling Gemini API: {str(e)}"
 
