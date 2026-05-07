@@ -636,6 +636,61 @@ class ApiService {
     }
   }
 
+  // Upload batting video to detect bat-ball contact (returns contact image immediately)
+  async uploadBatContact(formData: UploadFormData): Promise<ApiResponse<AnalysisResult>> {
+    try {
+      const token = await this.getStoredToken();
+      if (!token) {
+        return { success: false, error: 'Authentication required. Please login first.' };
+      }
+
+      // Verify token before request
+      const tokenVerification = await this.verifyToken();
+      if (!tokenVerification.success) {
+        await this.clearAuthData();
+        this.notifyUnauthorized();
+        return { success: false, error: 'Your session has expired. Please login again.' };
+      }
+
+      if (formData.player_type !== 'batsman') {
+        return { success: false, error: 'Bat-ball contact is only available for batsman uploads.' };
+      }
+
+      const data = new FormData();
+      const videoFile = {
+        uri: formData.video_uri,
+        name: formData.video_name || 'video.mp4',
+        type: formData.video_type || 'video/mp4',
+      } as any;
+
+      data.append('video', videoFile);
+      data.append('player_type', 'batsman');
+      if (formData.batter_side) data.append('batter_side', formData.batter_side);
+
+      const response = await this.api.post('/api/bat-contact', data, {
+        timeout: 300000, // 5 minutes (runs YOLO locally on backend)
+        headers: {
+          Authorization: `Bearer ${token}`,
+          // DO NOT set Content-Type for FormData
+        } as any,
+      });
+
+      if (response.status >= 200 && response.status < 300 && response.data?.success) {
+        return { success: true, data: response.data.data };
+      }
+
+      return {
+        success: false,
+        error: response.data?.error || response.data?.message || 'Bat contact request failed',
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message || 'Bat contact request failed',
+      };
+    }
+  }
+
   // Get file info
   async getFileInfo(uri: string): Promise<{ size: number; type: string }> {
     try {

@@ -3,7 +3,7 @@ import * as Speech from 'expo-speech';
 import { useFocusEffect } from '@react-navigation/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Card, Chip, Surface, Text, useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { currentConfig } from '../config';
@@ -238,6 +238,7 @@ export default function ResultsScreen() {
   };
 
   const renderFlaws = () => {
+    if (!result?.gpt_feedback) return null;
     // Support both old format (flaws) and new format (technical_flaws)
     const flaws = result.gpt_feedback.technical_flaws || result.gpt_feedback.flaws || [];
     
@@ -319,6 +320,7 @@ export default function ResultsScreen() {
   };
 
   const renderGeneralTips = () => {
+    if (!result?.gpt_feedback) return null;
     if (!result.gpt_feedback.general_tips || result.gpt_feedback.general_tips.length === 0) {
       return null;
     }
@@ -342,6 +344,7 @@ export default function ResultsScreen() {
   };
 
   const renderInjuryRisks = () => {
+    if (!result?.gpt_feedback) return null;
     // Support both old format (injury_risks as string[]) and new format (injury_risk_assessment as objects)
     // Prefer new format to avoid duplicates - only use old format if new format doesn't exist
     const newRisks = result.gpt_feedback.injury_risk_assessment || [];
@@ -411,6 +414,34 @@ export default function ResultsScreen() {
       }
     >
       <View style={styles.content}>
+        {/* Bat-ball contact result (optional) */}
+        {result?.bat_contact && (
+          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+            <Card.Content>
+              <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
+                🏏 Bat–Ball Contact
+              </Text>
+              {result.bat_contact.contact_detected ? (
+                <>
+                  {result.bat_contact.image_base64 ? (
+                    <Image
+                      source={{ uri: `data:image/jpeg;base64,${result.bat_contact.image_base64}` }}
+                      style={styles.batContactImage}
+                      resizeMode="contain"
+                    />
+                  ) : null}
+                  <Text style={[styles.analysisText, { color: theme.colors.onSurface }]}>
+                    {result.bat_contact.contact_location || 'Contact detected'}
+                  </Text>
+                </>
+              ) : (
+                <Text style={[styles.analysisText, { color: theme.colors.onSurface }]}>
+                  {result.bat_contact.message || 'No clear bat-ball contact detected in this video.'}
+                </Text>
+              )}
+            </Card.Content>
+          </Card>
+        )}
         {/* Header */}
         <Surface style={[styles.header, { backgroundColor: theme.colors.surface }]}>
           <View style={styles.headerContent}>
@@ -549,7 +580,7 @@ export default function ResultsScreen() {
         </View>
 
         {/* Analysis Summary - Support both old (analysis) and new (analysis_summary) format */}
-        {(result.gpt_feedback.analysis_summary || result.gpt_feedback.analysis) && (
+        {result?.gpt_feedback && (result.gpt_feedback.analysis_summary || result.gpt_feedback.analysis) && (
           <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
             <Card.Content>
               <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
@@ -643,6 +674,14 @@ export default function ResultsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  batContactImage: {
+    width: '100%',
+    height: 240,
+    marginTop: spacing.md,
+    marginBottom: spacing.md,
+    borderRadius: borderRadius.lg,
+    backgroundColor: 'black',
   },
   scrollContent: {
     paddingBottom: 100, // Extra padding to prevent tab bar overlay (will be adjusted with insets)

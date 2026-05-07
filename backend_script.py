@@ -39,6 +39,7 @@ import hashlib
 import tempfile
 from urllib.parse import quote_plus
 from dotenv import load_dotenv
+import base64
 
 try:
     import razorpay
@@ -82,6 +83,13 @@ load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = 'cricket_shot_prediction_secret_key'
+
+# Optional bat-ball contact module (kept separate so core backend still runs without it)
+try:
+    from bat_ball_contact import run_bat_ball_contact
+except Exception as _bat_contact_import_err:
+    run_bat_ball_contact = None
+    logger.warning(f"⚠️ Bat-ball contact module unavailable: {_bat_contact_import_err}")
 
 # JWT Configuration
 JWT_SECRET_KEY = 'your-super-secret-jwt-key-change-in-production'
@@ -3741,6 +3749,102 @@ def api_upload_file():
     
     logger.warning("Invalid file type")
     return jsonify({'error': 'Invalid file type. Please upload a video file.'}), 400
+
+@app.route('/api/bat-contact', methods=['POST'])
+@require_auth
+def api_bat_contact():
+    """
+    Upload a batting video and return the first detected bat-ball contact frame as an image (base64)
+    plus contact metadata.
+    """
+    try:
+        if run_bat_ball_contact is None:
+            return jsonify({
+                "success": False,
+                "error": "Bat-ball contact feature is not available on this server.",
+            }), 500
+
+        user_id = request.user["user_id"]
+        username = request.user["username"]
+
+        if "video" not in request.files:
+            return jsonify({"success": False, "error": "No video file selected"}), 400
+
+        file = request.files["video"]
+        if not file or not getattr(file, "filename", ""):
+            return jsonify({"success": False, "error": "No video file selected"}), 400
+
+        if not allowed_file(file.filename):
+            return jsonify({"success": False, "error": "Invalid file type. Please upload a video file."}), 400
+
+        filename = secure_filename(file.filename)
+
+        # Save to temp folder
+        job_id = uuid.uuid4().hex
+        tmp_dir = os.path.join(UPLOAD_FOLDER, "_tmp")
+        os.makedirs(tmp_dir, exist_ok=True)
+        tmp_path = os.path.join(tmp_dir, f"{user_id}_{job_id}_{filename}")
+        file.save(tmp_path)
+
+        user_folder = get_user_upload_folder(user_id)
+        os.makedirs(user_folder, exist_ok=True)
+
+        contact = run_bat_ball_contact(
+            tmp_path,
+            output_dir=user_folder,
+            output_basename=f"bat_contact_{job_id}",
+        )
+
+        # Best-effort temp cleanup
+        try:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except Exception:
+            pass
+
+        if not contact.contact_detected or not contact.image_base64:
+            return jsonify({
+                "success": True,
+                "data": {
+                    "success": True,
+                    "player_type": "batsman",
+                    "filename": filename,
+                    "gpt_feedback": None,
+                    "bat_contact": {
+                        "contact_detected": False,
+                        "message": "No clear bat-ball contact detected in the video.",
+                    },
+                },
+            })
+
+        # Also provide a stable filename to fetch later if needed
+        image_filename = os.path.basename(contact.image_path) if contact.image_path else None
+
+        return jsonify({
+            "success": True,
+            "data": {
+                "success": True,
+                "player_type": "batsman",
+                "filename": filename,
+                "username": username,
+                "user_id": int(user_id) if str(user_id).isdigit() else user_id,
+                "gpt_feedback": None,
+                "bat_contact": {
+                    "contact_detected": True,
+                    "frame": contact.frame_index,
+                    "contact_location": contact.contact_location,
+                    "contact_point": list(contact.contact_point) if contact.contact_point else None,
+                    "ball_speed_kmh": contact.ball_speed_kmh,
+                    "bat_speed_kmh": contact.bat_speed_kmh,
+                    "image_filename": image_filename,
+                    "image_base64": contact.image_base64,
+                    "debug": contact.debug,
+                },
+            },
+        })
+    except Exception as e:
+        logger.error(f"❌ [BAT_CONTACT] Failed: {str(e)}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/test-upload', methods=['POST'])
 def test_upload():

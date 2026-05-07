@@ -200,6 +200,36 @@ export default function UploadScreen() {
     }
   };
 
+  const performBatContact = async () => {
+    if (!selectedVideo) return;
+    if (playerType !== 'batsman') return;
+
+    try {
+      const formData: UploadFormData = {
+        player_type: 'batsman',
+        batter_side: playerSide,
+        video_uri: selectedVideo.uri,
+        video_name: selectedVideo.name,
+        video_size: selectedVideo.size,
+        video_type: selectedVideo.type,
+      };
+
+      // This endpoint returns a "result-like" payload that our Results screen can render
+      const resp = await apiService.uploadBatContact(formData);
+      if (!resp.success || !resp.data) {
+        throw new Error(resp.error || 'Failed to detect bat-ball contact');
+      }
+
+      router.push({
+        pathname: '/results',
+        params: { result: JSON.stringify(resp.data) }
+      });
+    } catch (error: any) {
+      console.error('Bat contact error:', error);
+      Alert.alert('Bat Contact Failed', error?.message || 'Failed to detect bat-ball contact. Please try again.');
+    }
+  };
+
   const requestAiConsentAndUpload = async () => {
     if (!selectedVideo) {
       Alert.alert('No Video Selected', 'Please select a video first.');
@@ -650,6 +680,20 @@ export default function UploadScreen() {
             fullWidth
           />
         </Animated.View>
+
+        {/* Bat-ball contact point (batsman only) */}
+        {playerType === 'batsman' && (
+          <Animated.View entering={FadeInUp.delay(650).springify()}>
+            <PremiumButton
+              title="See Bat–Ball Contact Point"
+              onPress={performBatContact}
+              variant="secondary"
+              size="large"
+              disabled={!selectedVideo || isUploading}
+              fullWidth
+            />
+          </Animated.View>
+        )}
 
         {/* Tips */}
         <Animated.View entering={FadeInUp.delay(700).springify()}>
