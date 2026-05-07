@@ -34,7 +34,6 @@ import random
 import string
 import subprocess
 import shutil
-import sys
 import hmac
 import hashlib
 import tempfile
@@ -713,36 +712,6 @@ def process_analysis_job(job_id, user_id, username, filepath, filename, form, ex
             batter_side = form.get("batter_side", "right")
 
             logger.info(f"🎬 [JOB {job_id}] Batting analysis started for {filename}")
-
-            # Optional: run bat-ball contact analysis (no video output) to surface:
-            # 1) bat speed
-            # 2) contact location on bat
-            ball_bat_contact = {
-                "detected": False,
-                "bat_speed_kmh": None,
-                "bat_speed_mps": None,
-                "contact_location": None,
-            }
-            try:
-                # Import lazily (ultralytics is heavy) and call directly.
-                # NOTE: module filename must be importable (no hyphens), e.g. `bat_ball_contact.py`.
-                from bat_ball_contact import analyze_ball_bat_contact  # type: ignore
-
-                logger.info(f"🏏 [JOB {job_id}] Running ball-bat contact (no video) via import")
-                parsed = analyze_ball_bat_contact(
-                    analysis_video_path,
-                    show_video=False,
-                    save_video=False,
-                ) or {}
-                contact = parsed.get("contact") or None
-                if contact:
-                    ball_bat_contact["detected"] = True
-                    ball_bat_contact["bat_speed_kmh"] = contact.get("bat_speed_kmh")
-                    ball_bat_contact["bat_speed_mps"] = contact.get("bat_speed_mps")
-                    ball_bat_contact["contact_location"] = contact.get("contact_location")
-            except Exception as e:
-                logger.warning(f"⚠️ [JOB {job_id}] ball-bat contact skipped: {e}")
-
             keypoints_path, annotated_video_path = extract_pose_keypoints(analysis_video_path, "batting")
             _ = compute_features(keypoints_path, batter_side, "batting")
             try:
@@ -763,7 +732,6 @@ def process_analysis_job(job_id, user_id, username, filepath, filename, form, ex
                 "filename": filename,
                 "annotated_video_path": annotated_video_path,
             }
-            results["ball_bat_contact"] = ball_bat_contact
 
             try:
                 report_path = generate_report(results, "batsman", shot_type, batter_side, None, None, filename, user_id=user_id)
@@ -3773,140 +3741,6 @@ def api_upload_file():
     
     logger.warning("Invalid file type")
     return jsonify({'error': 'Invalid file type. Please upload a video file.'}), 400
-
-@app.route('/api/ball-bat-contact', methods=['POST'])
-@require_auth
-def api_ball_bat_contact():
-    """
-    Run bat-ball contact analysis (YOLO) for a batsman video.
-    Returns an AnalysisResult-shaped JSON so the mobile Results screen can render it.
-    """
-    try:
-        user_id = request.user['user_id']
-        username = request.user['username']
-
-        if 'video' not in request.files:
-            return jsonify({'success': False, 'error': 'No video file selected'}), 400
-
-        file = request.files['video']
-        if file.filename == '':
-            return jsonify({'success': False, 'error': 'No video file selected'}), 400
-
-        if not allowed_file(file.filename):
-            return jsonify({'success': False, 'error': 'Invalid file type. Please upload a video file.'}), 400
-
-        # Save to tmp path
-        filename = secure_filename(file.filename)
-        job_id = uuid.uuid4().hex
-        tmp_dir = os.path.join(UPLOAD_FOLDER, "_tmp")
-        os.makedirs(tmp_dir, exist_ok=True)
-        raw_path = os.path.join(tmp_dir, f"{user_id}_{job_id}_{filename}")
-        file.save(raw_path)
-
-        # Ensure OpenCV can read it
-        readable_path = ensure_video_readable_for_analysis(raw_path, job_id=job_id, user_id=str(user_id))
-
-        # Run the analysis script as a subprocess (file name contains hyphens)
-        script_path = os.path.join(os.path.dirname(__file__), "bat-ball-contact.py")
-        if not os.path.exists(script_path):
-            return jsonify({'success': False, 'error': f'Missing script: {script_path}'}), 500
-
-        user_folder = get_user_upload_folder(user_id)
-        annotated_filename = f"ball_bat_contact_{job_id}.mp4"
-        annotated_out_path = os.path.join(user_folder, annotated_filename)
-
-        cmd = [
-            sys.executable,
-            script_path,
-            "--video", readable_path,
-            "--output", annotated_out_path,
-        ]
-        logger.info(f"🏏 [BALL_BAT_CONTACT] Running: {cmd[0]} {os.path.basename(cmd[1])} --video <...> --output {annotated_filename}")
-        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=900)
-        if proc.returncode != 0:
-            tail = (proc.stderr or "")[-2000:]
-            logger.error(f"❌ [BALL_BAT_CONTACT] Script failed: {tail}")
-            return jsonify({'success': False, 'error': 'Ball-bat contact analysis failed', 'details': tail}), 500
-
-        # Parse JSON from stdout (script prints one JSON object)
-        stdout = (proc.stdout or "").strip()
-        try:
-            parsed = json.loads(stdout.splitlines()[-1] if "\n" in stdout else stdout)
-        except Exception as e:
-            tail = stdout[-2000:]
-            logger.error(f"❌ [BALL_BAT_CONTACT] Failed to parse script JSON: {e}; stdout_tail={tail}")
-            return jsonify({'success': False, 'error': 'Ball-bat contact produced invalid output'}), 500
-
-        contact = parsed.get("contact") or None
-        gemini_analysis = parsed.get("gemini_analysis") or ""
-        annotated_path = parsed.get("annotated_video_path") if parsed.get("annotated_video_path") else None
-
-        # Some environments may not write output; be defensive.
-        if annotated_path and os.path.exists(annotated_path):
-            # Results screen expects just the filename; it fetches via /api/video/<filename>
-            annotated_video_field = annotated_filename
-        else:
-            annotated_video_field = None
-
-        # Optional metadata passed from client
-        batter_side = request.form.get('batter_side', 'right')
-        shot_type = request.form.get('shot_type', 'ball_bat_contact')
-
-        summary_lines = []
-        if contact:
-            try:
-                summary_lines.append(f"Contact detected at frame {contact.get('frame')}.")
-                if contact.get("contact_location"):
-                    summary_lines.append(f"Contact location: {contact.get('contact_location')}.")
-                if contact.get("bat_speed_kmh") is not None:
-                    summary_lines.append(f"Bat speed: {float(contact.get('bat_speed_kmh')):.2f} km/h.")
-                if contact.get("ball_speed_kmh") is not None:
-                    summary_lines.append(f"Ball speed: {float(contact.get('ball_speed_kmh')):.2f} km/h.")
-            except Exception:
-                pass
-
-        analysis_summary = "\n".join([*summary_lines, gemini_analysis]).strip() or "Ball-bat contact analysis completed."
-
-        result = {
-            "success": True,
-            "player_type": "batsman",
-            "shot_type": shot_type,
-            "batter_side": batter_side,
-            "gpt_feedback": {
-                "analysis_summary": analysis_summary,
-                "technical_flaws": [],
-                "general_tips": [],
-                "injury_risk_assessment": [],
-            },
-            "filename": filename,
-            "user_id": user_id,
-            "username": username,
-            "annotated_video_path": annotated_video_field,
-            "ball_bat_contact": {
-                "contact": contact,
-                "gemini_analysis": gemini_analysis,
-            },
-        }
-
-        # Cleanup temp files
-        try:
-            if os.path.exists(raw_path):
-                os.remove(raw_path)
-        except Exception:
-            pass
-        try:
-            if readable_path != raw_path and os.path.exists(readable_path):
-                os.remove(readable_path)
-        except Exception:
-            pass
-
-        return jsonify(result)
-    except subprocess.TimeoutExpired:
-        logger.error("❌ [BALL_BAT_CONTACT] Script timed out")
-        return jsonify({'success': False, 'error': 'Ball-bat contact analysis timed out'}), 504
-    except Exception as e:
-        logger.error(f"❌ [BALL_BAT_CONTACT] Unexpected error: {e}", exc_info=True)
-        return jsonify({'success': False, 'error': 'Ball-bat contact analysis failed', 'details': str(e)}), 500
 
 @app.route('/api/test-upload', methods=['POST'])
 def test_upload():

@@ -636,68 +636,6 @@ class ApiService {
     }
   }
 
-  // Ball-bat contact analysis (batsman only)
-  async ballBatContact(formData: UploadFormData): Promise<ApiResponse<AnalysisResult>> {
-    try {
-      const token = await this.getStoredToken();
-      if (!token) {
-        return { success: false, error: 'Authentication required. Please login first.' };
-      }
-
-      // Build FormData
-      const data = new FormData();
-      const videoFile = {
-        uri: formData.video_uri,
-        name: formData.video_name || 'video.mp4',
-        type: formData.video_type || 'video/mp4',
-      } as any;
-      data.append('video', videoFile);
-
-      // Optional context
-      if (formData.batter_side) data.append('batter_side', formData.batter_side);
-      if (formData.shot_type) data.append('shot_type', formData.shot_type);
-
-      const url = `${this.baseURL}/api/ball-bat-contact`;
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15 * 60 * 1000); // 15 min
-
-      try {
-        const resp = await fetch(url, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          body: data,
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-
-        const text = await resp.text();
-        let json: any = null;
-        try {
-          json = text ? JSON.parse(text) : null;
-        } catch {
-          // ignore
-        }
-
-        if (!resp.ok) {
-          const errMsg = json?.error || json?.message || text || `Request failed (${resp.status})`;
-          return { success: false, error: errMsg };
-        }
-
-        return { success: true, data: json };
-      } catch (e: any) {
-        clearTimeout(timeoutId);
-        if (e?.name === 'AbortError') {
-          return { success: false, error: 'Ball-bat contact timed out. Please try again.' };
-        }
-        return { success: false, error: e?.message || 'Ball-bat contact failed. Please try again.' };
-      }
-    } catch (error: any) {
-      return { success: false, error: error?.message || 'Ball-bat contact failed. Please try again.' };
-    }
-  }
-
   // Get file info
   async getFileInfo(uri: string): Promise<{ size: number; type: string }> {
     try {

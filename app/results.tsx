@@ -1,7 +1,7 @@
-import { AVPlaybackStatus, ResizeMode, Video } from 'expo-av';
-import * as Speech from 'expo-speech';
 import { useFocusEffect } from '@react-navigation/native';
+import { AVPlaybackStatus, ResizeMode, Video } from 'expo-av';
 import { router, useLocalSearchParams } from 'expo-router';
+import * as Speech from 'expo-speech';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Card, Chip, Surface, Text, useTheme } from 'react-native-paper';
@@ -10,8 +10,8 @@ import { currentConfig } from '../config';
 import apiService from '../src/services/api';
 import { borderRadius, colors, shadows, spacing } from '../src/theme';
 import { AnalysisResult } from '../src/types';
-import { translateToHindi } from '../src/utils/translate';
 import { getResponsiveFontSize, getResponsiveSize, screenWidth } from '../src/utils/responsive';
+import { translateToHindi } from '../src/utils/translate';
 
 export default function ResultsScreen() {
   const theme = useTheme();
@@ -223,10 +223,6 @@ export default function ResultsScreen() {
       </View>
     );
   }
-
-  const ballBatContact = (result as any)?.ball_bat_contact as
-    | { detected?: boolean; bat_speed_kmh?: number; bat_speed_mps?: number; contact_location?: string }
-    | undefined;
 
   const getPlayerTypeIcon = (type: string) => {
     return type === 'batsman' ? '🏏' : '🎯';
@@ -563,24 +559,6 @@ export default function ResultsScreen() {
                 {language === 'hi' && translated.summary
                   ? translated.summary
                   : (result.gpt_feedback.analysis_summary || result.gpt_feedback.analysis)}
-              </Text>
-            </Card.Content>
-          </Card>
-        )}
-
-        {/* Ball–Bat Contact (always shown for batsman) */}
-        {result.player_type === 'batsman' && (
-          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-            <Card.Content>
-              <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
-                {language === 'hi' ? '🏏 बल्ला–गेंद संपर्क' : '🏏 Ball–Bat Contact'}
-              </Text>
-              <Text style={[styles.analysisText, { color: theme.colors.onSurface }]}>
-                {language === 'hi' ? 'बल्ले की गति' : 'Bat speed'}:{' '}
-                {ballBatContact?.bat_speed_kmh != null ? `${Number(ballBatContact.bat_speed_kmh).toFixed(2)} km/h` : 'N/A'}
-              </Text>
-              <Text style={[styles.analysisText, { color: theme.colors.onSurface, marginTop: 6 }]}>
-                {language === 'hi' ? 'संपर्क स्थान' : 'Contact location'}: {ballBatContact?.contact_location || 'N/A'}
               </Text>
             </Card.Content>
           </Card>
