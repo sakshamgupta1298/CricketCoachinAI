@@ -1,12 +1,12 @@
 import { Stack } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
+import React from 'react';
 import { useColorScheme } from 'react-native';
 import { Provider as PaperProvider } from 'react-native-paper';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
-import * as SplashScreen from 'expo-splash-screen';
-import React from 'react';
 
 // Import context
 import { AuthProvider } from '../src/context/AuthContext';

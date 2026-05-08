@@ -1,9 +1,9 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
+import Constants from 'expo-constants';
+import * as Notifications from 'expo-notifications';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
-import * as Notifications from 'expo-notifications';
-import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { Provider as PaperProvider } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -15,7 +15,6 @@ import HomeScreen from './src/screens/HomeScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import ResultsScreen from './src/screens/ResultsScreen';
 import UploadScreen from './src/screens/UploadScreen';
-import PlansScreen from './src/screens/PlansScreen';
 
 // Import components
 import CustomTabBar from './src/components/CustomTabBar';
@@ -103,13 +102,6 @@ function TabNavigator() {
         component={UploadScreen}
         options={{
           tabBarLabel: 'Upload',
-        }}
-      />
-      <Stack.Screen
-        name="Plans"
-        component={PlansScreen}
-        options={{
-          tabBarLabel: 'Plans',
         }}
       />
       <Stack.Screen 

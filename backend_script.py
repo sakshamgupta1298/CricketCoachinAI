@@ -39,7 +39,6 @@ import hashlib
 import tempfile
 from urllib.parse import quote_plus
 from dotenv import load_dotenv
-from typing import Optional
 
 try:
     import razorpay
@@ -141,30 +140,10 @@ def init_database():
             analysis_credits_remaining INTEGER NOT NULL DEFAULT 20,
             feature_compare INTEGER NOT NULL DEFAULT 0,
             feature_ball_speed INTEGER NOT NULL DEFAULT 0,
-            feature_advanced_shot_insights INTEGER NOT NULL DEFAULT 0,
-            feature_performance_tracking INTEGER NOT NULL DEFAULT 0,
-            feature_priority_booking INTEGER NOT NULL DEFAULT 0,
-            coaching_sessions_remaining INTEGER NOT NULL DEFAULT 0,
-            plan_key TEXT,
-            entitlement_period_end TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
         )
     ''')
-
-    # Add new entitlement columns for existing installations (idempotent)
-    for col_def in [
-        "feature_advanced_shot_insights INTEGER NOT NULL DEFAULT 0",
-        "feature_performance_tracking INTEGER NOT NULL DEFAULT 0",
-        "feature_priority_booking INTEGER NOT NULL DEFAULT 0",
-        "coaching_sessions_remaining INTEGER NOT NULL DEFAULT 0",
-        "plan_key TEXT",
-        "entitlement_period_end TIMESTAMP",
-    ]:
-        try:
-            cursor.execute(f'ALTER TABLE user_entitlements ADD COLUMN {col_def}')
-        except sqlite3.OperationalError:
-            pass  # Column already exists
 
     # Razorpay orders/payments
     cursor.execute('''
@@ -182,8 +161,6 @@ def init_database():
             FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
         )
     ''')
-
-    # (Stripe removed) keep schema focused on Razorpay + entitlements
 
     # Backfill entitlements rows for existing users (idempotent)
     try:
@@ -216,130 +193,6 @@ PLAN_DEFINITIONS = {
     "plan3": {"price_inr": 399, "amount_paise": 399 * 100, "analysis_credits": 210, "feature_compare": 1, "feature_ball_speed": 1},
 }
 
-# Razorpay plan catalog (server-side entitlements)
-# Notes:
-# - analysis_credits_remaining is treated as a per-period allowance (reset on purchase/renewal)
-# - entitlement_period_end determines whether user is currently subscribed
-RAZORPAY_PLAN_CATALOG = {
-    "basic_monthly": {
-        "label": "Basic Monthly",
-        "price_inr": 199,
-        "amount_paise": 199 * 100,
-        "period_days": 30,
-        "analysis_allowance": 50,
-        "feature_compare": 0,
-        "feature_ball_speed": 0,
-        "feature_advanced_shot_insights": 0,
-        "feature_performance_tracking": 0,
-        "feature_priority_booking": 0,
-        "coach_sessions_per_period": 0,
-    },
-    "pro_monthly": {
-        "label": "Pro Monthly",
-        "price_inr": 399,
-        "amount_paise": 399 * 100,
-        "period_days": 30,
-        "analysis_allowance": 300,
-        "feature_compare": 1,
-        "feature_ball_speed": 0,
-        "feature_advanced_shot_insights": 0,
-        "feature_performance_tracking": 0,
-        "feature_priority_booking": 0,
-        "coach_sessions_per_period": 1,
-    },
-    "elite_monthly": {
-        "label": "Elite Monthly",
-        "price_inr": 999,
-        "amount_paise": 999 * 100,
-        "period_days": 30,
-        "analysis_allowance": 1000,
-        "feature_compare": 1,
-        "feature_ball_speed": 1,
-        "feature_advanced_shot_insights": 1,
-        "feature_performance_tracking": 1,
-        "feature_priority_booking": 0,
-        "coach_sessions_per_period": 2,
-    },
-    "elite_yearly": {
-        "label": "Elite Yearly",
-        "price_inr": 7999,
-        "amount_paise": 7999 * 100,
-        "period_days": 365,
-        "analysis_allowance": 1000,
-        "feature_compare": 1,
-        "feature_ball_speed": 1,
-        "feature_advanced_shot_insights": 1,
-        "feature_performance_tracking": 1,
-        "feature_priority_booking": 1,
-        "coach_sessions_per_period": 24,
-    },
-}
-
-
-def _set_entitlements_for_plan(
-    user_id: int,
-    plan_key: str,
-    period_end_ts: Optional[int],
-):
-    """
-    Overwrite per-period allowances + feature flags for the plan.
-    period_end_ts is Stripe unix timestamp (seconds) or None.
-    """
-    plan = RAZORPAY_PLAN_CATALOG.get(plan_key)
-    if not plan:
-        raise ValueError("Invalid plan_key")
-
-    entitlement_period_end = None
-    try:
-        if period_end_ts is not None:
-            entitlement_period_end = datetime.utcfromtimestamp(int(period_end_ts)).isoformat()
-    except Exception:
-        entitlement_period_end = None
-
-    conn = get_db_connection()
-    try:
-        _ensure_entitlements_row(conn, user_id)
-        cur = conn.cursor()
-        cur.execute('BEGIN IMMEDIATE')
-        cur.execute(
-            '''
-            UPDATE user_entitlements
-            SET
-              analysis_credits_remaining = ?,
-              feature_compare = ?,
-              feature_ball_speed = ?,
-              feature_advanced_shot_insights = ?,
-              feature_performance_tracking = ?,
-              feature_priority_booking = ?,
-              coaching_sessions_remaining = ?,
-              plan_key = ?,
-              entitlement_period_end = ?,
-              updated_at = CURRENT_TIMESTAMP
-            WHERE user_id = ?
-            ''',
-            (
-                int(plan["analysis_allowance"]),
-                int(plan["feature_compare"]),
-                int(plan["feature_ball_speed"]),
-                int(plan["feature_advanced_shot_insights"]),
-                int(plan["feature_performance_tracking"]),
-                int(plan["feature_priority_booking"]),
-                int(plan["coach_sessions_per_period"]),
-                plan_key,
-                entitlement_period_end,
-                user_id,
-            ),
-        )
-        conn.commit()
-    except Exception:
-        try:
-            conn.rollback()
-        except Exception:
-            pass
-        raise
-    finally:
-        conn.close()
-
 
 def _ensure_entitlements_row(conn, user_id: int):
     cur = conn.cursor()
@@ -354,46 +207,14 @@ def get_entitlements(user_id: int):
     try:
         _ensure_entitlements_row(conn, user_id)
         cur = conn.cursor()
-        cur.execute(
-            '''
-            SELECT
-              analysis_credits_remaining,
-              feature_compare,
-              feature_ball_speed,
-              feature_advanced_shot_insights,
-              feature_performance_tracking,
-              feature_priority_booking,
-              coaching_sessions_remaining,
-              plan_key,
-              entitlement_period_end
-            FROM user_entitlements
-            WHERE user_id = ?
-            ''',
-            (user_id,),
-        )
+        cur.execute('SELECT analysis_credits_remaining, feature_compare, feature_ball_speed FROM user_entitlements WHERE user_id = ?', (user_id,))
         row = cur.fetchone()
         if not row:
-            return {
-                "analysis_credits_remaining": 0,
-                "feature_compare": False,
-                "feature_ball_speed": False,
-                "feature_advanced_shot_insights": False,
-                "feature_performance_tracking": False,
-                "feature_priority_booking": False,
-                "coaching_sessions_remaining": 0,
-                "plan_key": None,
-                "entitlement_period_end": None,
-            }
+            return {"analysis_credits_remaining": 0, "feature_compare": False, "feature_ball_speed": False}
         return {
             "analysis_credits_remaining": int(row["analysis_credits_remaining"] or 0),
             "feature_compare": bool(row["feature_compare"]),
             "feature_ball_speed": bool(row["feature_ball_speed"]),
-            "feature_advanced_shot_insights": bool(row["feature_advanced_shot_insights"]),
-            "feature_performance_tracking": bool(row["feature_performance_tracking"]),
-            "feature_priority_booking": bool(row["feature_priority_booking"]),
-            "coaching_sessions_remaining": int(row["coaching_sessions_remaining"] or 0),
-            "plan_key": row["plan_key"],
-            "entitlement_period_end": row["entitlement_period_end"],
         }
     finally:
         conn.close()
@@ -406,23 +227,7 @@ def consume_one_analysis_credit(user_id: int) -> (bool, dict):
         _ensure_entitlements_row(conn, user_id)
         cur = conn.cursor()
         cur.execute('BEGIN IMMEDIATE')
-        cur.execute(
-            '''
-            SELECT
-              analysis_credits_remaining,
-              feature_compare,
-              feature_ball_speed,
-              feature_advanced_shot_insights,
-              feature_performance_tracking,
-              feature_priority_booking,
-              coaching_sessions_remaining,
-              plan_key,
-              entitlement_period_end
-            FROM user_entitlements
-            WHERE user_id = ?
-            ''',
-            (user_id,),
-        )
+        cur.execute('SELECT analysis_credits_remaining, feature_compare, feature_ball_speed FROM user_entitlements WHERE user_id = ?', (user_id,))
         row = cur.fetchone()
         remaining = int(row["analysis_credits_remaining"] or 0) if row else 0
         if remaining <= 0:
@@ -431,12 +236,6 @@ def consume_one_analysis_credit(user_id: int) -> (bool, dict):
                 "analysis_credits_remaining": remaining,
                 "feature_compare": bool(row["feature_compare"]) if row else False,
                 "feature_ball_speed": bool(row["feature_ball_speed"]) if row else False,
-                "feature_advanced_shot_insights": bool(row["feature_advanced_shot_insights"]) if row else False,
-                "feature_performance_tracking": bool(row["feature_performance_tracking"]) if row else False,
-                "feature_priority_booking": bool(row["feature_priority_booking"]) if row else False,
-                "coaching_sessions_remaining": int(row["coaching_sessions_remaining"] or 0) if row else 0,
-                "plan_key": row["plan_key"] if row else None,
-                "entitlement_period_end": row["entitlement_period_end"] if row else None,
             }
 
         new_remaining = remaining - 1
@@ -449,12 +248,6 @@ def consume_one_analysis_credit(user_id: int) -> (bool, dict):
             "analysis_credits_remaining": new_remaining,
             "feature_compare": bool(row["feature_compare"]),
             "feature_ball_speed": bool(row["feature_ball_speed"]),
-            "feature_advanced_shot_insights": bool(row["feature_advanced_shot_insights"]),
-            "feature_performance_tracking": bool(row["feature_performance_tracking"]),
-            "feature_priority_booking": bool(row["feature_priority_booking"]),
-            "coaching_sessions_remaining": int(row["coaching_sessions_remaining"] or 0),
-            "plan_key": row["plan_key"],
-            "entitlement_period_end": row["entitlement_period_end"],
         }
     except Exception as e:
         try:
@@ -4161,56 +3954,9 @@ def me_entitlements():
         return jsonify({"success": False, "error": "Failed to load entitlements"}), 500
 
 
-@app.route('/api/me/usage', methods=['GET'])
-@require_auth
-def me_usage():
-    """
-    Lightweight usage endpoint for paywall checks.
-    - total_analyses: number of completed analyses for this user (server-authoritative)
-    - is_subscribed: whether the user currently has an active plan_key
-    """
-    try:
-        user_id = int(request.user['user_id'])
-        ent = get_entitlements(user_id)
-        plan_key = ent.get("plan_key")
-        period_end = ent.get("entitlement_period_end")
-        is_subscribed = False
-        try:
-            if plan_key and period_end:
-                dt = datetime.fromisoformat(str(period_end).replace("Z", ""))
-                is_subscribed = dt > datetime.utcnow()
-        except Exception:
-            is_subscribed = bool(plan_key)
-
-        # Count result files in the user's upload folder
-        user_folder = get_user_upload_folder(user_id)
-        total = 0
-        try:
-            if os.path.exists(user_folder):
-                for f in os.listdir(user_folder):
-                    if f.startswith("results_") and f.endswith(".json"):
-                        total += 1
-        except Exception as e:
-            logger.warning(f"Failed counting analyses for user {user_id}: {e}")
-
-        return jsonify(
-            {
-                "success": True,
-                "usage": {
-                    "total_analyses": int(total),
-                    "is_subscribed": bool(is_subscribed),
-                    "plan_key": plan_key,
-                },
-            }
-        )
-    except Exception as e:
-        logger.error(f"Failed to get usage: {e}", exc_info=True)
-        return jsonify({"success": False, "error": "Failed to load usage"}), 500
-
-
 def _get_razorpay_client():
-    key_id = (os.environ.get("RAZORPAY_KEY_ID") or "").strip()
-    key_secret = (os.environ.get("RAZORPAY_KEY_SECRET") or "").strip()
+    key_id = "rzp_test_Sb5yJF2AjR63PO"
+    key_secret = "V78s4WUtReKfFgBpO9M1NWG1"
     if not key_id or not key_secret:
         raise RuntimeError("Razorpay keys not configured")
     if razorpay is None:
@@ -4225,22 +3971,11 @@ def razorpay_create_order():
     try:
         user_id = int(request.user['user_id'])
         data = request.get_json(silent=True) or {}
-        # New: plan_key (basic_monthly/pro_monthly/elite_monthly/elite_yearly)
-        # Back-compat: plan_id (plan1/plan2/plan3)
-        plan_key = (data.get("plan_key") or "").strip()
         plan_id = (data.get("plan_id") or "").strip()
+        if plan_id not in PLAN_DEFINITIONS:
+            return jsonify({"error": "Invalid plan_id"}), 400
 
-        if plan_key:
-            if plan_key not in RAZORPAY_PLAN_CATALOG:
-                return jsonify({"error": "Invalid plan_key"}), 400
-            plan = RAZORPAY_PLAN_CATALOG[plan_key]
-            plan_id_to_store = plan_key
-        else:
-            if plan_id not in PLAN_DEFINITIONS:
-                return jsonify({"error": "Invalid plan_id"}), 400
-            plan = PLAN_DEFINITIONS[plan_id]
-            plan_id_to_store = plan_id
-
+        plan = PLAN_DEFINITIONS[plan_id]
         client, key_id, _secret = _get_razorpay_client()
 
         order = client.order.create({
@@ -4249,7 +3984,7 @@ def razorpay_create_order():
             "payment_capture": 1,
             "notes": {
                 "user_id": str(user_id),
-                "plan_id": plan_id_to_store,
+                "plan_id": plan_id,
             }
         })
 
@@ -4262,7 +3997,7 @@ def razorpay_create_order():
             cur = conn.cursor()
             cur.execute(
                 'INSERT OR REPLACE INTO razorpay_transactions (order_id, user_id, plan_id, amount_paise, currency, status) VALUES (?, ?, ?, ?, ?, ?)',
-                (order_id, user_id, plan_id_to_store, int(plan["amount_paise"]), "INR", "created")
+                (order_id, user_id, plan_id, int(plan["amount_paise"]), "INR", "created")
             )
             conn.commit()
         finally:
@@ -4273,7 +4008,7 @@ def razorpay_create_order():
             "amount": int(plan["amount_paise"]),
             "currency": "INR",
             "key_id": key_id,
-            "plan_id": plan_id_to_store,
+            "plan_id": plan_id,
         })
     except Exception as e:
         logger.error(f"Create order failed: {e}", exc_info=True)
@@ -4287,14 +4022,12 @@ def razorpay_verify_payment():
     try:
         user_id = int(request.user['user_id'])
         data = request.get_json(silent=True) or {}
-        plan_id = (data.get("plan_id") or "").strip()  # may be plan_key (new) or plan1/2/3 (old)
+        plan_id = (data.get("plan_id") or "").strip()
         order_id = (data.get("razorpay_order_id") or "").strip()
         payment_id = (data.get("razorpay_payment_id") or "").strip()
         signature = (data.get("razorpay_signature") or "").strip()
 
-        is_new_plan = plan_id in RAZORPAY_PLAN_CATALOG
-        is_old_plan = plan_id in PLAN_DEFINITIONS
-        if not (is_new_plan or is_old_plan):
+        if plan_id not in PLAN_DEFINITIONS:
             return jsonify({"error": "Invalid plan_id"}), 400
         if not order_id or not payment_id or not signature:
             return jsonify({"error": "Missing payment fields"}), 400
@@ -4330,17 +4063,6 @@ def razorpay_verify_payment():
         finally:
             conn.close()
 
-        # Apply entitlements
-        if is_new_plan:
-            plan_key = plan_id
-            period_days = int(RAZORPAY_PLAN_CATALOG[plan_key]["period_days"])
-            period_end = datetime.utcnow() + timedelta(days=period_days)
-            period_end_ts = int(period_end.timestamp())
-            _set_entitlements_for_plan(user_id, plan_key, period_end_ts)
-            ent = get_entitlements(user_id)
-            return jsonify({"success": True, "entitlements": ent})
-
-        # Legacy credit pack behavior
         ent = apply_plan_purchase(user_id, plan_id)
         return jsonify({"success": True, "entitlements": ent})
     except Exception as e:

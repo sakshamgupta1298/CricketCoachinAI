@@ -3,22 +3,22 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
 import {
-  Alert,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  View,
+    Alert,
+    ScrollView,
+    StyleSheet,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import {
-  Button,
-  Card,
-  Menu,
-  ProgressBar,
-  RadioButton,
-  Surface,
-  Text,
-  TextInput,
-  useTheme
+    Button,
+    Card,
+    Menu,
+    ProgressBar,
+    RadioButton,
+    Surface,
+    Text,
+    TextInput,
+    useTheme
 } from 'react-native-paper';
 import Toast from 'react-native-toast-message';
 import { useUpload } from '../context/UploadContext';
@@ -126,26 +126,6 @@ const UploadScreen: React.FC = () => {
     }
 
     try {
-      // Paywall: after 10 total analyses, non-subscribed users must subscribe
-      try {
-        const usageResp = await apiService.getUsage();
-        const totalAnalyses = usageResp?.usage?.total_analyses ?? 0;
-        const isSubscribed = !!usageResp?.usage?.is_subscribed;
-        if (!isSubscribed && Number(totalAnalyses) >= 10) {
-          Alert.alert(
-            'Subscription Required',
-            'You have reached your free analysis limit. Please subscribe to continue.',
-            [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'OK', onPress: () => navigation.navigate('Plans' as any) },
-            ]
-          );
-          return;
-        }
-      } catch {
-        // If usage check fails, don't block upload.
-      }
-
       const formData: UploadFormData = {
         player_type: playerType,
         video_uri: selectedVideo.uri,
