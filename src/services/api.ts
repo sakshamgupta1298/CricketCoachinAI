@@ -1946,6 +1946,77 @@ class ApiService {
     }
   }
 
+  // ====================
+  // Subscriptions / Paywall
+  // ====================
+
+  async getEntitlements(): Promise<any> {
+    try {
+      const token = await this.getStoredToken();
+      if (!token) {
+        return { success: false, error: 'Authentication required' };
+      }
+      const response = await this.jsonApi.get('/api/me/entitlements', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return response.data;
+    } catch (error: any) {
+      return { success: false, error: error.response?.data?.error || error.message };
+    }
+  }
+
+  async getUsage(): Promise<any> {
+    try {
+      const token = await this.getStoredToken();
+      if (!token) {
+        return { success: false, error: 'Authentication required' };
+      }
+      const response = await this.jsonApi.get('/api/me/usage', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return response.data;
+    } catch (error: any) {
+      return { success: false, error: error.response?.data?.error || error.message };
+    }
+  }
+
+  async createRazorpayOrder(planKey: string): Promise<any> {
+    try {
+      const token = await this.getStoredToken();
+      if (!token) {
+        return { success: false, error: 'Authentication required' };
+      }
+      const response = await this.jsonApi.post(
+        '/api/payments/razorpay/create-order',
+        { plan_key: planKey },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      return response.data;
+    } catch (error: any) {
+      return { success: false, error: error.response?.data?.error || error.message };
+    }
+  }
+
+  async verifyRazorpayPayment(payload: {
+    plan_id: string;
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+  }): Promise<any> {
+    try {
+      const token = await this.getStoredToken();
+      if (!token) {
+        return { success: false, error: 'Authentication required' };
+      }
+      const response = await this.jsonApi.post('/api/payments/razorpay/verify', payload, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return response.data;
+    } catch (error: any) {
+      return { success: false, error: error.response?.data?.error || error.message };
+    }
+  }
+
 }
 
 export default new ApiService(); 

@@ -129,6 +129,22 @@ If you see the startup logs, the script is working correctly!
 
 ---
 
+## Razorpay Plans (Basic/Pro/Elite)
+
+The backend exposes:
+
+- `POST /api/payments/razorpay/create-order` (authenticated)
+- `POST /api/payments/razorpay/verify` (authenticated)
+
+### Required environment variables
+
+Set these in your backend `.env` (server-side):
+
+- `RAZORPAY_KEY_ID`
+- `RAZORPAY_KEY_SECRET`
+
+---
+
 ## Network Issue: Login Not Working
 
 If you're getting network errors when trying to login from the mobile app:

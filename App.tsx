@@ -15,6 +15,7 @@ import HomeScreen from './src/screens/HomeScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import ResultsScreen from './src/screens/ResultsScreen';
 import UploadScreen from './src/screens/UploadScreen';
+import PlansScreen from './src/screens/PlansScreen';
 
 // Import components
 import CustomTabBar from './src/components/CustomTabBar';
@@ -102,6 +103,13 @@ function TabNavigator() {
         component={UploadScreen}
         options={{
           tabBarLabel: 'Upload',
+        }}
+      />
+      <Stack.Screen
+        name="Plans"
+        component={PlansScreen}
+        options={{
+          tabBarLabel: 'Plans',
         }}
       />
       <Stack.Screen 

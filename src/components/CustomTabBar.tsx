@@ -13,6 +13,8 @@ const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, navigat
         return '🏠';
       case 'Upload':
         return '📤';
+      case 'Plans':
+        return '💳';
       case 'Camera':
         return '📷';
       case 'History':
