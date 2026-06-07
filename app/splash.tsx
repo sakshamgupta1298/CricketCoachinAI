@@ -137,10 +137,11 @@ export default function SplashScreenComponent() {
   const opacity = useSharedValue(1); // Start visible
   
   // Responsive dimensions
-  const logoSize = getResponsiveSize(150);
+  const logoSize = getResponsiveSize(210);
   const appNameFontSize = getResponsiveFontSize(27);
   const taglineFontSize = getResponsiveFontSize(14);
-  const logoMarginBottom = getResponsiveSize(40);
+  const logoMarginBottom = getResponsiveSize(-10);
+  const logoMarginTop = getResponsiveSize(30);
   const textMarginBottom = getResponsiveSize(60);
   const loadingMarginTop = getResponsiveSize(20);
   const dotSize = Math.max(getResponsiveSize(8), 6); // Minimum 6px
@@ -153,11 +154,12 @@ export default function SplashScreenComponent() {
       console.log('⚠️ [SPLASH] hideAsync failed (ignored):', (e as any)?.message ?? e);
     });
     console.log('🎬 [SPLASH] First effect ran (hideAsync triggered)');
-    // Animate splash icon entrance with bounce effect, then keep it static
+    // Animate splash icon entrance, then a smooth zoom-out to resting size
     scale.value = withSequence(
       withTiming(0.5, { duration: 0 }), // Start small
       withTiming(1.2, { duration: 1200, easing: Easing.out(Easing.exp) }), // Bounce up
-      withTiming(1, { duration: 600, easing: Easing.inOut(Easing.exp) }) // Settle to static
+      withTiming(1.12, { duration: 400, easing: Easing.out(Easing.cubic) }), // Slight overshoot
+      withTiming(1, { duration: 2200, easing: Easing.out(Easing.cubic) }) // Smooth zoom-out
     );
     // Keep opacity at 1 (visible)
     opacity.value = 1;
@@ -211,7 +213,7 @@ export default function SplashScreenComponent() {
           <Animated.View 
             style={[
               styles.logoContainer, 
-              { marginBottom: logoMarginBottom },
+              { marginTop: logoMarginTop, marginBottom: logoMarginBottom },
               logoAnimatedStyle
             ]}
             entering={FadeIn.duration(800)}
@@ -220,7 +222,7 @@ export default function SplashScreenComponent() {
             <Image
               source={imageError 
                 ? require('../assets/images/logo-icon.png')
-                : require('../assets/images/splash-icon.png')
+                : require('../assets/images/logo-icon.png')
               }
               style={[styles.logo, { width: logoSize, height: logoSize }]}
               contentFit="contain"

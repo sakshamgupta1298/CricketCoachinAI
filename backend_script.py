@@ -1556,7 +1556,7 @@ REQUIRED JSON OUTPUT
 
     try:
         response_B = client.models.generate_content(
-            model="gemini-2.5-pro",
+            model="gemini-1.5-flash",
             contents=[prompt_B],
             config={
             "temperature": 0,
@@ -2102,7 +2102,7 @@ REQUIRED JSON OUTPUT
 
     try:
         response_B = client.models.generate_content(
-            model="gemini-2.5-pro",
+            model="gemini-1.5-flash",
             contents=[prompt_B],
             config={
             "temperature": 0,
@@ -3006,7 +3006,7 @@ REQUIRED JSON OUTPUT
 
     try:
         response_B = client.models.generate_content(
-            model="gemini-2.5-pro",
+            model="gemini-1.5-flash",
             contents=[prompt_B],
             config={
             "temperature": 0,
