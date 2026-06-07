@@ -453,6 +453,55 @@ def _try_open_video_with_opencv(video_path: str) -> bool:
         except Exception:
             pass
 
+def get_video_duration_seconds(video_path: str):
+    """
+    Return the duration of a video in seconds, or None if it can't be determined.
+    Tries ffprobe first (most reliable across containers/codecs), then falls back to OpenCV.
+    """
+    # 1) Try ffprobe (part of the ffmpeg suite) for an accurate duration.
+    ffprobe = shutil.which("ffprobe")
+    if ffprobe:
+        try:
+            out = subprocess.run(
+                [
+                    ffprobe,
+                    "-v", "error",
+                    "-show_entries", "format=duration",
+                    "-of", "default=noprint_wrappers=1:nokey=1",
+                    video_path,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            value = (out.stdout or "").strip()
+            if value:
+                duration = float(value)
+                if duration > 0:
+                    return duration
+        except Exception:
+            pass
+
+    # 2) Fall back to OpenCV (frame_count / fps).
+    cap = None
+    try:
+        cap = cv2.VideoCapture(video_path)
+        if cap and cap.isOpened():
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+            if fps and fps > 0 and frame_count and frame_count > 0:
+                return float(frame_count) / float(fps)
+    except Exception:
+        pass
+    finally:
+        try:
+            if cap:
+                cap.release()
+        except Exception:
+            pass
+
+    return None
+
 def _transcode_to_mp4_ffmpeg(input_path: str, output_path: str) -> None:
     """
     Transcode video to MP4 (H.264/AAC) using ffmpeg.
@@ -3686,6 +3735,36 @@ def api_upload_file():
         os.makedirs(tmp_dir, exist_ok=True)
         filepath = os.path.join(tmp_dir, f"{user_id}_{job_id}_{filename}")
         file.save(filepath)
+
+        # Enforce a maximum video length of 5 seconds.
+        MAX_VIDEO_DURATION_SECONDS = 5
+        duration = get_video_duration_seconds(filepath)
+        if duration is None:
+            try:
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+            except Exception:
+                pass
+            logger.warning(f"Could not determine duration for uploaded video: {filename}")
+            return jsonify({
+                "error": "We couldn't read this video. Please upload a valid video of a particular shot that is 5 seconds or less."
+            }), 400
+
+        # Allow a tiny tolerance so a clip that is ~5s isn't wrongly rejected.
+        if duration > MAX_VIDEO_DURATION_SECONDS + 0.5:
+            try:
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+            except Exception:
+                pass
+            logger.warning(
+                f"Rejected upload: video too long ({duration:.2f}s) for user {username}, file {filename}"
+            )
+            return jsonify({
+                "error": "The video you uploaded is large. You need to upload a video of a particular shot and of 5 seconds.",
+                "duration": round(duration, 2),
+                "max_duration": MAX_VIDEO_DURATION_SECONDS,
+            }), 400
 
         try:
             s3_info = upload_video_to_s3(
