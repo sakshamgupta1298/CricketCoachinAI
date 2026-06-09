@@ -19,6 +19,9 @@ import { MODEL_INPUT_SIZE } from './useBallDetector';
 
 // Minimum class confidence to accept a ball detection.
 const CONF_THRESHOLD = 0.3;
+// COCO class index for "sports ball" (used by stock YOLOv8n export).
+const SPORTS_BALL_CLASS = 32;
+const COCO_CHANNELS = 84; // 4 box rows + 80 class scores
 // Dequant for yolov8n_full_integer_quant.tflite (int8 output, zp=-128).
 const OUT_SCALE = 0.004194468259811401;
 const OUT_ZERO_POINT = -128;
@@ -46,7 +49,7 @@ export const MODEL_CONFIG = {
   targetClass: 32,
   /** True if box coords are normalized 0..1 (multiply by input size). Set
    *  false if your export emits pixel coords (0..input size). */
-  coordsNormalized: false,
+  coordsNormalized: true,
 } as const;
 
 export interface FrameProcessorRefs {
@@ -84,19 +87,29 @@ export function useBallSpeedFrameProcessor(
       const outputs = model.runSync([input]);
       const out = outputs[0];
 
+<<<<<<< HEAD
       // YOLOv8 TFLite output is channels-first: [1, 4 + numClasses, N].
       // Rows 0..3 = cx, cy, w, h; row (4 + targetClass) = the class score.
       // index(c, j) = c * N + j. (COCO has no separate objectness in v8.)
       const channels = 4 + MODEL_CONFIG.numClasses;
       const N = out.length / channels;
       const confRow = 4 + MODEL_CONFIG.targetClass;
+=======
+      // YOLOv8 COCO TFLite output is channels-first: [1, 84, N]
+      // rows 0–3 = cx, cy, w, h; rows 4–83 = 80 class scores. index(c,j)=c*N+j.
+      const N = out.length / COCO_CHANNELS;
+>>>>>>> d26dc33 (ball speed check)
       let bestConf = CONF_THRESHOLD;
       let bestCx = 0;
       let bestCy = 0;
       let bestW = 0;
       let bestH = 0;
       for (let j = 0; j < N; j++) {
-        const conf = dequant(out[confRow * N + j] as number);
+<<<<<<< HEAD
+        const conf = out[confRow * N + j] as number;
+=======
+        const conf = dequant(out[(4 + SPORTS_BALL_CLASS) * N + j] as number);
+>>>>>>> d26dc33 (ball speed check)
         if (conf > bestConf) {
           bestConf = conf;
           bestCx = dequant(out[j] as number);
@@ -107,10 +120,17 @@ export function useBallSpeedFrameProcessor(
       }
       if (bestConf <= CONF_THRESHOLD) return; // no ball this frame
 
+<<<<<<< HEAD
       const s = MODEL_CONFIG.coordsNormalized ? MODEL_INPUT_SIZE : 1;
       const x = bestCx * s;
       const y = bestCy * s;
       const radius = (Math.max(bestW, bestH) * s) / 2;
+=======
+      // Ultralytics export emits box coords in input-pixel units (0..320).
+      const x = bestCx;
+      const y = bestCy;
+      const radius = Math.max(bestW, bestH) / 2;
+>>>>>>> d26dc33 (ball speed check)
 
       // frame.timestamp is in nanoseconds; convert to seconds for speed math.
       const t = frame.timestamp / 1e9;
