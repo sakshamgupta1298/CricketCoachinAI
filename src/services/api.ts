@@ -783,6 +783,72 @@ class ApiService {
     }
   }
 
+  // Upload a bowling clip for automatic ball-speed detection (computer vision).
+  // Returns a job_id; poll getJobResult(jobId) until status === 'completed'.
+  async detectBallSpeedAuto(params: {
+    video_uri: string;
+    video_name?: string;
+    video_type?: string;
+    distance_m?: number;
+    fps?: number;
+  }): Promise<ApiResponse<UploadJobResponse>> {
+    try {
+      const token = await this.getStoredToken();
+      if (!token) {
+        return { success: false, error: 'No authentication token found' };
+      }
+
+      const data = new FormData();
+      data.append('video', {
+        uri: params.video_uri,
+        name: params.video_name || 'ball-speed.mp4',
+        type: params.video_type || 'video/mp4',
+      } as any);
+      if (params.distance_m != null) data.append('distance_m', String(params.distance_m));
+      if (params.fps != null) data.append('fps', String(params.fps));
+
+      const expoPushToken = await this.getStoredPushToken();
+      if (expoPushToken) data.append('expo_push_token', expoPushToken);
+
+      const url = `${this.baseURL}/api/ball-speed`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 180000);
+
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: data,
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        const text = await response.text();
+        let parsed: any = {};
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          parsed = {};
+        }
+
+        if (!response.ok) {
+          return {
+            success: false,
+            error: parsed.error || parsed.message || `Request failed (${response.status})`,
+          };
+        }
+        return { success: true, data: parsed };
+      } catch (error: any) {
+        clearTimeout(timeoutId);
+        const message = error?.name === 'AbortError' ? 'Request timed out' : error?.message || 'Upload failed';
+        return { success: false, error: message };
+      }
+    } catch (error: any) {
+      console.error('Detect Ball Speed Error:', error);
+      return { success: false, error: error?.message || 'Failed to detect ball speed' };
+    }
+  }
+
   // Generate training plan
   async generateTrainingPlan(filename: string, days: number = 7): Promise<ApiResponse<any>> {
     try {

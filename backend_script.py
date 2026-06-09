@@ -41,6 +41,11 @@ from urllib.parse import quote_plus
 from dotenv import load_dotenv
 
 try:
+    import ball_speed_cv
+except Exception as _ball_speed_import_err:
+    ball_speed_cv = None
+
+try:
     import razorpay
 except Exception:
     razorpay = None
@@ -908,6 +913,97 @@ def process_analysis_job(job_id, user_id, username, filepath, filename, form, ex
                     os.remove(abs_path)
         except Exception as cleanup_err:
             logger.warning(f"⚠️ [JOB {job_id}] Temp cleanup failed: {cleanup_err}")
+
+def process_ball_speed_job(job_id, user_id, username, filepath, filename, form, expo_push_token=None):
+    """
+    Background worker that auto-detects ball speed from a bowling video using
+    computer vision (ball_speed_cv). Results are stored keyed by job_id and
+    polled via the existing /api/results/<job_id> endpoint.
+    """
+    try:
+        job = load_job(user_id, job_id) or {}
+        job.update({
+            "job_id": job_id,
+            "status": "processing",
+            "updated_at": datetime.utcnow().isoformat() + "Z",
+        })
+        save_job(user_id, job)
+
+        if ball_speed_cv is None:
+            raise RuntimeError("Ball speed CV module is not available on the server.")
+
+        try:
+            distance_m = float(form.get("distance_m") or ball_speed_cv.DEFAULT_DISTANCE_METERS)
+        except (TypeError, ValueError):
+            distance_m = ball_speed_cv.DEFAULT_DISTANCE_METERS
+
+        fps_override = None
+        raw_fps = form.get("fps")
+        if raw_fps:
+            try:
+                v = float(raw_fps)
+                if v > 0:
+                    fps_override = v
+            except (TypeError, ValueError):
+                fps_override = None
+
+        # Make sure the clip is in a format OpenCV can decode reliably.
+        analysis_video_path = ensure_video_readable_for_analysis(filepath, job_id=job_id, user_id=str(user_id))
+
+        logger.info(f"🎯 [BALL_SPEED {job_id}] Detecting ball speed for {filename} (distance={distance_m}m, fps={fps_override})")
+        cv_result = ball_speed_cv.estimate_ball_speed(
+            analysis_video_path,
+            distance_m=distance_m,
+            fps_override=fps_override,
+        )
+
+        result = {
+            "success": bool(cv_result.get("success")),
+            "job_id": job_id,
+            "user_id": user_id,
+            "username": username,
+            "filename": filename,
+            "feature": "ball_speed",
+            **cv_result,
+        }
+
+        job = load_job(user_id, job_id) or {}
+        job.update({
+            "job_id": job_id,
+            "status": "completed",
+            "result": result,
+            "updated_at": datetime.utcnow().isoformat() + "Z",
+        })
+        save_job(user_id, job)
+
+        if result.get("success"):
+            send_expo_push(
+                expo_push_token,
+                title="CrickCoach: Ball speed ready",
+                body=f"Estimated {result.get('speed_kmh')} km/h. Tap to view.",
+                data={"job_id": job_id, "feature": "ball_speed"},
+            )
+        logger.info(f"✅ [BALL_SPEED {job_id}] Completed: {cv_result.get('speed_kmh')} km/h (success={cv_result.get('success')})")
+    except Exception as e:
+        logger.error(f"❌ [BALL_SPEED {job_id}] Failed: {str(e)}", exc_info=True)
+        job = load_job(user_id, job_id) or {}
+        job.update({
+            "job_id": job_id,
+            "status": "failed",
+            "error": str(e),
+            "updated_at": datetime.utcnow().isoformat() + "Z",
+        })
+        save_job(user_id, job)
+    finally:
+        try:
+            tmp_root = os.path.abspath(os.path.join(UPLOAD_FOLDER, "_tmp"))
+            abs_path = os.path.abspath(filepath) if filepath else ""
+            if abs_path and os.path.exists(abs_path):
+                if os.path.commonpath([abs_path, tmp_root]) == tmp_root:
+                    os.remove(abs_path)
+        except Exception as cleanup_err:
+            logger.warning(f"⚠️ [BALL_SPEED {job_id}] Temp cleanup failed: {cleanup_err}")
+
 
 # Model configuration
 MODEL_PATH = "slowfast_cricket.pth"
@@ -3820,6 +3916,104 @@ def api_upload_file():
     
     logger.warning("Invalid file type")
     return jsonify({'error': 'Invalid file type. Please upload a video file.'}), 400
+
+@app.route('/api/ball-speed', methods=['POST'])
+@require_auth
+def api_ball_speed():
+    """
+    Auto-detect ball speed from a bowling video using computer vision.
+    Enqueues an async job (like /api/upload) and returns a job_id which the
+    client polls via /api/results/<job_id>.
+    """
+    user_id = request.user['user_id']
+    username = request.user['username']
+    logger.info(f"🎯 Ball-speed request from {username} (ID: {user_id})")
+
+    # Gate behind the ball-speed entitlement (sold on higher plans).
+    try:
+        ent = get_entitlements(user_id)
+        if not ent.get("feature_ball_speed"):
+            return jsonify({
+                "error": "Ball speed detection isn't included in your plan.",
+                "feature": "ball_speed",
+                "entitled": False,
+            }), 403
+    except Exception as e:
+        logger.error(f"Entitlement check failed for ball-speed: {e}", exc_info=True)
+        return jsonify({"error": "Could not verify entitlements"}), 500
+
+    if ball_speed_cv is None:
+        return jsonify({"error": "Ball speed detection is not available on the server."}), 503
+
+    if 'video' not in request.files:
+        return jsonify({'error': 'No video file selected'}), 400
+
+    file = request.files['video']
+    if file.filename == '':
+        return jsonify({'error': 'No video file selected'}), 400
+
+    if not (file and allowed_file(file.filename)):
+        return jsonify({'error': 'Invalid file type. Please upload a video file.'}), 400
+
+    filename = secure_filename(file.filename)
+    job_id = uuid.uuid4().hex
+    now = datetime.utcnow().isoformat() + "Z"
+
+    tmp_dir = os.path.join(UPLOAD_FOLDER, "_tmp")
+    os.makedirs(tmp_dir, exist_ok=True)
+    filepath = os.path.join(tmp_dir, f"{user_id}_{job_id}_{filename}")
+    file.save(filepath)
+
+    # Reject overly long clips (same policy as analysis uploads).
+    MAX_VIDEO_DURATION_SECONDS = 15
+    duration = get_video_duration_seconds(filepath)
+    if duration is None:
+        try:
+            os.remove(filepath)
+        except Exception:
+            pass
+        return jsonify({"error": "We couldn't read this video. Please upload a valid bowling clip."}), 400
+    if duration > MAX_VIDEO_DURATION_SECONDS + 0.5:
+        try:
+            os.remove(filepath)
+        except Exception:
+            pass
+        return jsonify({
+            "error": f"Please upload a bowling clip of {MAX_VIDEO_DURATION_SECONDS} seconds or less.",
+            "duration": round(duration, 2),
+            "max_duration": MAX_VIDEO_DURATION_SECONDS,
+        }), 400
+
+    expo_push_token = request.form.get('expo_push_token') or request.form.get('push_token')
+
+    job = {
+        "job_id": job_id,
+        "status": "queued",
+        "created_at": now,
+        "updated_at": now,
+        "user_id": user_id,
+        "username": username,
+        "filename": filename,
+        "feature": "ball_speed",
+    }
+    save_job(user_id, job)
+
+    worker = threading.Thread(
+        target=process_ball_speed_job,
+        args=(job_id, user_id, username, filepath, filename, dict(request.form), expo_push_token),
+        daemon=True,
+    )
+    worker.start()
+
+    logger.info(f"🧵 [BALL_SPEED {job_id}] Enqueued for {username} file {filename}")
+    return jsonify({
+        "success": True,
+        "job_id": job_id,
+        "filename": filename,
+        "status": "queued",
+        "feature": "ball_speed",
+    })
+
 
 @app.route('/api/test-upload', methods=['POST'])
 def test_upload():

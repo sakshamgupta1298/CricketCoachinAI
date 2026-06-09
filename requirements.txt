@@ -19,6 +19,9 @@ tensorflow
 tensorflow-hub
 opencv-python
 pytorchvideo
+# Ball-speed detection (ball_speed_cv.py) uses opencv-python + numpy only.
+# Optional future upgrade to a trained detector: uncomment to use YOLOv8.
+# ultralytics
 
 # Data processing
 pandas

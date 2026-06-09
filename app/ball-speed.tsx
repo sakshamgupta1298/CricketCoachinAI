@@ -3,11 +3,12 @@ import { ResizeMode, Video } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Text, TextInput, useTheme } from 'react-native-paper';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PremiumCard } from '../src/components/ui/PremiumCard';
+import apiService from '../src/services/api';
 import { borderRadius, colors, spacing } from '../src/theme';
 import { getResponsiveFontSize, getResponsiveSize } from '../src/utils/responsive';
 
@@ -32,6 +33,10 @@ export default function BallSpeedScreen() {
   const [distanceMetersInput, setDistanceMetersInput] = useState<string>('');
   const [fpsInput, setFpsInput] = useState<string>('');
   const [speedKmh, setSpeedKmh] = useState<number | null>(null);
+
+  const [isAutoDetecting, setIsAutoDetecting] = useState(false);
+  const [autoStatus, setAutoStatus] = useState<string>('');
+  const [autoConfidence, setAutoConfidence] = useState<string | null>(null);
 
   const getDisplayedSeconds = (seconds: number) => {
     const decimals = seconds < 10 ? 2 : 1;
@@ -106,6 +111,81 @@ export default function BallSpeedScreen() {
     if (releaseFrame != null) computeFromFrames(releaseFrame, frame);
   };
 
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const autoDetectSpeed = async () => {
+    if (!videoUri || isAutoDetecting) return;
+    setIsAutoDetecting(true);
+    setAutoConfidence(null);
+    setAutoStatus('Uploading clip…');
+    resetComputed();
+
+    try {
+      const distanceM = getDistanceMeters();
+      const fpsValue = fpsInput.trim() ? getFps() : undefined;
+
+      const upload = await apiService.detectBallSpeedAuto({
+        video_uri: videoUri,
+        video_name: 'ball-speed.mp4',
+        video_type: 'video/mp4',
+        distance_m: distanceM,
+        fps: fpsValue,
+      });
+
+      if (!upload.success || !upload.data?.job_id) {
+        Alert.alert('Auto-detect failed', upload.error || 'Could not start detection.');
+        setAutoStatus('');
+        return;
+      }
+
+      const jobId = upload.data.job_id;
+      setAutoStatus('Analyzing video…');
+
+      const maxAttempts = 60;
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        await sleep(2000);
+        const poll = await apiService.getJobResult(jobId);
+        const status = poll.data?.status;
+
+        if (status === 'completed') {
+          const result: any = poll.data?.result;
+          if (result?.success) {
+            setSpeedKmh(typeof result.speed_kmh === 'number' ? result.speed_kmh : null);
+            setTimeTakenSec(typeof result.time_sec === 'number' ? result.time_sec : null);
+            if (typeof result.fps === 'number') setFpsInput(String(result.fps));
+            if (typeof result.distance_m === 'number') setDistanceMetersInput(String(result.distance_m));
+            if (typeof result.release_frame === 'number') setReleaseFrame(result.release_frame);
+            if (typeof result.arrival_frame === 'number') setArrivalFrame(result.arrival_frame);
+            setAutoConfidence(result.confidence || null);
+            setAutoStatus('Detected automatically');
+            if (result.note) Alert.alert('Heads up', result.note);
+          } else {
+            setAutoStatus('');
+            Alert.alert(
+              'Could not detect the ball',
+              result?.note || 'Try a clearer, side-on clip recorded at 60/120 fps.'
+            );
+          }
+          return;
+        }
+
+        if (status === 'failed') {
+          setAutoStatus('');
+          Alert.alert('Auto-detect failed', poll.data?.error || 'Analysis failed on the server.');
+          return;
+        }
+      }
+
+      setAutoStatus('');
+      Alert.alert('Still working', 'Detection is taking longer than expected. Please try again.');
+    } catch (e: any) {
+      setAutoStatus('');
+      Alert.alert('Auto-detect failed', e?.message || 'Something went wrong.');
+    } finally {
+      setIsAutoDetecting(false);
+    }
+  };
+
   const changePlaybackRate = async (rate: number) => {
     setPlaybackRate(rate);
     if (!isPlaying) return;
@@ -126,6 +206,8 @@ export default function BallSpeedScreen() {
     setArrivalFrame(null);
     setTimeTakenSec(null);
     setSpeedKmh(null);
+    setAutoConfidence(null);
+    setAutoStatus('');
     try {
       await videoRef.current?.unloadAsync();
     } catch {
@@ -470,6 +552,41 @@ export default function BallSpeedScreen() {
                   thumbTintColor={theme.colors.primary}
                 />
 
+                <TouchableOpacity
+                  style={[
+                    styles.autoButton,
+                    {
+                      backgroundColor: isAutoDetecting ? theme.colors.surfaceVariant : theme.colors.primary,
+                      opacity: isAutoDetecting ? 0.9 : 1,
+                    },
+                  ]}
+                  onPress={autoDetectSpeed}
+                  activeOpacity={0.85}
+                  disabled={isAutoDetecting}
+                >
+                  {isAutoDetecting ? (
+                    <View style={styles.autoButtonRow}>
+                      <ActivityIndicator color={theme.colors.onSurface} size="small" />
+                      <Text style={[styles.autoButtonText, { color: theme.colors.onSurface }]}>
+                        {autoStatus || 'Detecting…'}
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.autoButtonText}>Auto-detect speed (beta)</Text>
+                  )}
+                </TouchableOpacity>
+
+                {(autoConfidence || (autoStatus && !isAutoDetecting)) && (
+                  <Text style={[styles.autoMeta, { color: theme.colors.onSurfaceVariant }]}>
+                    {autoStatus}
+                    {autoConfidence ? `  •  confidence: ${autoConfidence}` : ''}
+                  </Text>
+                )}
+
+                <Text style={[styles.manualHint, { color: theme.colors.onSurfaceVariant }]}>
+                  Or mark frames manually:
+                </Text>
+
                 <View style={styles.markRow}>
                   <TouchableOpacity
                     style={[styles.markButton, { backgroundColor: theme.colors.primary }]}
@@ -684,6 +801,35 @@ const styles = StyleSheet.create({
   smallButtonText: {
     fontWeight: '800',
     fontSize: getResponsiveFontSize(13),
+  },
+  autoButton: {
+    borderRadius: borderRadius.lg,
+    paddingVertical: getResponsiveSize(spacing.md),
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: getResponsiveSize(48),
+    marginTop: getResponsiveSize(spacing.sm),
+  },
+  autoButtonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: getResponsiveSize(spacing.sm),
+  },
+  autoButtonText: {
+    color: 'white',
+    fontWeight: '800',
+    fontSize: getResponsiveFontSize(15),
+  },
+  autoMeta: {
+    marginTop: getResponsiveSize(spacing.xs),
+    fontSize: getResponsiveFontSize(12),
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  manualHint: {
+    marginTop: getResponsiveSize(spacing.md),
+    fontSize: getResponsiveFontSize(12),
+    fontWeight: '600',
   },
   markRow: {
     flexDirection: 'row',
