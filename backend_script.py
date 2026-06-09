@@ -3930,17 +3930,17 @@ def api_ball_speed():
     logger.info(f"🎯 Ball-speed request from {username} (ID: {user_id})")
 
     # Gate behind the ball-speed entitlement (sold on higher plans).
-    try:
-        ent = get_entitlements(user_id)
-        if not ent.get("feature_ball_speed"):
-            return jsonify({
-                "error": "Ball speed detection isn't included in your plan.",
-                "feature": "ball_speed",
-                "entitled": False,
-            }), 403
-    except Exception as e:
-        logger.error(f"Entitlement check failed for ball-speed: {e}", exc_info=True)
-        return jsonify({"error": "Could not verify entitlements"}), 500
+    # try:
+    #     ent = get_entitlements(user_id)
+    #     if not ent.get("feature_ball_speed"):
+    #         return jsonify({
+    #             "error": "Ball speed detection isn't included in your plan.",
+    #             "feature": "ball_speed",
+    #             "entitled": False,
+    #         }), 403
+    # except Exception as e:
+    #     logger.error(f"Entitlement check failed for ball-speed: {e}", exc_info=True)
+    #     return jsonify({"error": "Could not verify entitlements"}), 500
 
     if ball_speed_cv is None:
         return jsonify({"error": "Ball speed detection is not available on the server."}), 503
