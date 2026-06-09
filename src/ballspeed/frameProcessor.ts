@@ -22,6 +22,26 @@ const CONF_THRESHOLD = 0.3;
 // Process 1 of every N frames to bound CPU at high capture fps.
 const FRAME_STRIDE = 1;
 
+/**
+ * Output layout of the bundled model. Two supported shapes (channels-first,
+ * i.e. `[1, 4 + numClasses, N]`):
+ *
+ *  - Stock COCO YOLOv8 (`yolov8n.tflite`): numClasses = 80, the ball is the
+ *    "sports ball" class at index 32. Drop in the stock model with zero training.
+ *  - Custom single-class cricket-ball model: numClasses = 1, targetClass = 0.
+ *
+ * Switch by editing this one constant (and the file you drop in as ball.tflite).
+ */
+export const MODEL_CONFIG = {
+  /** Number of class score rows in the output (80 for COCO, 1 for custom). */
+  numClasses: 80,
+  /** Which class to keep (32 = "sports ball" in COCO; 0 for single-class). */
+  targetClass: 32,
+  /** True if box coords are normalized 0..1 (multiply by input size). Set
+   *  false if your export emits pixel coords (0..input size). */
+  coordsNormalized: true,
+} as const;
+
 export interface FrameProcessorRefs {
   /** Whether we are actively capturing a delivery. */
   capturing: SharedValue<boolean>;
@@ -57,16 +77,19 @@ export function useBallSpeedFrameProcessor(
       const outputs = model.runSync([input]);
       const out = outputs[0];
 
-      // YOLOv8 single-class TFLite output is channels-first: [1, 5, N]
-      // (rows: cx, cy, w, h, conf — all normalized 0..1). index(c,j)=c*N+j.
-      const N = out.length / 5;
+      // YOLOv8 TFLite output is channels-first: [1, 4 + numClasses, N].
+      // Rows 0..3 = cx, cy, w, h; row (4 + targetClass) = the class score.
+      // index(c, j) = c * N + j. (COCO has no separate objectness in v8.)
+      const channels = 4 + MODEL_CONFIG.numClasses;
+      const N = out.length / channels;
+      const confRow = 4 + MODEL_CONFIG.targetClass;
       let bestConf = CONF_THRESHOLD;
       let bestCx = 0;
       let bestCy = 0;
       let bestW = 0;
       let bestH = 0;
       for (let j = 0; j < N; j++) {
-        const conf = out[4 * N + j] as number;
+        const conf = out[confRow * N + j] as number;
         if (conf > bestConf) {
           bestConf = conf;
           bestCx = out[j] as number;
@@ -77,9 +100,10 @@ export function useBallSpeedFrameProcessor(
       }
       if (bestConf <= CONF_THRESHOLD) return; // no ball this frame
 
-      const x = bestCx * MODEL_INPUT_SIZE;
-      const y = bestCy * MODEL_INPUT_SIZE;
-      const radius = (Math.max(bestW, bestH) * MODEL_INPUT_SIZE) / 2;
+      const s = MODEL_CONFIG.coordsNormalized ? MODEL_INPUT_SIZE : 1;
+      const x = bestCx * s;
+      const y = bestCy * s;
+      const radius = (Math.max(bestW, bestH) * s) / 2;
 
       // frame.timestamp is in nanoseconds; convert to seconds for speed math.
       const t = frame.timestamp / 1e9;
