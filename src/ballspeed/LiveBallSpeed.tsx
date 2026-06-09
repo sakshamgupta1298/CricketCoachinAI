@@ -25,7 +25,7 @@ import { MODEL_INPUT_SIZE, useBallDetector } from './useBallDetector';
 
 const DEFAULT_DISTANCE_METERS = 20.12;
 
-type Gate = 'checking' | 'allowed' | 'blocked' | 'error';
+type Gate = 'checking' | 'allowed' | 'blocked';
 
 export default function LiveBallSpeed() {
   const theme = useTheme();
@@ -58,7 +58,8 @@ export default function LiveBallSpeed() {
     (async () => {
       const res = await apiService.getEntitlements();
       if (!alive) return;
-      if (!res.success) setGate('error');
+      // Offline-friendly: only an explicit missing entitlement blocks; network errors allow use.
+      if (!res.success) setGate('allowed');
       else setGate(res.data?.feature_ball_speed ? 'allowed' : 'blocked');
     })();
     return () => {
@@ -125,13 +126,6 @@ export default function LiveBallSpeed() {
       <View style={styles.center}>
         <Text style={[styles.title, { color: theme.colors.onSurface }]}>Ball Speed is a Pro feature</Text>
         <Text style={[styles.muted, { color: muted }]}>Upgrade your plan to measure ball speed on-device.</Text>
-      </View>
-    );
-  }
-  if (gate === 'error') {
-    return (
-      <View style={styles.center}>
-        <Text style={[styles.muted, { color: muted }]}>Couldn’t verify your plan. Check your connection and retry.</Text>
       </View>
     );
   }

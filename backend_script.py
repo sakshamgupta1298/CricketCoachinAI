@@ -3917,18 +3917,6 @@ def api_upload_file():
     logger.warning("Invalid file type")
     return jsonify({'error': 'Invalid file type. Please upload a video file.'}), 400
 
-@app.route('/api/entitlements', methods=['GET'])
-@require_auth
-def api_entitlements():
-    """Return the current user's entitlements (used to gate paid features in the
-    app, e.g. on-device ball speed which never hits the upload endpoint)."""
-    user_id = request.user['user_id']
-    try:
-        return jsonify({"success": True, "entitlements": get_entitlements(user_id)})
-    except Exception as e:
-        logger.error(f"Entitlements fetch failed for {user_id}: {e}", exc_info=True)
-        return jsonify({"success": False, "error": "Could not load entitlements"}), 500
-
 @app.route('/api/ball-speed', methods=['POST'])
 @require_auth
 def api_ball_speed():
@@ -3942,17 +3930,17 @@ def api_ball_speed():
     logger.info(f"🎯 Ball-speed request from {username} (ID: {user_id})")
 
     # Gate behind the ball-speed entitlement (sold on higher plans).
-    # try:
-    #     ent = get_entitlements(user_id)
-    #     if not ent.get("feature_ball_speed"):
-    #         return jsonify({
-    #             "error": "Ball speed detection isn't included in your plan.",
-    #             "feature": "ball_speed",
-    #             "entitled": False,
-    #         }), 403
-    # except Exception as e:
-    #     logger.error(f"Entitlement check failed for ball-speed: {e}", exc_info=True)
-    #     return jsonify({"error": "Could not verify entitlements"}), 500
+    try:
+        ent = get_entitlements(user_id)
+        if not ent.get("feature_ball_speed"):
+            return jsonify({
+                "error": "Ball speed detection isn't included in your plan.",
+                "feature": "ball_speed",
+                "entitled": False,
+            }), 403
+    except Exception as e:
+        logger.error(f"Entitlement check failed for ball-speed: {e}", exc_info=True)
+        return jsonify({"error": "Could not verify entitlements"}), 500
 
     if ball_speed_cv is None:
         return jsonify({"error": "Ball speed detection is not available on the server."}), 503

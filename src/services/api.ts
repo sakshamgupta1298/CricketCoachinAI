@@ -857,7 +857,7 @@ class ApiService {
     feature_ball_speed: boolean;
   }>> {
     try {
-      const response = await this.jsonApi.get('/api/entitlements');
+      const response = await this.jsonApi.get('/api/me/entitlements');
       return { success: true, data: response.data.entitlements };
     } catch (error: any) {
       console.error('Get Entitlements Error:', error);

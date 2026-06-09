@@ -21,7 +21,7 @@ motion-blurred deliveries is limited (see caveats).
 
 ```bash
 pip install ultralytics
-yolo export model=yolov8n.tflite format=tflite int8=True imgsz=320
+yolo export model=yolov8n.pt format=tflite int8=True imgsz=320
 # (or use yolov8s for better small-object recall)
 ```
 Copy the exported `*_full_integer_quant.tflite` here as `ball.tflite`.
@@ -30,6 +30,7 @@ Copy the exported `*_full_integer_quant.tflite` here as `ball.tflite`.
 ```ts
 numClasses: 80,
 targetClass: 32,   // "sports ball"
+coordsNormalized: false,
 ```
 
 ## Option B — Custom single-class cricket-ball model (best accuracy)
@@ -46,6 +47,7 @@ Copy `best_full_integer_quant.tflite` here as `ball.tflite`, then set:
 ```ts
 numClasses: 1,
 targetClass: 0,
+coordsNormalized: false,
 ```
 
 ---
@@ -58,12 +60,14 @@ targetClass: 0,
   `cx, cy, w, h` then one score per class. The decoder reads the score at row
   `4 + targetClass`. If your export is `1 x N x (4+numClasses)`, transpose the
   indexing in `frameProcessor.ts`.
-- **Quantization:** int8 weights for speed, but **keep float32 output tensors** (and
-  uint8 input). The decoder reads `conf` as a float and thresholds at `0.3`; a full
-  int8 export with int8 outputs would need dequantization (scale/zero-point) first.
-- **Coordinate units:** the decoder multiplies `cx/cy/w/h` by `320`, i.e. assumes
-  **normalized 0..1**. If your export emits pixel coords, set
-  `MODEL_CONFIG.coordsNormalized = false`.
+- **Quantization:** the default build expects a **full int8** export
+  (`*_full_integer_quant.tflite`). The decoder dequantizes int8 outputs using the
+  scale/zero-point baked into `frameProcessor.ts` before thresholding at `0.3`. If
+  you export with float32 output tensors instead, remove or bypass dequantization.
+- **Coordinate units:** Ultralytics int8 exports emit box coords in **input-pixel
+  units (0..320)**, not normalized 0..1. The default is
+  `MODEL_CONFIG.coordsNormalized = false`. Set it to `true` only if your export
+  emits normalized coords (then the decoder multiplies by `320`).
 
 ## Caveats for Option A (stock COCO)
 

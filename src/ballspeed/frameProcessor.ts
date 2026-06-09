@@ -11,14 +11,21 @@
  * Distance(m), so working in model space is fine.
  */
 import type { TensorflowModel } from 'react-native-fast-tflite';
-import { useFrameProcessor } from 'react-native-vision-camera';
-import { useResizePlugin } from 'react-native-vision-camera-resize-plugin';
 import type { SharedValue } from 'react-native-reanimated';
+import { useFrameProcessor } from 'react-native-vision-camera';
+import { useResizePlugin } from 'vision-camera-resize-plugin';
 import type { Detection } from './track';
 import { MODEL_INPUT_SIZE } from './useBallDetector';
 
 // Minimum class confidence to accept a ball detection.
 const CONF_THRESHOLD = 0.3;
+// Dequant for yolov8n_full_integer_quant.tflite (int8 output, zp=-128).
+const OUT_SCALE = 0.004194468259811401;
+const OUT_ZERO_POINT = -128;
+
+function dequant(v: number): number {
+  return (v - OUT_ZERO_POINT) * OUT_SCALE;
+}
 // Process 1 of every N frames to bound CPU at high capture fps.
 const FRAME_STRIDE = 1;
 
@@ -39,7 +46,7 @@ export const MODEL_CONFIG = {
   targetClass: 32,
   /** True if box coords are normalized 0..1 (multiply by input size). Set
    *  false if your export emits pixel coords (0..input size). */
-  coordsNormalized: true,
+  coordsNormalized: false,
 } as const;
 
 export interface FrameProcessorRefs {
@@ -89,13 +96,13 @@ export function useBallSpeedFrameProcessor(
       let bestW = 0;
       let bestH = 0;
       for (let j = 0; j < N; j++) {
-        const conf = out[confRow * N + j] as number;
+        const conf = dequant(out[confRow * N + j] as number);
         if (conf > bestConf) {
           bestConf = conf;
-          bestCx = out[j] as number;
-          bestCy = out[N + j] as number;
-          bestW = out[2 * N + j] as number;
-          bestH = out[3 * N + j] as number;
+          bestCx = dequant(out[j] as number);
+          bestCy = dequant(out[N + j] as number);
+          bestW = dequant(out[2 * N + j] as number);
+          bestH = dequant(out[3 * N + j] as number);
         }
       }
       if (bestConf <= CONF_THRESHOLD) return; // no ball this frame

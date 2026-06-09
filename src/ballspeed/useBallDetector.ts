@@ -1,5 +1,5 @@
 /**
- * Loads the on-device cricket-ball detector (YOLOv8-nano, TFLite int8).
+ * Loads the on-device ball detector (stock YOLOv8-nano COCO, TFLite int8).
  *
  * The model is bundled as an asset and run inside a vision-camera frame
  * processor via `react-native-fast-tflite`. Input is a 320x320x3 uint8 tensor;

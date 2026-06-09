@@ -138,6 +138,16 @@ function ThemedApp() {
               headerTintColor: theme.colors.onSurface,
             }}
           />
+          <Stack.Screen
+            name="live-ball-speed"
+            options={{
+              headerShown: true,
+              title: 'Live Ball Speed',
+              headerBackTitle: 'Back',
+              headerStyle: { backgroundColor: theme.colors.surface },
+              headerTintColor: theme.colors.onSurface,
+            }}
+          />
         </Stack>
         <Toast />
         <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
