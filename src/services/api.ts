@@ -849,6 +849,22 @@ class ApiService {
     }
   }
 
+  // Fetch the user's entitlements (used to gate paid features like on-device
+  // ball speed, which never hits the upload endpoint).
+  async getEntitlements(): Promise<ApiResponse<{
+    analysis_credits_remaining: number;
+    feature_compare: boolean;
+    feature_ball_speed: boolean;
+  }>> {
+    try {
+      const response = await this.jsonApi.get('/api/entitlements');
+      return { success: true, data: response.data.entitlements };
+    } catch (error: any) {
+      console.error('Get Entitlements Error:', error);
+      return { success: false, error: error.response?.data?.error || error.message };
+    }
+  }
+
   // Generate training plan
   async generateTrainingPlan(filename: string, days: number = 7): Promise<ApiResponse<any>> {
     try {

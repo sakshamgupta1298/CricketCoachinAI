@@ -3917,6 +3917,18 @@ def api_upload_file():
     logger.warning("Invalid file type")
     return jsonify({'error': 'Invalid file type. Please upload a video file.'}), 400
 
+@app.route('/api/entitlements', methods=['GET'])
+@require_auth
+def api_entitlements():
+    """Return the current user's entitlements (used to gate paid features in the
+    app, e.g. on-device ball speed which never hits the upload endpoint)."""
+    user_id = request.user['user_id']
+    try:
+        return jsonify({"success": True, "entitlements": get_entitlements(user_id)})
+    except Exception as e:
+        logger.error(f"Entitlements fetch failed for {user_id}: {e}", exc_info=True)
+        return jsonify({"success": False, "error": "Could not load entitlements"}), 500
+
 @app.route('/api/ball-speed', methods=['POST'])
 @require_auth
 def api_ball_speed():

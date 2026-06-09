@@ -64,7 +64,20 @@
       ],
       "expo-router",
       "expo-apple-authentication",
-      "react-native-vision-camera"
+      [
+        "react-native-vision-camera",
+        {
+          "cameraPermissionText": "Allow Cricket Coach to use the camera to measure ball speed.",
+          "enableFrameProcessors": true
+        }
+      ],
+      [
+        "react-native-fast-tflite",
+        {
+          "enableCoreMLDelegate": true,
+          "enableAndroidGpuLibraries": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

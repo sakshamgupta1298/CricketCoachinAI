@@ -8,6 +8,7 @@ import { Text, TextInput, useTheme } from 'react-native-paper';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PremiumCard } from '../src/components/ui/PremiumCard';
+import LiveBallSpeed from '../src/ballspeed/LiveBallSpeed';
 import apiService from '../src/services/api';
 import { borderRadius, colors, spacing } from '../src/theme';
 import { getResponsiveFontSize, getResponsiveSize } from '../src/utils/responsive';
@@ -37,6 +38,9 @@ export default function BallSpeedScreen() {
   const [isAutoDetecting, setIsAutoDetecting] = useState(false);
   const [autoStatus, setAutoStatus] = useState<string>('');
   const [autoConfidence, setAutoConfidence] = useState<string | null>(null);
+
+  // 'live' = on-device real-time (default); 'upload' = server CV fallback.
+  const [liveMode, setLiveMode] = useState<boolean>(true);
 
   const getDisplayedSeconds = (seconds: number) => {
     const decimals = seconds < 10 ? 2 : 1;
@@ -349,6 +353,36 @@ export default function BallSpeedScreen() {
         </Animated.View>
 
         <Animated.View entering={FadeInUp.delay(140).springify()}>
+          <View style={styles.modeRow}>
+            <TouchableOpacity
+              style={[
+                styles.modeButton,
+                { backgroundColor: liveMode ? theme.colors.primary : theme.colors.surfaceVariant },
+              ]}
+              onPress={() => setLiveMode(true)}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.modeButtonText, { color: liveMode ? 'white' : theme.colors.onSurfaceVariant }]}>
+                Live (on-device)
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.modeButton,
+                { backgroundColor: !liveMode ? theme.colors.primary : theme.colors.surfaceVariant },
+              ]}
+              onPress={() => setLiveMode(false)}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.modeButtonText, { color: !liveMode ? 'white' : theme.colors.onSurfaceVariant }]}>
+                Upload clip
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {liveMode ? (
+            <LiveBallSpeed />
+          ) : (
           <PremiumCard variant="elevated" padding="large" style={styles.cameraCard}>
             <View style={styles.cameraHeader}>
               <View style={styles.controlsRow}>
@@ -640,6 +674,7 @@ export default function BallSpeedScreen() {
               </View>
             )}
           </PremiumCard>
+          )}
 
           <TouchableOpacity style={styles.backButtonRow} onPress={() => router.back()} activeOpacity={0.8}>
             <Text style={[styles.backLink, { color: theme.colors.primary }]}>Back</Text>
@@ -718,6 +753,20 @@ const styles = StyleSheet.create({
   },
   cameraCard: {
     marginBottom: getResponsiveSize(spacing.lg),
+  },
+  modeRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: getResponsiveSize(spacing.md),
+  },
+  modeButton: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+  },
+  modeButtonText: {
+    fontWeight: '600',
   },
   cameraWrapper: {
     height: getResponsiveSize(420),
