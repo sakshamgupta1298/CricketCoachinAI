@@ -932,6 +932,10 @@ if not _gemini_api_key:
     raise RuntimeError("Missing GEMINI_API_KEY (or GOOGLE_API_KEY) in environment")
 client = genai.Client(api_key=_gemini_api_key)
 
+# Token-usage monitor: wraps Gemini calls and logs per-call token usage/cost
+# to monitoring/gemini_token_usage.log
+from monitoring.gemini_token_monitor import gemini
+
 def build_youtube_search_url(query: str) -> str:
     q = (query or "").strip()
     if not q:
@@ -1433,8 +1437,9 @@ def get_feedback_from_gpt_for_bowling(keypoint_csv_path, bowler_type='fast_bowle
 # ================================
     logger.info("Stage 1: Running biomechanical analysis for bowling (Prompt A)...")
     try:
-        response_A = client.models.generate_content(
+        response_A = gemini.generate_content(
             model="gemini-2.5-pro",
+            label="bowling-biomechanics",
             contents=[prompt_A],
             config={
             "temperature": 0,
@@ -1604,8 +1609,9 @@ REQUIRED JSON OUTPUT
 """
 
     try:
-        response_B = client.models.generate_content(
+        response_B = gemini.generate_content(
             model="gemini-2.5-pro",
+            label="bowling-feedback",
             contents=[prompt_B],
             config={
             "temperature": 0,
@@ -1975,8 +1981,9 @@ def get_feedback_from_gpt_for_keeping(keypoint_csv_path, keeping_type='standing_
 # ================================
     logger.info("Stage 1: Running biomechanical analysis for keeping (Prompt A)...")
     try:
-        response_A = client.models.generate_content(
+        response_A = gemini.generate_content(
             model="gemini-2.5-pro",
+            label="keeping-biomechanics",
             contents=[prompt_A],
             config={
             "temperature": 0,
@@ -2150,8 +2157,9 @@ REQUIRED JSON OUTPUT
 """
 
     try:
-        response_B = client.models.generate_content(
+        response_B = gemini.generate_content(
             model="gemini-2.5-pro",
+            label="keeping-feedback",
             contents=[prompt_B],
             config={
             "temperature": 0,
@@ -2895,8 +2903,9 @@ def get_feedback_from_gpt(action_type, keypoint_csv_path, player_level='intermed
 # ================================
     logger.info("Stage 1: Running biomechanical analysis (Prompt A)...")
     try:
-        response_A = client.models.generate_content(
+        response_A = gemini.generate_content(
             model="gemini-2.5-pro",
+            label="batting-biomechanics",
             contents=[prompt_A],
             config={
             "temperature": 0,
@@ -3054,8 +3063,9 @@ REQUIRED JSON OUTPUT
 """
 
     try:
-        response_B = client.models.generate_content(
+        response_B = gemini.generate_content(
             model="gemini-2.5-pro",
+            label="batting-feedback",
             contents=[prompt_B],
             config={
             "temperature": 0,
@@ -3330,8 +3340,9 @@ Example JSON structure:
 """
 
     try:
-        response = client.models.generate_content(
+        response = gemini.generate_content(
             model="gemini-2.5-pro",
+            label="training-plan",
             contents=[prompt]
         )
         raw = response.text
@@ -4725,8 +4736,9 @@ RULES
             def make_api_call():
                 nonlocal response
                 try:
-                    response = client.models.generate_content(
+                    response = gemini.generate_content(
                         model="gemini-2.5-pro",
+                        label="video-comparison",
                         contents=[prompt]
                     )
                 except Exception as e:

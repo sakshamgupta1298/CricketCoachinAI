@@ -197,3 +197,6 @@ pids
 *.apk
 *.aab
 
+
+# Gemini token usage log (runtime-generated)
+monitoring/gemini_token_usage.log
