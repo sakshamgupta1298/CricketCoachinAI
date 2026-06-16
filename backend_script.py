@@ -162,6 +162,37 @@ def init_database():
         )
     ''')
 
+    # Per-analysis log (used for daily "videos analyzed per account" report)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS analysis_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            username TEXT,
+            filename TEXT,
+            player_type TEXT,
+            job_id TEXT,
+            gemini_calls INTEGER DEFAULT 0,
+            prompt_tokens INTEGER DEFAULT 0,
+            output_tokens INTEGER DEFAULT 0,
+            total_tokens INTEGER DEFAULT 0,
+            cost_usd REAL DEFAULT 0,
+            analyzed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_analysis_log_analyzed_at ON analysis_log(analyzed_at)')
+    # Add token columns for databases created before token tracking existed (idempotent).
+    for _col, _decl in (
+        ('gemini_calls', 'INTEGER DEFAULT 0'),
+        ('prompt_tokens', 'INTEGER DEFAULT 0'),
+        ('output_tokens', 'INTEGER DEFAULT 0'),
+        ('total_tokens', 'INTEGER DEFAULT 0'),
+        ('cost_usd', 'REAL DEFAULT 0'),
+    ):
+        try:
+            cursor.execute(f'ALTER TABLE analysis_log ADD COLUMN {_col} {_decl}')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
     # Backfill entitlements rows for existing users (idempotent)
     try:
         cursor.execute('SELECT id FROM users')
@@ -179,11 +210,275 @@ def init_database():
     conn.close()
     logger.info("Database initialized successfully")
 
+    # Kick off the daily per-account usage report scheduler.
+    start_daily_report_scheduler()
+
 def get_db_connection():
     """Get database connection"""
     conn = sqlite3.connect(DATABASE_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+# ==================== DAILY ANALYSIS USAGE TRACKING ====================
+# Who receives the daily "videos analyzed per account" email, and when (server local time).
+# Comma-separated list of recipients (overridable via ADMIN_REPORT_EMAIL env var).
+ADMIN_REPORT_EMAIL = os.getenv(
+    'ADMIN_REPORT_EMAIL',
+    'siddhantsharan@gmail.com,admin@crickcoachai.com,9626samiksha3gupta@gmail.com'
+)
+ADMIN_REPORT_RECIPIENTS = [e.strip() for e in ADMIN_REPORT_EMAIL.split(',') if e.strip()]
+DAILY_REPORT_HOUR = int(os.getenv('DAILY_REPORT_HOUR', '23'))
+DAILY_REPORT_MINUTE = int(os.getenv('DAILY_REPORT_MINUTE', '59'))
+# Optional shared secret to manually trigger the report via the admin endpoint.
+ADMIN_REPORT_TOKEN = os.getenv('ADMIN_REPORT_TOKEN', '')
+_daily_report_scheduler_started = False
+
+
+def log_video_analysis(user_id, username, filename, player_type, job_id=None):
+    """Record one analyzed video so we can report per-account daily usage.
+
+    Returns the new row id (or None on failure) so token usage can be filled in
+    once the analysis finishes.
+    """
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            'INSERT INTO analysis_log (user_id, username, filename, player_type, job_id) VALUES (?, ?, ?, ?, ?)',
+            (user_id, username, filename, player_type, job_id)
+        )
+        row_id = cur.lastrowid
+        conn.commit()
+        conn.close()
+        return row_id
+    except Exception as e:
+        logger.warning(f"Failed to log video analysis for user {user_id}: {e}")
+        return None
+
+
+def update_analysis_tokens(log_id, usage):
+    """Fill in the Gemini token usage for a previously logged analysis row."""
+    if not log_id or not usage:
+        return
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            '''UPDATE analysis_log
+               SET gemini_calls = ?, prompt_tokens = ?, output_tokens = ?,
+                   total_tokens = ?, cost_usd = ?
+               WHERE id = ?''',
+            (usage.get('calls', 0), usage.get('prompt_tokens', 0),
+             usage.get('output_tokens', 0), usage.get('total_tokens', 0),
+             round(usage.get('cost_usd', 0.0), 6), log_id)
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.warning(f"Failed to update token usage for analysis {log_id}: {e}")
+
+
+def build_daily_analysis_report(date_str=None):
+    """Return (date_str, rows) of per-account analysis counts for the given UTC date.
+
+    date_str must be 'YYYY-MM-DD'. Defaults to the current UTC date, which matches
+    the UTC CURRENT_TIMESTAMP values stored in analysis_log.
+    """
+    if date_str is None:
+        date_str = datetime.utcnow().strftime('%Y-%m-%d')
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute('''
+        SELECT al.user_id AS user_id,
+               COALESCE(u.username, al.username) AS username,
+               u.email AS email,
+               COUNT(*) AS video_count,
+               COALESCE(SUM(al.total_tokens), 0) AS total_tokens,
+               COALESCE(SUM(al.cost_usd), 0) AS cost_usd
+        FROM analysis_log al
+        LEFT JOIN users u ON u.id = al.user_id
+        WHERE date(al.analyzed_at) = ?
+        GROUP BY al.user_id
+        ORDER BY video_count DESC
+    ''', (date_str,))
+    rows = cur.fetchall()
+    conn.close()
+    return date_str, rows
+
+
+def build_daily_analysis_requests(date_str=None):
+    """Return (date_str, rows) of individual analysis requests for the given UTC date,
+    each with its own Gemini token usage."""
+    if date_str is None:
+        date_str = datetime.utcnow().strftime('%Y-%m-%d')
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute('''
+        SELECT COALESCE(u.username, al.username) AS username,
+               al.filename AS filename,
+               al.player_type AS player_type,
+               al.gemini_calls AS gemini_calls,
+               al.prompt_tokens AS prompt_tokens,
+               al.output_tokens AS output_tokens,
+               al.total_tokens AS total_tokens,
+               al.cost_usd AS cost_usd,
+               al.analyzed_at AS analyzed_at
+        FROM analysis_log al
+        LEFT JOIN users u ON u.id = al.user_id
+        WHERE date(al.analyzed_at) = ?
+        ORDER BY al.analyzed_at ASC
+    ''', (date_str,))
+    rows = cur.fetchall()
+    conn.close()
+    return date_str, rows
+
+
+def send_daily_analysis_report(date_str=None):
+    """Build and email the per-account daily analysis usage report to the admin."""
+    date_str, rows = build_daily_analysis_report(date_str)
+    _, req_rows = build_daily_analysis_requests(date_str)
+    total_videos = sum(r['video_count'] for r in rows)
+    total_accounts = len(rows)
+    total_tokens = sum(r['total_tokens'] for r in rows)
+    total_cost = sum(r['cost_usd'] for r in rows)
+
+    if rows:
+        table_rows = "".join(
+            f"<tr>"
+            f"<td style='padding:8px;border:1px solid #ddd;'>{r['username'] or 'Unknown'}</td>"
+            f"<td style='padding:8px;border:1px solid #ddd;'>{r['email'] or '-'}</td>"
+            f"<td style='padding:8px;border:1px solid #ddd;text-align:center;'>{r['video_count']}</td>"
+            f"<td style='padding:8px;border:1px solid #ddd;text-align:right;'>{r['total_tokens']:,}</td>"
+            f"<td style='padding:8px;border:1px solid #ddd;text-align:right;'>"
+            f"{(r['total_tokens'] // r['video_count'] if r['video_count'] else 0):,}</td>"
+            f"<td style='padding:8px;border:1px solid #ddd;text-align:right;'>${r['cost_usd']:.4f}</td>"
+            f"</tr>"
+            for r in rows
+        )
+        table_html = (
+            "<h3>Per-account summary</h3>"
+            "<table style='border-collapse:collapse;width:100%;font-family:Arial,sans-serif;'>"
+            "<thead><tr style='background:#0a3d62;color:#fff;'>"
+            "<th style='padding:8px;border:1px solid #ddd;text-align:left;'>Account</th>"
+            "<th style='padding:8px;border:1px solid #ddd;text-align:left;'>Email</th>"
+            "<th style='padding:8px;border:1px solid #ddd;'>Videos</th>"
+            "<th style='padding:8px;border:1px solid #ddd;'>Total Tokens</th>"
+            "<th style='padding:8px;border:1px solid #ddd;'>Avg Tokens/Video</th>"
+            "<th style='padding:8px;border:1px solid #ddd;'>Est. Cost</th>"
+            "</tr></thead>"
+            f"<tbody>{table_rows}</tbody></table>"
+        )
+    else:
+        table_html = "<p>No videos were analyzed on this day.</p>"
+
+    # Per-request (per-video) Gemini token breakdown.
+    if req_rows:
+        req_table_rows = "".join(
+            f"<tr>"
+            f"<td style='padding:6px;border:1px solid #ddd;'>{r['username'] or 'Unknown'}</td>"
+            f"<td style='padding:6px;border:1px solid #ddd;'>{r['filename'] or '-'}</td>"
+            f"<td style='padding:6px;border:1px solid #ddd;'>{r['player_type'] or '-'}</td>"
+            f"<td style='padding:6px;border:1px solid #ddd;text-align:right;'>{r['gemini_calls']}</td>"
+            f"<td style='padding:6px;border:1px solid #ddd;text-align:right;'>{r['prompt_tokens']:,}</td>"
+            f"<td style='padding:6px;border:1px solid #ddd;text-align:right;'>{r['output_tokens']:,}</td>"
+            f"<td style='padding:6px;border:1px solid #ddd;text-align:right;'>{r['total_tokens']:,}</td>"
+            f"<td style='padding:6px;border:1px solid #ddd;text-align:right;'>${r['cost_usd']:.4f}</td>"
+            f"</tr>"
+            for r in req_rows
+        )
+        req_table_html = (
+            "<h3 style='margin-top:24px;'>Per-request Gemini token usage</h3>"
+            "<table style='border-collapse:collapse;width:100%;font-family:Arial,sans-serif;font-size:13px;'>"
+            "<thead><tr style='background:#0a3d62;color:#fff;'>"
+            "<th style='padding:6px;border:1px solid #ddd;text-align:left;'>Account</th>"
+            "<th style='padding:6px;border:1px solid #ddd;text-align:left;'>Video</th>"
+            "<th style='padding:6px;border:1px solid #ddd;'>Type</th>"
+            "<th style='padding:6px;border:1px solid #ddd;'>Calls</th>"
+            "<th style='padding:6px;border:1px solid #ddd;'>Prompt</th>"
+            "<th style='padding:6px;border:1px solid #ddd;'>Output</th>"
+            "<th style='padding:6px;border:1px solid #ddd;'>Total Tokens</th>"
+            "<th style='padding:6px;border:1px solid #ddd;'>Est. Cost</th>"
+            "</tr></thead>"
+            f"<tbody>{req_table_rows}</tbody></table>"
+        )
+    else:
+        req_table_html = ""
+
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <body style="font-family:Arial,sans-serif;color:#222;">
+        <h2>CrickCoach AI — Daily Analysis Report</h2>
+        <p><strong>Date (UTC):</strong> {date_str}</p>
+        <p><strong>Total videos analyzed:</strong> {total_videos}<br/>
+           <strong>Active accounts:</strong> {total_accounts}<br/>
+           <strong>Total Gemini tokens:</strong> {total_tokens:,}<br/>
+           <strong>Estimated Gemini cost:</strong> ${total_cost:.4f}</p>
+        {table_html}
+        {req_table_html}
+        <p style="color:#888;font-size:12px;margin-top:24px;">Automated report from CrickCoach AI backend.</p>
+    </body>
+    </html>
+    """
+
+    text_lines = [f"CrickCoach AI Daily Analysis Report — {date_str} (UTC)",
+                  f"Total videos analyzed: {total_videos}",
+                  f"Active accounts: {total_accounts}",
+                  f"Total Gemini tokens: {total_tokens:,}",
+                  f"Estimated Gemini cost: ${total_cost:.4f}", "",
+                  "Per-account (videos | total tokens | est. cost):"]
+    for r in rows:
+        text_lines.append(
+            f"  {r['username'] or 'Unknown'} ({r['email'] or '-'}): "
+            f"{r['video_count']} videos | {r['total_tokens']:,} tokens | ${r['cost_usd']:.4f}"
+        )
+    text_lines.append("")
+    text_lines.append("Per-request (video | type | total tokens | est. cost):")
+    for r in req_rows:
+        text_lines.append(
+            f"  {r['username'] or 'Unknown'} | {r['filename'] or '-'} | {r['player_type'] or '-'} | "
+            f"{r['total_tokens']:,} tokens | ${r['cost_usd']:.4f}"
+        )
+    text_body = "\n".join(text_lines)
+
+    subject = f"CrickCoach Daily Analysis — {date_str}: {total_videos} videos, {total_accounts} accounts"
+    ok = send_email_via_smtp2go(", ".join(ADMIN_REPORT_RECIPIENTS), subject, html_body, text_body)
+    if ok:
+        logger.info(f"Daily analysis report sent to {ADMIN_REPORT_RECIPIENTS} for {date_str}")
+    else:
+        logger.error(f"Failed to send daily analysis report for {date_str}")
+    return ok
+
+
+def _daily_report_scheduler():
+    """Background loop that emails the daily usage report at the configured time."""
+    while True:
+        try:
+            now = datetime.now()
+            target = now.replace(hour=DAILY_REPORT_HOUR, minute=DAILY_REPORT_MINUTE,
+                                 second=0, microsecond=0)
+            if target <= now:
+                target += timedelta(days=1)
+            time.sleep(max(1, (target - now).total_seconds()))
+            send_daily_analysis_report()
+        except Exception as e:
+            logger.error(f"Daily report scheduler error: {e}", exc_info=True)
+            time.sleep(60)  # avoid a tight crash loop
+
+
+def start_daily_report_scheduler():
+    """Start the daily report background thread once."""
+    global _daily_report_scheduler_started
+    if _daily_report_scheduler_started:
+        return
+    _daily_report_scheduler_started = True
+    t = threading.Thread(target=_daily_report_scheduler, daemon=True)
+    t.start()
+    logger.info(
+        f"Daily analysis report scheduler started "
+        f"(daily at {DAILY_REPORT_HOUR:02d}:{DAILY_REPORT_MINUTE:02d}, to {ADMIN_REPORT_RECIPIENTS})"
+    )
 
 
 # ==================== SUBSCRIPTION / ENTITLEMENTS ====================
@@ -747,6 +1042,11 @@ def process_analysis_job(job_id, user_id, username, filepath, filename, form, ex
 
         player_type = form.get("player_type", "batsman")
 
+        # Track this analysis for the daily per-account usage report, and start
+        # measuring Gemini token usage for this request.
+        analysis_log_id = log_video_analysis(user_id, username, filename, player_type, job_id)
+        gemini.begin_request()
+
         results = None
         user_folder = get_user_upload_folder(user_id)
         analysis_video_path = ensure_video_readable_for_analysis(filepath, job_id=job_id, user_id=str(user_id))
@@ -858,6 +1158,12 @@ def process_analysis_job(job_id, user_id, username, filepath, filename, form, ex
 
         else:
             raise ValueError(f"Unsupported player type: {player_type}. Supported types: batsman, bowler, keeper")
+
+        # Record how many Gemini tokens this analysis request consumed.
+        try:
+            update_analysis_tokens(analysis_log_id, gemini.request_usage())
+        except Exception as token_err:
+            logger.warning(f"⚠️ [JOB {job_id}] Token usage record failed: {token_err}")
 
         # Save results by filename for history/backwards compatibility
         results_file = os.path.join(user_folder, f"results_{filename}.json")
@@ -3622,6 +3928,47 @@ The biomechanical assessment reveals potential issues with run-up speed, deliver
     with open(report_path, 'w', encoding='utf-8') as f:
         f.write(report_content)
     return report_path
+
+
+@app.route('/api/admin/daily-report', methods=['GET', 'POST'])
+def trigger_daily_report():
+    """Manually trigger / preview the daily per-account analysis report.
+
+    Protect with ADMIN_REPORT_TOKEN env var; pass it as ?token=... .
+    Optional ?date=YYYY-MM-DD (UTC) to report a specific day.
+    Pass ?send=false to preview the JSON without emailing.
+    """
+    if ADMIN_REPORT_TOKEN and request.args.get('token') != ADMIN_REPORT_TOKEN:
+        return jsonify({'error': 'unauthorized'}), 401
+
+    date_str = request.args.get('date')
+    date_str, rows = build_daily_analysis_report(date_str)
+    _, req_rows = build_daily_analysis_requests(date_str)
+    summary = {
+        'date': date_str,
+        'total_videos': sum(r['video_count'] for r in rows),
+        'total_accounts': len(rows),
+        'total_tokens': sum(r['total_tokens'] for r in rows),
+        'total_cost_usd': round(sum(r['cost_usd'] for r in rows), 4),
+        'accounts': [
+            {'user_id': r['user_id'], 'username': r['username'],
+             'email': r['email'], 'video_count': r['video_count'],
+             'total_tokens': r['total_tokens'], 'cost_usd': round(r['cost_usd'], 4)}
+            for r in rows
+        ],
+        'requests': [
+            {'username': r['username'], 'filename': r['filename'],
+             'player_type': r['player_type'], 'gemini_calls': r['gemini_calls'],
+             'prompt_tokens': r['prompt_tokens'], 'output_tokens': r['output_tokens'],
+             'total_tokens': r['total_tokens'], 'cost_usd': round(r['cost_usd'], 4),
+             'analyzed_at': r['analyzed_at']}
+            for r in req_rows
+        ],
+    }
+
+    if request.args.get('send', 'true').lower() != 'false':
+        summary['email_sent'] = send_daily_analysis_report(date_str)
+    return jsonify(summary)
 
 
 @app.route('/')

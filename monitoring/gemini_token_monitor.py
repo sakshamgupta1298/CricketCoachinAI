@@ -84,6 +84,27 @@ class GeminiTokenMonitor:
             "total_tokens": 0,
             "cost_usd": 0.0,
         }
+        # Per-thread accumulator so one analysis "request" (which may make several
+        # Gemini calls) can be measured end-to-end. See begin_request()/request_usage().
+        self._local = threading.local()
+
+    @staticmethod
+    def _empty_usage():
+        return {
+            "calls": 0,
+            "prompt_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0,
+            "cost_usd": 0.0,
+        }
+
+    def begin_request(self):
+        """Start (or reset) per-request token accounting for the current thread."""
+        self._local.usage = self._empty_usage()
+
+    def request_usage(self):
+        """Return token usage accumulated since the last begin_request() on this thread."""
+        return dict(getattr(self._local, "usage", None) or self._empty_usage())
 
     # -- the wrapped call ---------------------------------------------------
     def generate_content(self, model, contents, label=None, **kwargs):
@@ -121,6 +142,15 @@ class GeminiTokenMonitor:
             self._totals["total_tokens"] += total_tokens
             self._totals["cost_usd"] += cost
             running = dict(self._totals)
+
+        # Accumulate into the current thread's per-request total, if one is active.
+        local_usage = getattr(self._local, "usage", None)
+        if local_usage is not None:
+            local_usage["calls"] += 1
+            local_usage["prompt_tokens"] += prompt_tokens
+            local_usage["output_tokens"] += output_tokens
+            local_usage["total_tokens"] += total_tokens
+            local_usage["cost_usd"] += cost
 
         logger.info(
             "📊 Running totals: %d calls | %d total tokens | ~$%.4f",
