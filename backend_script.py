@@ -221,15 +221,25 @@ def get_db_connection():
 
 
 # ==================== DAILY ANALYSIS USAGE TRACKING ====================
-# Who receives the daily "videos analyzed per account" email, and when (server local time).
+# Who receives the daily "videos analyzed per account" email, and when.
 # Comma-separated list of recipients (overridable via ADMIN_REPORT_EMAIL env var).
 ADMIN_REPORT_EMAIL = os.getenv(
     'ADMIN_REPORT_EMAIL',
     'siddhantsharan@gmail.com,admin@crickcoachai.com,9626samiksha3gupta@gmail.com'
 )
 ADMIN_REPORT_RECIPIENTS = [e.strip() for e in ADMIN_REPORT_EMAIL.split(',') if e.strip()]
-DAILY_REPORT_HOUR = int(os.getenv('DAILY_REPORT_HOUR', '23'))
-DAILY_REPORT_MINUTE = int(os.getenv('DAILY_REPORT_MINUTE', '59'))
+# The "day" for the report is India Standard Time (UTC+5:30, no DST), independent of
+# where the server is hosted. Both the day boundary and the send time use IST.
+IST_OFFSET = timedelta(hours=5, minutes=30)
+# SQLite datetime() modifiers to shift stored UTC timestamps into IST.
+IST_SQL_MODIFIERS = ("+5 hours", "+30 minutes")
+DAILY_REPORT_HOUR = int(os.getenv('DAILY_REPORT_HOUR', '23'))    # IST hour
+DAILY_REPORT_MINUTE = int(os.getenv('DAILY_REPORT_MINUTE', '59'))  # IST minute
+
+
+def _ist_today():
+    """Current date in IST as 'YYYY-MM-DD'."""
+    return (datetime.utcnow() + IST_OFFSET).strftime('%Y-%m-%d')
 # Optional shared secret to manually trigger the report via the admin endpoint.
 ADMIN_REPORT_TOKEN = os.getenv('ADMIN_REPORT_TOKEN', '')
 _daily_report_scheduler_started = False
@@ -282,11 +292,11 @@ def update_analysis_tokens(log_id, usage):
 def build_daily_analysis_report(date_str=None):
     """Return (date_str, rows) of per-account analysis counts for the given UTC date.
 
-    date_str must be 'YYYY-MM-DD'. Defaults to the current UTC date, which matches
-    the UTC CURRENT_TIMESTAMP values stored in analysis_log.
+    date_str must be 'YYYY-MM-DD' and is interpreted in IST. Stored timestamps are
+    UTC, so they are shifted into IST before bucketing by day. Defaults to today (IST).
     """
     if date_str is None:
-        date_str = datetime.utcnow().strftime('%Y-%m-%d')
+        date_str = _ist_today()
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute('''
@@ -298,10 +308,10 @@ def build_daily_analysis_report(date_str=None):
                COALESCE(SUM(al.cost_usd), 0) AS cost_usd
         FROM analysis_log al
         LEFT JOIN users u ON u.id = al.user_id
-        WHERE date(al.analyzed_at) = ?
+        WHERE date(al.analyzed_at, ?, ?) = ?
         GROUP BY al.user_id
         ORDER BY video_count DESC
-    ''', (date_str,))
+    ''', (*IST_SQL_MODIFIERS, date_str))
     rows = cur.fetchall()
     conn.close()
     return date_str, rows
@@ -309,9 +319,9 @@ def build_daily_analysis_report(date_str=None):
 
 def build_daily_analysis_requests(date_str=None):
     """Return (date_str, rows) of individual analysis requests for the given UTC date,
-    each with its own Gemini token usage."""
+    each with its own Gemini token usage. date_str is interpreted in IST."""
     if date_str is None:
-        date_str = datetime.utcnow().strftime('%Y-%m-%d')
+        date_str = _ist_today()
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute('''
@@ -323,12 +333,12 @@ def build_daily_analysis_requests(date_str=None):
                al.output_tokens AS output_tokens,
                al.total_tokens AS total_tokens,
                al.cost_usd AS cost_usd,
-               al.analyzed_at AS analyzed_at
+               datetime(al.analyzed_at, ?, ?) AS analyzed_at
         FROM analysis_log al
         LEFT JOIN users u ON u.id = al.user_id
-        WHERE date(al.analyzed_at) = ?
+        WHERE date(al.analyzed_at, ?, ?) = ?
         ORDER BY al.analyzed_at ASC
-    ''', (date_str,))
+    ''', (*IST_SQL_MODIFIERS, *IST_SQL_MODIFIERS, date_str))
     rows = cur.fetchall()
     conn.close()
     return date_str, rows
@@ -410,7 +420,7 @@ def send_daily_analysis_report(date_str=None):
     <html>
     <body style="font-family:Arial,sans-serif;color:#222;">
         <h2>CrickCoach AI — Daily Analysis Report</h2>
-        <p><strong>Date (UTC):</strong> {date_str}</p>
+        <p><strong>Date (IST):</strong> {date_str}</p>
         <p><strong>Total videos analyzed:</strong> {total_videos}<br/>
            <strong>Active accounts:</strong> {total_accounts}<br/>
            <strong>Total Gemini tokens:</strong> {total_tokens:,}<br/>
@@ -422,7 +432,7 @@ def send_daily_analysis_report(date_str=None):
     </html>
     """
 
-    text_lines = [f"CrickCoach AI Daily Analysis Report — {date_str} (UTC)",
+    text_lines = [f"CrickCoach AI Daily Analysis Report — {date_str} (IST)",
                   f"Total videos analyzed: {total_videos}",
                   f"Active accounts: {total_accounts}",
                   f"Total Gemini tokens: {total_tokens:,}",
@@ -452,15 +462,18 @@ def send_daily_analysis_report(date_str=None):
 
 
 def _daily_report_scheduler():
-    """Background loop that emails the daily usage report at the configured time."""
+    """Background loop that emails the daily usage report at the configured IST time."""
     while True:
         try:
-            now = datetime.now()
-            target = now.replace(hour=DAILY_REPORT_HOUR, minute=DAILY_REPORT_MINUTE,
-                                 second=0, microsecond=0)
-            if target <= now:
-                target += timedelta(days=1)
-            time.sleep(max(1, (target - now).total_seconds()))
+            # Work entirely in the IST clock so the day completes "in India",
+            # regardless of the server's own timezone.
+            now_ist = datetime.utcnow() + IST_OFFSET
+            target_ist = now_ist.replace(hour=DAILY_REPORT_HOUR, minute=DAILY_REPORT_MINUTE,
+                                         second=0, microsecond=0)
+            if target_ist <= now_ist:
+                target_ist += timedelta(days=1)
+            # Both are on the same (IST) clock, so their delta is real elapsed time.
+            time.sleep(max(1, (target_ist - now_ist).total_seconds()))
             send_daily_analysis_report()
         except Exception as e:
             logger.error(f"Daily report scheduler error: {e}", exc_info=True)
@@ -477,7 +490,7 @@ def start_daily_report_scheduler():
     t.start()
     logger.info(
         f"Daily analysis report scheduler started "
-        f"(daily at {DAILY_REPORT_HOUR:02d}:{DAILY_REPORT_MINUTE:02d}, to {ADMIN_REPORT_RECIPIENTS})"
+        f"(daily at {DAILY_REPORT_HOUR:02d}:{DAILY_REPORT_MINUTE:02d} IST, to {ADMIN_REPORT_RECIPIENTS})"
     )
 
 
