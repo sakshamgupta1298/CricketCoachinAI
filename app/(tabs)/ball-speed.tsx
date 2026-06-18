@@ -7,11 +7,10 @@ import { ActivityIndicator, Alert, ScrollView, StyleSheet, TouchableOpacity, Vie
 import { Text, TextInput, useTheme } from 'react-native-paper';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import LiveBallSpeed from '../src/ballspeed/LiveBallSpeed';
-import { PremiumCard } from '../src/components/ui/PremiumCard';
-import apiService from '../src/services/api';
-import { borderRadius, colors, spacing } from '../src/theme';
-import { getResponsiveFontSize, getResponsiveSize } from '../src/utils/responsive';
+import { PremiumCard } from '../../src/components/ui/PremiumCard';
+import apiService from '../../src/services/api';
+import { borderRadius, colors, spacing } from '../../src/theme';
+import { getResponsiveFontSize, getResponsiveSize } from '../../src/utils/responsive';
 
 const DEFAULT_DISTANCE_METERS = 20.12;
 const DEFAULT_FPS = 30;
@@ -38,7 +37,6 @@ export default function BallSpeedScreen() {
   const [isAutoDetecting, setIsAutoDetecting] = useState(false);
   const [autoStatus, setAutoStatus] = useState<string>('');
   const [autoConfidence, setAutoConfidence] = useState<string | null>(null);
-  const [liveMode, setLiveMode] = useState(false);
 
   const getDisplayedSeconds = (seconds: number) => {
     const decimals = seconds < 10 ? 2 : 1;
@@ -337,7 +335,7 @@ export default function BallSpeedScreen() {
                 { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(20) },
               ]}
             >
-              {liveMode ? 'Live Ball Speed (beta)' : 'Ball Speed from Video Frames'}
+              Ball Speed from Video Frames
             </Text>
             <Text
               style={[
@@ -345,28 +343,12 @@ export default function BallSpeedScreen() {
                 { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(13) },
               ]}
             >
-              {liveMode
-                ? 'Film a side-on delivery on-device. Enter distance, tap Measure, then Stop — no upload.'
-                : 'Mark the release and arrival frames, then compute time and speed.'}
+              Mark the release and arrival frames, then compute time and speed.
             </Text>
           </PremiumCard>
         </Animated.View>
 
         <Animated.View entering={FadeInUp.delay(140).springify()}>
-          {liveMode ? (
-            <>
-              <PremiumCard variant="elevated" padding="large" style={styles.cameraCard}>
-                <LiveBallSpeed />
-              </PremiumCard>
-              <TouchableOpacity
-                style={styles.backButtonRow}
-                onPress={() => setLiveMode(false)}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.backLink, { color: theme.colors.primary }]}>Back to video analysis</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
           <PremiumCard variant="elevated" padding="large" style={styles.cameraCard}>
             <View style={styles.cameraHeader}>
               <View style={styles.controlsRow}>
@@ -666,13 +648,10 @@ export default function BallSpeedScreen() {
               </View>
             )}
           </PremiumCard>
-          )}
 
-          {!liveMode && (
-            <TouchableOpacity style={styles.backButtonRow} onPress={() => router.back()} activeOpacity={0.8}>
-              <Text style={[styles.backLink, { color: theme.colors.primary }]}>Back</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity style={styles.backButtonRow} onPress={() => router.back()} activeOpacity={0.8}>
+            <Text style={[styles.backLink, { color: theme.colors.primary }]}>Back</Text>
+          </TouchableOpacity>
         </Animated.View>
       </ScrollView>
     </SafeAreaView>

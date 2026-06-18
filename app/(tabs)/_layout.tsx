@@ -87,6 +87,8 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => <TabBarIcon name="profile" color={color} focused={focused} />,
         }}
       />
+      {/* Reachable via router.push('/ball-speed') from Upload, but hidden from the tab bar. */}
+      <Tabs.Screen name="ball-speed" options={{ href: null }} />
     </Tabs>
   );
 }
