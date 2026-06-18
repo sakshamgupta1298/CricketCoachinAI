@@ -235,10 +235,9 @@ IST_OFFSET = timedelta(hours=5, minutes=30)
 IST_SQL_MODIFIERS = ("+5 hours", "+30 minutes")
 DAILY_REPORT_HOUR = int(os.getenv('DAILY_REPORT_HOUR', '23'))    # IST hour
 DAILY_REPORT_MINUTE = int(os.getenv('DAILY_REPORT_MINUTE', '59'))  # IST minute
-# Weekly returning-users report: sent once a week at the daily send time, on this
-# weekday (Python weekday(): Mon=0 .. Sun=6; default Sunday = end of the week).
-WEEKLY_REPORT_WEEKDAY = int(os.getenv('WEEKLY_REPORT_WEEKDAY', '6'))
-WEEKLY_REPORT_WINDOW_DAYS = int(os.getenv('WEEKLY_REPORT_WINDOW_DAYS', '7'))
+# Returning-users section (included in the daily email): a user is "returning" if
+# they analyzed videos on 2+ distinct IST days within this rolling window.
+RETURNING_WINDOW_DAYS = int(os.getenv('RETURNING_WINDOW_DAYS', '7'))
 
 
 def _ist_today():
@@ -469,6 +468,43 @@ def send_daily_analysis_report(date_str=None):
     else:
         req_table_html = ""
 
+    # Returning-users section: rolling window ending today (a user is "returning"
+    # if they analyzed on 2+ distinct IST days within the window).
+    ret = build_returning_users_report(date_str, RETURNING_WINDOW_DAYS)
+    if ret['users']:
+        ret_table_rows = "".join(
+            f"<tr>"
+            f"<td style='padding:8px;border:1px solid #ddd;'>{u['username'] or 'Unknown'}</td>"
+            f"<td style='padding:8px;border:1px solid #ddd;'>{u['email'] or '-'}</td>"
+            f"<td style='padding:8px;border:1px solid #ddd;text-align:center;'>{u['active_days']}</td>"
+            f"<td style='padding:8px;border:1px solid #ddd;text-align:center;'>{u['video_count']}</td>"
+            f"<td style='padding:8px;border:1px solid #ddd;text-align:center;'>{'✅' if u['returning'] else '—'}</td>"
+            f"</tr>"
+            for u in ret['users']
+        )
+        ret_table_html = (
+            f"<h3 style='margin-top:24px;'>Returning users — last {ret['window_days']} days "
+            f"({ret['start_date']} → {ret['end_date']})</h3>"
+            f"<p><strong>Active users:</strong> {ret['total_active_users']} &nbsp;|&nbsp; "
+            f"<strong>Returning (2+ days):</strong> {ret['returning_users']} &nbsp;|&nbsp; "
+            f"<strong>Return rate:</strong> {ret['return_rate_pct']}%</p>"
+            "<table style='border-collapse:collapse;width:100%;font-family:Arial,sans-serif;'>"
+            "<thead><tr style='background:#0a3d62;color:#fff;'>"
+            "<th style='padding:8px;border:1px solid #ddd;text-align:left;'>Account</th>"
+            "<th style='padding:8px;border:1px solid #ddd;text-align:left;'>Email</th>"
+            "<th style='padding:8px;border:1px solid #ddd;'>Active Days</th>"
+            "<th style='padding:8px;border:1px solid #ddd;'>Videos</th>"
+            "<th style='padding:8px;border:1px solid #ddd;'>Returning?</th>"
+            "</tr></thead>"
+            f"<tbody>{ret_table_rows}</tbody></table>"
+        )
+    else:
+        ret_table_html = (
+            f"<h3 style='margin-top:24px;'>Returning users — last {ret['window_days']} days "
+            f"({ret['start_date']} → {ret['end_date']})</h3>"
+            "<p>No users were active in this window.</p>"
+        )
+
     html_body = f"""
     <!DOCTYPE html>
     <html>
@@ -481,6 +517,7 @@ def send_daily_analysis_report(date_str=None):
            <strong>Estimated Gemini cost:</strong> ${total_cost:.4f}</p>
         {table_html}
         {req_table_html}
+        {ret_table_html}
         <p style="color:#888;font-size:12px;margin-top:24px;">Automated report from CrickCoach AI backend.</p>
     </body>
     </html>
@@ -504,6 +541,19 @@ def send_daily_analysis_report(date_str=None):
             f"  {r['username'] or 'Unknown'} | {r['filename'] or '-'} | {r['player_type'] or '-'} | "
             f"{r['total_tokens']:,} tokens | ${r['cost_usd']:.4f}"
         )
+    text_lines.append("")
+    text_lines.append(
+        f"Returning users — last {ret['window_days']} days "
+        f"({ret['start_date']} to {ret['end_date']}): "
+        f"{ret['returning_users']}/{ret['total_active_users']} active "
+        f"returned ({ret['return_rate_pct']}%)"
+    )
+    for u in ret['users']:
+        text_lines.append(
+            f"  {u['username'] or 'Unknown'} ({u['email'] or '-'}): "
+            f"{u['active_days']} days | {u['video_count']} videos | "
+            f"{'returning' if u['returning'] else 'no'}"
+        )
     text_body = "\n".join(text_lines)
 
     subject = f"CrickCoach Daily Analysis — {date_str}: {total_videos} videos, {total_accounts} accounts"
@@ -518,7 +568,7 @@ def send_daily_analysis_report(date_str=None):
 def send_returning_users_report(end_date=None, window_days=None):
     """Build and email the weekly returning-users report to the admin recipients."""
     if window_days is None:
-        window_days = WEEKLY_REPORT_WINDOW_DAYS
+        window_days = RETURNING_WINDOW_DAYS
     data = build_returning_users_report(end_date, window_days)
     users = data['users']
     returning_rows = [u for u in users if u['returning']]
@@ -602,11 +652,8 @@ def _daily_report_scheduler():
                 target_ist += timedelta(days=1)
             # Both are on the same (IST) clock, so their delta is real elapsed time.
             time.sleep(max(1, (target_ist - now_ist).total_seconds()))
+            # Daily email now also includes the rolling returning-users section.
             send_daily_analysis_report()
-            # Once a week, also send the returning-users report for the week ending now.
-            fire_ist = datetime.utcnow() + IST_OFFSET
-            if fire_ist.weekday() == WEEKLY_REPORT_WEEKDAY:
-                send_returning_users_report()
         except Exception as e:
             logger.error(f"Daily report scheduler error: {e}", exc_info=True)
             time.sleep(60)  # avoid a tight crash loop
@@ -620,12 +667,10 @@ def start_daily_report_scheduler():
     _daily_report_scheduler_started = True
     t = threading.Thread(target=_daily_report_scheduler, daemon=True)
     t.start()
-    _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-    _wd = _weekdays[WEEKLY_REPORT_WEEKDAY] if 0 <= WEEKLY_REPORT_WEEKDAY < 7 else WEEKLY_REPORT_WEEKDAY
     logger.info(
         f"Daily analysis report scheduler started "
-        f"(daily at {DAILY_REPORT_HOUR:02d}:{DAILY_REPORT_MINUTE:02d} IST; "
-        f"weekly returning-users report every {_wd}; to {ADMIN_REPORT_RECIPIENTS})"
+        f"(daily at {DAILY_REPORT_HOUR:02d}:{DAILY_REPORT_MINUTE:02d} IST; includes "
+        f"rolling {RETURNING_WINDOW_DAYS}-day returning-users section; to {ADMIN_REPORT_RECIPIENTS})"
     )
 
 
@@ -1397,7 +1442,7 @@ def build_youtube_search_url(query: str) -> str:
     return f"https://www.youtube.com/results?search_query={quote_plus(q)}"
 
 _youtube_api_key = os.getenv("YOUTUBE_API_KEY")
-_youtube_resolve_max = int(os.getenv("YOUTUBE_RESOLVE_MAX", "12") or "12")
+_youtube_resolve_max = int(os.getenv("YOUTUBE_RESOLVE_MAX", "50") or "50")
 _youtube_cache: dict[str, str] = {}
 
 def resolve_youtube_watch_url(query: str) -> str | None:
@@ -1443,6 +1488,63 @@ def resolve_youtube_watch_url(query: str) -> str | None:
         return url
     except Exception:
         return None
+
+
+def _is_youtube_watch_url(url) -> bool:
+    """True if url is a specific YouTube video (not a search-results page)."""
+    return isinstance(url, str) and "watch?v=" in url
+
+
+def ensure_drill_youtube_links(plan_json, context: str = "") -> bool:
+    """Make sure every drill in a training plan points at a specific YouTube video.
+
+    For each drill: build a drill-specific search query if missing, guarantee at
+    least a search URL, then (when an API key is available) upgrade it to a real
+    watch URL for THIS drill. Cache hits don't count against the resolve cap, so a
+    full plan resolves cleanly. Returns True if anything changed (so the caller can
+    persist the upgraded plan).
+    """
+    if not isinstance(plan_json, dict):
+        return False
+    changed = False
+    api_calls = 0
+    for day in (plan_json.get("plan") or []):
+        if not isinstance(day, dict):
+            continue
+        drills = day.get("drills")
+        if not isinstance(drills, list):
+            continue
+        for drill in drills:
+            if not isinstance(drill, dict):
+                continue
+            # 1) Ensure a specific, drill-targeted search query.
+            if not (drill.get("youtube_search_query") or "").strip():
+                drill_name = (drill.get("name") or "").strip()
+                drill["youtube_search_query"] = f"{drill_name} cricket {context} drill technique".strip()
+                changed = True
+            query = drill.get("youtube_search_query")
+
+            # 2) Always provide at least a search URL as a safe default.
+            if not drill.get("youtube_url"):
+                drill["youtube_url"] = build_youtube_search_url(query)
+                changed = True
+
+            # 3) Upgrade to a specific watch URL for this drill if we don't have one.
+            if _is_youtube_watch_url(drill.get("youtube_url")):
+                continue
+            cached = _youtube_cache.get((query or "").strip())
+            if cached:
+                if cached != drill.get("youtube_url"):
+                    drill["youtube_url"] = cached
+                    changed = True
+                continue
+            if _youtube_api_key and api_calls < max(0, _youtube_resolve_max):
+                watch_url = resolve_youtube_watch_url(query)
+                api_calls += 1
+                if watch_url:
+                    drill["youtube_url"] = watch_url
+                    changed = True
+    return changed
 
 def extract_json_from_response(text: str) -> str:
     """
@@ -3802,28 +3904,8 @@ Example JSON structure:
         raw = response.text
         json_text = extract_json_from_response(raw)
         plan_json = json.loads(json_text)
-        # Ensure every drill has a usable YouTube link (avoid relying on the model for valid URLs)
-        resolved_count = 0
-        for day in plan_json.get("plan", []):
-            drills = day.get("drills", [])
-            if not isinstance(drills, list):
-                continue
-            for drill in drills:
-                if not isinstance(drill, dict):
-                    continue
-                if not drill.get("youtube_search_query"):
-                    drill_name = (drill.get("name") or "").strip()
-                    context = shot_type or bowler_type or player_type
-                    drill["youtube_search_query"] = f"{drill_name} cricket drill {context}".strip()
-                # Default: always provide a search URL
-                drill["youtube_url"] = build_youtube_search_url(drill.get("youtube_search_query"))
-
-                # Optional: resolve to a specific watch URL (cap to protect quota/latency)
-                if resolved_count < max(0, _youtube_resolve_max):
-                    watch_url = resolve_youtube_watch_url(drill.get("youtube_search_query"))
-                    if watch_url:
-                        drill["youtube_url"] = watch_url
-                    resolved_count += 1
+        # Ensure every drill has a specific, drill-relevant YouTube video link.
+        ensure_drill_youtube_links(plan_json, context=(shot_type or bowler_type or player_type or ""))
         return plan_json
     except Exception as e:
         logger.exception("Failed to generate training plan from Gemini")
@@ -4130,9 +4212,9 @@ def returning_users():
 
     end_date = request.args.get('end_date')
     try:
-        window = int(request.args.get('window', str(WEEKLY_REPORT_WINDOW_DAYS)))
+        window = int(request.args.get('window', str(RETURNING_WINDOW_DAYS)))
     except ValueError:
-        window = WEEKLY_REPORT_WINDOW_DAYS
+        window = RETURNING_WINDOW_DAYS
     data = build_returning_users_report(end_date, window)
     # ?send=true emails the report; default is preview-only JSON.
     if request.args.get('send', 'false').lower() == 'true':
@@ -5066,18 +5148,32 @@ def get_training_plan(filename):
             print(f"Training plan found for {filename}")
             
             # Check if the corresponding analysis results belong to the authenticated user
+            results = {}
             results_file = os.path.join(user_folder, f"results_{filename}.json")
             if os.path.exists(results_file):
                 with open(results_file, 'r') as f:
                     results = json.load(f)
-                
+
                 result_user_id = results.get('user_id')
                 if result_user_id != user_id:
                     print(f"Access denied: User {username} tried to access training plan for user ID {result_user_id}")
                     return jsonify({'error': 'Access denied'}), 403
-            
+
             with open(plan_file, 'r') as f:
                 plan = json.load(f)
+
+            # Upgrade older plans whose drills still point at search URLs (e.g. saved
+            # before the YouTube API key was configured) to specific watch URLs.
+            context = (results.get('shot_type') or results.get('bowler_type')
+                       or results.get('player_type') or "")
+            if ensure_drill_youtube_links(plan, context=context):
+                try:
+                    with open(plan_file, 'w') as f:
+                        json.dump(plan, f, indent=2)
+                    print(f"Upgraded YouTube drill links for {filename}")
+                except Exception as save_err:
+                    logger.warning(f"Could not persist upgraded plan {filename}: {save_err}")
+
             return jsonify(plan)
         else:
             print(f"No training plan exists for {filename} - this is normal for new analyses")
