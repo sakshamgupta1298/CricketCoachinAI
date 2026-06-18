@@ -235,6 +235,10 @@ IST_OFFSET = timedelta(hours=5, minutes=30)
 IST_SQL_MODIFIERS = ("+5 hours", "+30 minutes")
 DAILY_REPORT_HOUR = int(os.getenv('DAILY_REPORT_HOUR', '23'))    # IST hour
 DAILY_REPORT_MINUTE = int(os.getenv('DAILY_REPORT_MINUTE', '59'))  # IST minute
+# Weekly returning-users report: sent once a week at the daily send time, on this
+# weekday (Python weekday(): Mon=0 .. Sun=6; default Sunday = end of the week).
+WEEKLY_REPORT_WEEKDAY = int(os.getenv('WEEKLY_REPORT_WEEKDAY', '6'))
+WEEKLY_REPORT_WINDOW_DAYS = int(os.getenv('WEEKLY_REPORT_WINDOW_DAYS', '7'))
 
 
 def _ist_today():
@@ -342,6 +346,56 @@ def build_daily_analysis_requests(date_str=None):
     rows = cur.fetchall()
     conn.close()
     return date_str, rows
+
+
+def build_returning_users_report(end_date=None, window_days=7):
+    """Measure returning users over a rolling window ending on end_date (IST).
+
+    A user is "returning" if they analyzed at least one video on 2+ distinct
+    IST days within the window. Returns a dict with the window bounds, total
+    active users, returning users, the return rate, and the per-user breakdown.
+    """
+    if end_date is None:
+        end_date = _ist_today()
+    # Window is `window_days` days inclusive, ending on end_date (IST).
+    end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+    start_date = (end_dt - timedelta(days=window_days - 1)).strftime('%Y-%m-%d')
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute('''
+        SELECT al.user_id AS user_id,
+               COALESCE(u.username, al.username) AS username,
+               u.email AS email,
+               COUNT(DISTINCT date(al.analyzed_at, ?, ?)) AS active_days,
+               COUNT(*) AS video_count
+        FROM analysis_log al
+        LEFT JOIN users u ON u.id = al.user_id
+        WHERE date(al.analyzed_at, ?, ?) BETWEEN ? AND ?
+        GROUP BY al.user_id
+        ORDER BY active_days DESC, video_count DESC
+    ''', (*IST_SQL_MODIFIERS, *IST_SQL_MODIFIERS, start_date, end_date))
+    rows = cur.fetchall()
+    conn.close()
+
+    total_active = len(rows)
+    returning = [r for r in rows if r['active_days'] >= 2]
+    return_rate = round(100.0 * len(returning) / total_active, 1) if total_active else 0.0
+
+    return {
+        'start_date': start_date,
+        'end_date': end_date,
+        'window_days': window_days,
+        'total_active_users': total_active,
+        'returning_users': len(returning),
+        'return_rate_pct': return_rate,
+        'users': [
+            {'user_id': r['user_id'], 'username': r['username'], 'email': r['email'],
+             'active_days': r['active_days'], 'video_count': r['video_count'],
+             'returning': r['active_days'] >= 2}
+            for r in rows
+        ],
+    }
 
 
 def send_daily_analysis_report(date_str=None):
@@ -461,6 +515,80 @@ def send_daily_analysis_report(date_str=None):
     return ok
 
 
+def send_returning_users_report(end_date=None, window_days=None):
+    """Build and email the weekly returning-users report to the admin recipients."""
+    if window_days is None:
+        window_days = WEEKLY_REPORT_WINDOW_DAYS
+    data = build_returning_users_report(end_date, window_days)
+    users = data['users']
+    returning_rows = [u for u in users if u['returning']]
+
+    if users:
+        table_rows = "".join(
+            f"<tr>"
+            f"<td style='padding:8px;border:1px solid #ddd;'>{u['username'] or 'Unknown'}</td>"
+            f"<td style='padding:8px;border:1px solid #ddd;'>{u['email'] or '-'}</td>"
+            f"<td style='padding:8px;border:1px solid #ddd;text-align:center;'>{u['active_days']}</td>"
+            f"<td style='padding:8px;border:1px solid #ddd;text-align:center;'>{u['video_count']}</td>"
+            f"<td style='padding:8px;border:1px solid #ddd;text-align:center;'>{'✅' if u['returning'] else '—'}</td>"
+            f"</tr>"
+            for u in users
+        )
+        table_html = (
+            "<table style='border-collapse:collapse;width:100%;font-family:Arial,sans-serif;'>"
+            "<thead><tr style='background:#0a3d62;color:#fff;'>"
+            "<th style='padding:8px;border:1px solid #ddd;text-align:left;'>Account</th>"
+            "<th style='padding:8px;border:1px solid #ddd;text-align:left;'>Email</th>"
+            "<th style='padding:8px;border:1px solid #ddd;'>Active Days</th>"
+            "<th style='padding:8px;border:1px solid #ddd;'>Videos</th>"
+            "<th style='padding:8px;border:1px solid #ddd;'>Returning?</th>"
+            "</tr></thead>"
+            f"<tbody>{table_rows}</tbody></table>"
+        )
+    else:
+        table_html = "<p>No users were active in this window.</p>"
+
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <body style="font-family:Arial,sans-serif;color:#222;">
+        <h2>CrickCoach AI — Weekly Returning Users</h2>
+        <p><strong>Window (IST):</strong> {data['start_date']} → {data['end_date']} ({data['window_days']} days)</p>
+        <p><strong>Active users:</strong> {data['total_active_users']}<br/>
+           <strong>Returning users (analyzed on 2+ days):</strong> {data['returning_users']}<br/>
+           <strong>Return rate:</strong> {data['return_rate_pct']}%</p>
+        <h3>Per-user activity</h3>
+        {table_html}
+        <p style="color:#888;font-size:12px;margin-top:24px;">A user counts as "returning" if they analyzed videos on 2 or more different days in the window. Automated report from CrickCoach AI backend.</p>
+    </body>
+    </html>
+    """
+
+    text_lines = [
+        f"CrickCoach AI Weekly Returning Users — {data['start_date']} to {data['end_date']} (IST)",
+        f"Active users: {data['total_active_users']}",
+        f"Returning users (2+ days): {data['returning_users']}",
+        f"Return rate: {data['return_rate_pct']}%", "",
+        "Per-user (active days | videos | returning):",
+    ]
+    for u in users:
+        text_lines.append(
+            f"  {u['username'] or 'Unknown'} ({u['email'] or '-'}): "
+            f"{u['active_days']} days | {u['video_count']} videos | "
+            f"{'yes' if u['returning'] else 'no'}"
+        )
+    text_body = "\n".join(text_lines)
+
+    subject = (f"CrickCoach Weekly Returning Users — {data['end_date']}: "
+               f"{data['returning_users']}/{data['total_active_users']} ({data['return_rate_pct']}%)")
+    ok = send_email_via_smtp2go(", ".join(ADMIN_REPORT_RECIPIENTS), subject, html_body, text_body)
+    if ok:
+        logger.info(f"Weekly returning-users report sent for {data['start_date']}..{data['end_date']}")
+    else:
+        logger.error("Failed to send weekly returning-users report")
+    return ok
+
+
 def _daily_report_scheduler():
     """Background loop that emails the daily usage report at the configured IST time."""
     while True:
@@ -475,6 +603,10 @@ def _daily_report_scheduler():
             # Both are on the same (IST) clock, so their delta is real elapsed time.
             time.sleep(max(1, (target_ist - now_ist).total_seconds()))
             send_daily_analysis_report()
+            # Once a week, also send the returning-users report for the week ending now.
+            fire_ist = datetime.utcnow() + IST_OFFSET
+            if fire_ist.weekday() == WEEKLY_REPORT_WEEKDAY:
+                send_returning_users_report()
         except Exception as e:
             logger.error(f"Daily report scheduler error: {e}", exc_info=True)
             time.sleep(60)  # avoid a tight crash loop
@@ -488,9 +620,12 @@ def start_daily_report_scheduler():
     _daily_report_scheduler_started = True
     t = threading.Thread(target=_daily_report_scheduler, daemon=True)
     t.start()
+    _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+    _wd = _weekdays[WEEKLY_REPORT_WEEKDAY] if 0 <= WEEKLY_REPORT_WEEKDAY < 7 else WEEKLY_REPORT_WEEKDAY
     logger.info(
         f"Daily analysis report scheduler started "
-        f"(daily at {DAILY_REPORT_HOUR:02d}:{DAILY_REPORT_MINUTE:02d} IST, to {ADMIN_REPORT_RECIPIENTS})"
+        f"(daily at {DAILY_REPORT_HOUR:02d}:{DAILY_REPORT_MINUTE:02d} IST; "
+        f"weekly returning-users report every {_wd}; to {ADMIN_REPORT_RECIPIENTS})"
     )
 
 
@@ -3982,6 +4117,27 @@ def trigger_daily_report():
     if request.args.get('send', 'true').lower() != 'false':
         summary['email_sent'] = send_daily_analysis_report(date_str)
     return jsonify(summary)
+
+
+@app.route('/api/admin/returning-users', methods=['GET'])
+def returning_users():
+    """Weekly returning-users metric: users who analyzed videos on 2+ distinct
+    IST days within the window. Protect with ADMIN_REPORT_TOKEN (?token=...).
+    Optional ?end_date=YYYY-MM-DD (IST, default today) and ?window=7 (days).
+    """
+    if ADMIN_REPORT_TOKEN and request.args.get('token') != ADMIN_REPORT_TOKEN:
+        return jsonify({'error': 'unauthorized'}), 401
+
+    end_date = request.args.get('end_date')
+    try:
+        window = int(request.args.get('window', str(WEEKLY_REPORT_WINDOW_DAYS)))
+    except ValueError:
+        window = WEEKLY_REPORT_WINDOW_DAYS
+    data = build_returning_users_report(end_date, window)
+    # ?send=true emails the report; default is preview-only JSON.
+    if request.args.get('send', 'false').lower() == 'true':
+        data['email_sent'] = send_returning_users_report(end_date, window)
+    return jsonify(data)
 
 
 @app.route('/')
