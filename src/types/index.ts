@@ -164,6 +164,75 @@ export type PlayerSide = 'left' | 'right';
 export type BowlerType = 'fast_bowler' | 'spin_bowler';
 export type KeepingType = 'standing_up' | 'standing_back' | 'diving_catch' | 'stumping';
 
+// ---------------------------------------------------------------------------
+// Athlete Monitoring (NCA-style): wellness, workload, fitness tests, injuries.
+// All records are scoped to the authenticated user server-side via the bearer
+// token (same as analysis history) — no client-side user id is required.
+// ---------------------------------------------------------------------------
+
+export type SessionType = 'batting' | 'bowling' | 'fielding' | 'gym' | 'match' | 'other';
+export type InjuryStatus = 'fit' | 'managing' | 'rehab' | 'out';
+export type InjurySeverity = 'minor' | 'moderate' | 'severe';
+export type WorkloadFlag = 'low' | 'optimal' | 'high';
+
+// Daily wellness check-in. One entry per calendar day; sub-scores are 1–5
+// (5 = best, e.g. fully recovered / great mood / no soreness).
+export interface WellnessEntry {
+  id: string;
+  date: string; // ISO yyyy-mm-dd
+  sleep_quality: number; // 1–5
+  sleep_hours: number;
+  soreness: number; // 1–5 (5 = no soreness)
+  fatigue: number; // 1–5 (5 = fresh)
+  stress: number; // 1–5 (5 = relaxed)
+  mood: number; // 1–5
+  score?: number; // 0–100, computed (server or client)
+  notes?: string;
+}
+
+// A single training/match session. load = rpe * duration_min (sRPE method).
+export interface WorkloadEntry {
+  id: string;
+  date: string; // ISO yyyy-mm-dd
+  type: SessionType;
+  duration_min: number;
+  rpe: number; // session RPE 1–10
+  balls_bowled?: number;
+  load?: number; // rpe * duration_min (server may compute)
+  notes?: string;
+}
+
+// Rolling workload summary used to drive the ACWR injury-risk gauge.
+export interface WorkloadSummary {
+  acute_load: number; // 7-day rolling sum of session load
+  chronic_load: number; // 28-day rolling average (weekly equivalent)
+  acwr: number; // acute : chronic workload ratio
+  flag: WorkloadFlag; // low (<0.8) | optimal (0.8–1.3) | high (>1.3)
+  weekly_balls?: number; // balls bowled in the last 7 days
+}
+
+// A periodic fitness test result (Yo-Yo, sprint, vertical jump, lifts, etc.).
+export interface FitnessTest {
+  id: string;
+  date: string; // ISO yyyy-mm-dd
+  metric: string; // e.g. 'yoyo' | 'sprint_20m' | 'vertical_jump' | 'weight'
+  value: number;
+  unit: string; // e.g. 'level', 's', 'cm', 'kg'
+  notes?: string;
+}
+
+export interface InjuryRecord {
+  id: string;
+  body_part: string;
+  injury_type: string;
+  date_reported: string; // ISO yyyy-mm-dd
+  severity: InjurySeverity;
+  status: InjuryStatus;
+  rehab_notes?: string;
+  expected_return?: string; // ISO yyyy-mm-dd
+  resolved_date?: string; // ISO yyyy-mm-dd
+}
+
 export interface VideoInfo {
   uri: string;
   name: string;

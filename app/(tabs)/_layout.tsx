@@ -13,6 +13,7 @@ export default function TabLayout() {
       switch (name) {
         case 'home': return '🏠';
         case 'upload': return '📤';
+        case 'monitor': return '📈';
         case 'history': return '📋';
         case 'profile': return '👤';
         default: return '📱';
@@ -71,6 +72,13 @@ export default function TabLayout() {
         options={{
           title: 'Upload',
           tabBarIcon: ({ color, focused }) => <TabBarIcon name="upload" color={color} focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="monitor"
+        options={{
+          title: 'Monitor',
+          tabBarIcon: ({ color, focused }) => <TabBarIcon name="monitor" color={color} focused={focused} />,
         }}
       />
       <Tabs.Screen

@@ -231,6 +231,34 @@ export default function HomeScreen() {
         </View>
       </View>
 
+      {/* Athlete Monitor promo */}
+      <View style={styles.section}>
+        <Animated.View entering={FadeInUp.delay(350).springify()}>
+          <TouchableOpacity activeOpacity={0.85} onPress={() => router.push('/monitor')}>
+            <PremiumCard
+              variant="elevated"
+              padding="large"
+              style={StyleSheet.flatten([styles.monitorCard, { borderLeftWidth: 4, borderLeftColor: colors.cricket.orange }])}
+            >
+              <View style={styles.monitorRow}>
+                <View style={[styles.monitorIcon, { backgroundColor: colors.cricket.orange + '20' }]}>
+                  <Text style={{ fontSize: getResponsiveSize(26) }}>📈</Text>
+                </View>
+                <View style={styles.monitorText}>
+                  <Text style={[styles.monitorTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(16) }]}>
+                    Athlete Monitor
+                  </Text>
+                  <Text style={[styles.monitorSubtitle, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(12) }]}>
+                    Track wellness, workload, fitness & injuries
+                  </Text>
+                </View>
+                <Text style={{ color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(22) }}>›</Text>
+              </View>
+            </PremiumCard>
+          </TouchableOpacity>
+        </Animated.View>
+      </View>
+
       {/* Stats */}
       <View style={styles.section}>
         <Animated.Text 
@@ -414,6 +442,30 @@ const styles = StyleSheet.create({
   },
   ctaCard: {
     alignItems: 'center',
+  },
+  monitorCard: {},
+  monitorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  monitorIcon: {
+    width: getResponsiveSize(52),
+    height: getResponsiveSize(52),
+    borderRadius: getResponsiveSize(26),
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: getResponsiveSize(spacing.md),
+  },
+  monitorText: {
+    flex: 1,
+  },
+  monitorTitle: {
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  monitorSubtitle: {
+    marginTop: 2,
+    fontWeight: '500',
   },
   ctaTitle: {
     fontWeight: '700',

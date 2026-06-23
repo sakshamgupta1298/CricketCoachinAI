@@ -193,6 +193,83 @@ def init_database():
         except sqlite3.OperationalError:
             pass  # Column already exists
 
+    # ---- Athlete Monitoring (NCA-style) tables ----
+    # Daily wellness check-in: one row per user per calendar day (UNIQUE), so a
+    # re-submit for the same day updates rather than duplicating.
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS wellness_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            date TEXT NOT NULL,
+            sleep_quality INTEGER,
+            sleep_hours REAL,
+            soreness INTEGER,
+            fatigue INTEGER,
+            stress INTEGER,
+            mood INTEGER,
+            score INTEGER,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, date),
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_wellness_user_date ON wellness_entries(user_id, date)')
+
+    # Training/match sessions. load = rpe * duration_min (sRPE method).
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS workload_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            date TEXT NOT NULL,
+            type TEXT NOT NULL,
+            duration_min REAL NOT NULL,
+            rpe INTEGER NOT NULL,
+            balls_bowled INTEGER,
+            load REAL,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_workload_user_date ON workload_sessions(user_id, date)')
+
+    # Periodic fitness test results (Yo-Yo, sprint, jump, lifts, weight, ...).
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS fitness_tests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            date TEXT NOT NULL,
+            metric TEXT NOT NULL,
+            value REAL NOT NULL,
+            unit TEXT,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_fitness_user_metric ON fitness_tests(user_id, metric)')
+
+    # Injury & rehab tracking.
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS injuries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            body_part TEXT NOT NULL,
+            injury_type TEXT,
+            date_reported TEXT NOT NULL,
+            severity TEXT,
+            status TEXT NOT NULL DEFAULT 'rehab',
+            rehab_notes TEXT,
+            expected_return TEXT,
+            resolved_date TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_injuries_user ON injuries(user_id)')
+
     # Backfill entitlements rows for existing users (idempotent)
     try:
         cursor.execute('SELECT id FROM users')
@@ -4816,6 +4893,390 @@ def get_analysis_history():
     except Exception as e:
         logging.exception("Failed to get analysis history")
         return jsonify({'error': f'Error retrieving history: {str(e)}'}), 500
+
+
+# ==================== ATHLETE MONITORING (NCA-style) ====================
+# Wellness, training/bowling workload, fitness tests, and injury/rehab tracking.
+# Every endpoint is scoped to the authenticated user via request.user['user_id'].
+# Day boundaries use the server's local date (good enough for trend tracking).
+
+ACWR_ACUTE_DAYS = 7
+ACWR_CHRONIC_DAYS = 28
+ACWR_LOW = 0.8
+ACWR_HIGH = 1.3
+
+
+def _today_str():
+    return datetime.now().strftime('%Y-%m-%d')
+
+
+def _session_load(rpe, duration_min, load):
+    """Session load via the sRPE method (RPE x minutes), preferring a stored value."""
+    if load is not None:
+        return float(load)
+    return float(rpe or 0) * float(duration_min or 0)
+
+
+def _wellness_to_dict(r):
+    return {
+        'id': str(r['id']),
+        'date': r['date'],
+        'sleep_quality': r['sleep_quality'],
+        'sleep_hours': r['sleep_hours'],
+        'soreness': r['soreness'],
+        'fatigue': r['fatigue'],
+        'stress': r['stress'],
+        'mood': r['mood'],
+        'score': r['score'],
+        'notes': r['notes'],
+    }
+
+
+def _workload_to_dict(r):
+    return {
+        'id': str(r['id']),
+        'date': r['date'],
+        'type': r['type'],
+        'duration_min': r['duration_min'],
+        'rpe': r['rpe'],
+        'balls_bowled': r['balls_bowled'],
+        'load': r['load'] if r['load'] is not None else _session_load(r['rpe'], r['duration_min'], None),
+        'notes': r['notes'],
+    }
+
+
+def _fitness_to_dict(r):
+    return {
+        'id': str(r['id']),
+        'date': r['date'],
+        'metric': r['metric'],
+        'value': r['value'],
+        'unit': r['unit'],
+        'notes': r['notes'],
+    }
+
+
+def _injury_to_dict(r):
+    return {
+        'id': str(r['id']),
+        'body_part': r['body_part'],
+        'injury_type': r['injury_type'],
+        'date_reported': r['date_reported'],
+        'severity': r['severity'],
+        'status': r['status'],
+        'rehab_notes': r['rehab_notes'],
+        'expected_return': r['expected_return'],
+        'resolved_date': r['resolved_date'],
+    }
+
+
+def _compute_workload_summary(rows):
+    """Compute ACWR from workload rows. Mirrors src/utils/workload.ts so the
+    client and server agree. Chronic load is the 28-day total expressed as a
+    weekly average (÷4) for direct comparison with the 7-day acute load."""
+    today = datetime.now().date()
+    acute = 0.0
+    chronic_total = 0.0
+    weekly_balls = 0
+    for r in rows:
+        try:
+            d = datetime.strptime(str(r['date'])[:10], '%Y-%m-%d').date()
+        except Exception:
+            continue
+        days_ago = (today - d).days
+        if days_ago < 0 or days_ago >= ACWR_CHRONIC_DAYS:
+            continue
+        load = _session_load(r['rpe'], r['duration_min'], r['load'])
+        chronic_total += load
+        if days_ago < ACWR_ACUTE_DAYS:
+            acute += load
+            weekly_balls += int(r['balls_bowled'] or 0)
+    chronic = chronic_total / (ACWR_CHRONIC_DAYS / ACWR_ACUTE_DAYS)
+    acwr = (acute / chronic) if chronic > 0 else 0.0
+    if chronic <= 0 or acwr < ACWR_LOW:
+        flag = 'low'
+    elif acwr > ACWR_HIGH:
+        flag = 'high'
+    else:
+        flag = 'optimal'
+    return {
+        'acute_load': round(acute),
+        'chronic_load': round(chronic),
+        'acwr': round(acwr, 2),
+        'flag': flag,
+        'weekly_balls': weekly_balls,
+    }
+
+
+# ---- Daily wellness ----
+@app.route('/api/monitor/wellness', methods=['GET'])
+@require_auth
+def monitor_get_wellness():
+    try:
+        user_id = int(request.user['user_id'])
+        days = int(request.args.get('days', 30))
+        cutoff = (datetime.now().date() - timedelta(days=days)).strftime('%Y-%m-%d')
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            'SELECT * FROM wellness_entries WHERE user_id = ? AND date >= ? ORDER BY date ASC',
+            (user_id, cutoff),
+        )
+        rows = cur.fetchall()
+        conn.close()
+        return jsonify({'entries': [_wellness_to_dict(r) for r in rows]})
+    except Exception as e:
+        logger.error(f"Get wellness failed: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to load wellness'}), 500
+
+
+@app.route('/api/monitor/wellness', methods=['POST'])
+@require_auth
+def monitor_log_wellness():
+    try:
+        user_id = int(request.user['user_id'])
+        data = request.get_json(silent=True) or {}
+        date = (data.get('date') or _today_str())[:10]
+        conn = get_db_connection()
+        cur = conn.cursor()
+        # One entry per user per day: re-submitting the same day updates it.
+        cur.execute(
+            '''INSERT INTO wellness_entries
+                 (user_id, date, sleep_quality, sleep_hours, soreness, fatigue, stress, mood, score, notes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(user_id, date) DO UPDATE SET
+                 sleep_quality=excluded.sleep_quality,
+                 sleep_hours=excluded.sleep_hours,
+                 soreness=excluded.soreness,
+                 fatigue=excluded.fatigue,
+                 stress=excluded.stress,
+                 mood=excluded.mood,
+                 score=excluded.score,
+                 notes=excluded.notes''',
+            (user_id, date, data.get('sleep_quality'), data.get('sleep_hours'),
+             data.get('soreness'), data.get('fatigue'), data.get('stress'),
+             data.get('mood'), data.get('score'), data.get('notes')),
+        )
+        conn.commit()
+        cur.execute('SELECT * FROM wellness_entries WHERE user_id = ? AND date = ?', (user_id, date))
+        row = cur.fetchone()
+        conn.close()
+        return jsonify({'entry': _wellness_to_dict(row)})
+    except Exception as e:
+        logger.error(f"Log wellness failed: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to save wellness'}), 500
+
+
+# ---- Training / bowling workload ----
+@app.route('/api/monitor/workload', methods=['GET'])
+@require_auth
+def monitor_get_workload():
+    try:
+        user_id = int(request.user['user_id'])
+        days = int(request.args.get('days', 30))
+        cutoff = (datetime.now().date() - timedelta(days=days)).strftime('%Y-%m-%d')
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            'SELECT * FROM workload_sessions WHERE user_id = ? AND date >= ? ORDER BY date ASC, id ASC',
+            (user_id, cutoff),
+        )
+        rows = cur.fetchall()
+        conn.close()
+        return jsonify({'entries': [_workload_to_dict(r) for r in rows]})
+    except Exception as e:
+        logger.error(f"Get workload failed: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to load workload'}), 500
+
+
+@app.route('/api/monitor/workload', methods=['POST'])
+@require_auth
+def monitor_log_workload():
+    try:
+        user_id = int(request.user['user_id'])
+        data = request.get_json(silent=True) or {}
+        date = (data.get('date') or _today_str())[:10]
+        rpe = data.get('rpe')
+        duration_min = data.get('duration_min')
+        load = data.get('load')
+        if load is None:
+            load = _session_load(rpe, duration_min, None)
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            '''INSERT INTO workload_sessions
+                 (user_id, date, type, duration_min, rpe, balls_bowled, load, notes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+            (user_id, date, data.get('type', 'other'), duration_min, rpe,
+             data.get('balls_bowled'), load, data.get('notes')),
+        )
+        conn.commit()
+        new_id = cur.lastrowid
+        cur.execute('SELECT * FROM workload_sessions WHERE id = ?', (new_id,))
+        row = cur.fetchone()
+        conn.close()
+        return jsonify({'entry': _workload_to_dict(row)})
+    except Exception as e:
+        logger.error(f"Log workload failed: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to save session'}), 500
+
+
+@app.route('/api/monitor/workload/summary', methods=['GET'])
+@require_auth
+def monitor_workload_summary():
+    try:
+        user_id = int(request.user['user_id'])
+        cutoff = (datetime.now().date() - timedelta(days=ACWR_CHRONIC_DAYS)).strftime('%Y-%m-%d')
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            'SELECT date, type, duration_min, rpe, balls_bowled, load FROM workload_sessions WHERE user_id = ? AND date >= ?',
+            (user_id, cutoff),
+        )
+        rows = cur.fetchall()
+        conn.close()
+        return jsonify({'summary': _compute_workload_summary(rows)})
+    except Exception as e:
+        logger.error(f"Workload summary failed: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to load summary'}), 500
+
+
+# ---- Fitness tests ----
+@app.route('/api/monitor/fitness', methods=['GET'])
+@require_auth
+def monitor_get_fitness():
+    try:
+        user_id = int(request.user['user_id'])
+        metric = request.args.get('metric')
+        conn = get_db_connection()
+        cur = conn.cursor()
+        if metric:
+            cur.execute(
+                'SELECT * FROM fitness_tests WHERE user_id = ? AND metric = ? ORDER BY date ASC, id ASC',
+                (user_id, metric),
+            )
+        else:
+            cur.execute(
+                'SELECT * FROM fitness_tests WHERE user_id = ? ORDER BY date ASC, id ASC',
+                (user_id,),
+            )
+        rows = cur.fetchall()
+        conn.close()
+        return jsonify({'tests': [_fitness_to_dict(r) for r in rows]})
+    except Exception as e:
+        logger.error(f"Get fitness failed: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to load fitness tests'}), 500
+
+
+@app.route('/api/monitor/fitness', methods=['POST'])
+@require_auth
+def monitor_log_fitness():
+    try:
+        user_id = int(request.user['user_id'])
+        data = request.get_json(silent=True) or {}
+        date = (data.get('date') or _today_str())[:10]
+        if data.get('metric') is None or data.get('value') is None:
+            return jsonify({'error': 'metric and value are required'}), 400
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            '''INSERT INTO fitness_tests (user_id, date, metric, value, unit, notes)
+               VALUES (?, ?, ?, ?, ?, ?)''',
+            (user_id, date, data.get('metric'), data.get('value'), data.get('unit'), data.get('notes')),
+        )
+        conn.commit()
+        new_id = cur.lastrowid
+        cur.execute('SELECT * FROM fitness_tests WHERE id = ?', (new_id,))
+        row = cur.fetchone()
+        conn.close()
+        return jsonify({'test': _fitness_to_dict(row)})
+    except Exception as e:
+        logger.error(f"Log fitness failed: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to save test'}), 500
+
+
+# ---- Injury & rehab ----
+@app.route('/api/monitor/injuries', methods=['GET'])
+@require_auth
+def monitor_get_injuries():
+    try:
+        user_id = int(request.user['user_id'])
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            'SELECT * FROM injuries WHERE user_id = ? ORDER BY date_reported DESC, id DESC',
+            (user_id,),
+        )
+        rows = cur.fetchall()
+        conn.close()
+        return jsonify({'injuries': [_injury_to_dict(r) for r in rows]})
+    except Exception as e:
+        logger.error(f"Get injuries failed: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to load injuries'}), 500
+
+
+@app.route('/api/monitor/injuries', methods=['POST'])
+@require_auth
+def monitor_log_injury():
+    try:
+        user_id = int(request.user['user_id'])
+        data = request.get_json(silent=True) or {}
+        if not data.get('body_part'):
+            return jsonify({'error': 'body_part is required'}), 400
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            '''INSERT INTO injuries
+                 (user_id, body_part, injury_type, date_reported, severity, status, rehab_notes, expected_return, resolved_date)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            (user_id, data.get('body_part'), data.get('injury_type'),
+             (data.get('date_reported') or _today_str())[:10], data.get('severity'),
+             data.get('status', 'rehab'), data.get('rehab_notes'),
+             data.get('expected_return'), data.get('resolved_date')),
+        )
+        conn.commit()
+        new_id = cur.lastrowid
+        cur.execute('SELECT * FROM injuries WHERE id = ?', (new_id,))
+        row = cur.fetchone()
+        conn.close()
+        return jsonify({'injury': _injury_to_dict(row)})
+    except Exception as e:
+        logger.error(f"Log injury failed: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to save injury'}), 500
+
+
+@app.route('/api/monitor/injuries/<injury_id>', methods=['PATCH'])
+@require_auth
+def monitor_update_injury(injury_id):
+    try:
+        user_id = int(request.user['user_id'])
+        data = request.get_json(silent=True) or {}
+        # Only allow patching a known set of fields.
+        allowed = ['body_part', 'injury_type', 'severity', 'status',
+                   'rehab_notes', 'expected_return', 'resolved_date']
+        updates = {k: data[k] for k in allowed if k in data}
+        if not updates:
+            return jsonify({'error': 'No updatable fields provided'}), 400
+        set_clause = ', '.join(f'{k} = ?' for k in updates)
+        params = list(updates.values()) + [injury_id, user_id]
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            f"UPDATE injuries SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?",
+            params,
+        )
+        conn.commit()
+        if cur.rowcount == 0:
+            conn.close()
+            return jsonify({'error': 'Injury not found'}), 404
+        cur.execute('SELECT * FROM injuries WHERE id = ? AND user_id = ?', (injury_id, user_id))
+        row = cur.fetchone()
+        conn.close()
+        return jsonify({'injury': _injury_to_dict(row)})
+    except Exception as e:
+        logger.error(f"Update injury failed: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to update injury'}), 500
+
 
 @app.route('/api/history/clear', methods=['DELETE'])
 @require_auth

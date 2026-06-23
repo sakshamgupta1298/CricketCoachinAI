@@ -3,7 +3,7 @@ import axios, { AxiosInstance } from 'axios';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 import { currentConfig } from '../../config';
-import { AnalysisResult, ApiResponse, JobStatusResponse, UploadFormData, UploadJobResponse } from '../types';
+import { AnalysisResult, ApiResponse, FitnessTest, InjuryRecord, JobStatusResponse, UploadFormData, UploadJobResponse, WellnessEntry, WorkloadEntry, WorkloadSummary } from '../types';
 
 class ApiService {
   private api: AxiosInstance;
@@ -955,6 +955,154 @@ class ApiService {
         success: false,
         error: error.response?.data?.error || error.message || 'Failed to compare videos. Please check your connection and try again.',
       };
+    }
+  }
+
+  // ===========================================================================
+  // Athlete Monitoring (NCA-style): wellness, workload, fitness, injuries.
+  // All endpoints are scoped to the authenticated user server-side via the
+  // bearer token (auto-injected by the jsonApi request interceptor).
+  // ===========================================================================
+
+  // --- Daily wellness ---
+  async getWellness(days: number = 30): Promise<ApiResponse<WellnessEntry[]>> {
+    try {
+      const response = await this.jsonApi.get('/api/monitor/wellness', { params: { days } });
+      if (response.status !== 200) {
+        return { success: false, error: response.data?.error || `Failed to load wellness (${response.status})` };
+      }
+      const entries = response.data?.entries ?? response.data?.wellness ?? response.data;
+      return { success: true, data: Array.isArray(entries) ? entries : [] };
+    } catch (error: any) {
+      console.error('Get Wellness Error:', error);
+      return { success: false, error: error.response?.data?.error || error.message };
+    }
+  }
+
+  async logWellness(entry: Omit<WellnessEntry, 'id'>): Promise<ApiResponse<WellnessEntry>> {
+    try {
+      const response = await this.jsonApi.post('/api/monitor/wellness', entry);
+      if (response.status >= 400) {
+        return { success: false, error: response.data?.error || `Failed to save wellness (${response.status})` };
+      }
+      return { success: true, data: response.data?.entry ?? response.data };
+    } catch (error: any) {
+      console.error('Log Wellness Error:', error);
+      return { success: false, error: error.response?.data?.error || error.message };
+    }
+  }
+
+  // --- Training / bowling workload ---
+  async getWorkload(days: number = 30): Promise<ApiResponse<WorkloadEntry[]>> {
+    try {
+      const response = await this.jsonApi.get('/api/monitor/workload', { params: { days } });
+      if (response.status !== 200) {
+        return { success: false, error: response.data?.error || `Failed to load workload (${response.status})` };
+      }
+      const entries = response.data?.entries ?? response.data?.workload ?? response.data;
+      return { success: true, data: Array.isArray(entries) ? entries : [] };
+    } catch (error: any) {
+      console.error('Get Workload Error:', error);
+      return { success: false, error: error.response?.data?.error || error.message };
+    }
+  }
+
+  async logWorkload(entry: Omit<WorkloadEntry, 'id'>): Promise<ApiResponse<WorkloadEntry>> {
+    try {
+      const response = await this.jsonApi.post('/api/monitor/workload', entry);
+      if (response.status >= 400) {
+        return { success: false, error: response.data?.error || `Failed to save session (${response.status})` };
+      }
+      return { success: true, data: response.data?.entry ?? response.data };
+    } catch (error: any) {
+      console.error('Log Workload Error:', error);
+      return { success: false, error: error.response?.data?.error || error.message };
+    }
+  }
+
+  // Server-computed ACWR summary. Callers should fall back to computing locally
+  // from getWorkload() when this returns an error (e.g. endpoint not deployed).
+  async getWorkloadSummary(): Promise<ApiResponse<WorkloadSummary>> {
+    try {
+      const response = await this.jsonApi.get('/api/monitor/workload/summary');
+      if (response.status !== 200) {
+        return { success: false, error: response.data?.error || `Failed to load summary (${response.status})` };
+      }
+      return { success: true, data: response.data?.summary ?? response.data };
+    } catch (error: any) {
+      console.error('Get Workload Summary Error:', error);
+      return { success: false, error: error.response?.data?.error || error.message };
+    }
+  }
+
+  // --- Fitness tests ---
+  async getFitnessTests(metric?: string): Promise<ApiResponse<FitnessTest[]>> {
+    try {
+      const response = await this.jsonApi.get('/api/monitor/fitness', {
+        params: metric ? { metric } : undefined,
+      });
+      if (response.status !== 200) {
+        return { success: false, error: response.data?.error || `Failed to load fitness tests (${response.status})` };
+      }
+      const tests = response.data?.tests ?? response.data?.fitness ?? response.data;
+      return { success: true, data: Array.isArray(tests) ? tests : [] };
+    } catch (error: any) {
+      console.error('Get Fitness Tests Error:', error);
+      return { success: false, error: error.response?.data?.error || error.message };
+    }
+  }
+
+  async logFitnessTest(entry: Omit<FitnessTest, 'id'>): Promise<ApiResponse<FitnessTest>> {
+    try {
+      const response = await this.jsonApi.post('/api/monitor/fitness', entry);
+      if (response.status >= 400) {
+        return { success: false, error: response.data?.error || `Failed to save test (${response.status})` };
+      }
+      return { success: true, data: response.data?.test ?? response.data };
+    } catch (error: any) {
+      console.error('Log Fitness Test Error:', error);
+      return { success: false, error: error.response?.data?.error || error.message };
+    }
+  }
+
+  // --- Injury & rehab ---
+  async getInjuries(): Promise<ApiResponse<InjuryRecord[]>> {
+    try {
+      const response = await this.jsonApi.get('/api/monitor/injuries');
+      if (response.status !== 200) {
+        return { success: false, error: response.data?.error || `Failed to load injuries (${response.status})` };
+      }
+      const injuries = response.data?.injuries ?? response.data;
+      return { success: true, data: Array.isArray(injuries) ? injuries : [] };
+    } catch (error: any) {
+      console.error('Get Injuries Error:', error);
+      return { success: false, error: error.response?.data?.error || error.message };
+    }
+  }
+
+  async logInjury(record: Omit<InjuryRecord, 'id'>): Promise<ApiResponse<InjuryRecord>> {
+    try {
+      const response = await this.jsonApi.post('/api/monitor/injuries', record);
+      if (response.status >= 400) {
+        return { success: false, error: response.data?.error || `Failed to save injury (${response.status})` };
+      }
+      return { success: true, data: response.data?.injury ?? response.data };
+    } catch (error: any) {
+      console.error('Log Injury Error:', error);
+      return { success: false, error: error.response?.data?.error || error.message };
+    }
+  }
+
+  async updateInjury(id: string, patch: Partial<InjuryRecord>): Promise<ApiResponse<InjuryRecord>> {
+    try {
+      const response = await this.jsonApi.patch(`/api/monitor/injuries/${id}`, patch);
+      if (response.status >= 400) {
+        return { success: false, error: response.data?.error || `Failed to update injury (${response.status})` };
+      }
+      return { success: true, data: response.data?.injury ?? response.data };
+    } catch (error: any) {
+      console.error('Update Injury Error:', error);
+      return { success: false, error: error.response?.data?.error || error.message };
     }
   }
 

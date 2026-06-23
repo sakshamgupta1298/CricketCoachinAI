@@ -2,7 +2,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Alert, Platform, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { Menu, RadioButton, Text, TextInput, useTheme } from 'react-native-paper';
+import { Dialog, Divider, IconButton, Menu, Portal, RadioButton, Text, TextInput, useTheme } from 'react-native-paper';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import Toast from 'react-native-toast-message';
 import AnalysisScreen from '../../src/components/AnalysisScreen';
@@ -35,6 +35,7 @@ export default function UploadScreen() {
   } | null>(null);
   const [analysisStatus, setAnalysisStatus] = useState<'uploading' | 'processing' | 'analyzing'>('uploading');
   const [refreshing, setRefreshing] = useState(false);
+  const [videoInfoVisible, setVideoInfoVisible] = useState(false);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -241,6 +242,50 @@ export default function UploadScreen() {
     );
   };
 
+  const getVideoGuidance = (): { title: string; points: string[] } => {
+    const general = [
+      'Record in landscape (horizontal) mode.',
+      'Good, even lighting — avoid strong backlight or shadows.',
+      'Keep the camera steady on a tripod or stable surface.',
+      'Keep the player fully in frame for the whole action.',
+      'Single player only — avoid other people in the shot.',
+      'MP4, AVI, MOV or MKV, up to 100MB and 60 seconds.',
+    ];
+    if (playerType === 'batsman') {
+      return {
+        title: '🏏 Batting video guide',
+        points: [
+          'Film front-on, from near the bowler\'s stumps facing the batter — this angle gives the most accurate results.',
+          'Frame only the batter — keep the bowler and any other people out of the shot.',
+          'Capture the full shot: stance, backlift, swing and follow-through.',
+          'Show the full body — head to feet, including the bat.',
+          ...general,
+        ],
+      };
+    }
+    if (playerType === 'bowler') {
+      return {
+        title: '🎯 Bowling video guide',
+        points: [
+          'Film front-on, facing the bowler — this angle gives the most accurate results.',
+          'Cover the complete action: run-up, the delivery (ball release) point and follow-through.',
+          'Frame only the bowler — keep any other people out of the shot.',
+          'Keep the bowler in frame from the start of the run-up to the follow-through.',
+          ...general,
+        ],
+      };
+    }
+    return {
+      title: '🧤 Wicket-keeping video guide',
+      points: [
+        'Film from behind or side-on to the stumps.',
+        'Capture the full movement: stance, glove work and take/dive.',
+        'Keep the keeper and stumps in frame throughout.',
+        ...general,
+      ],
+    };
+  };
+
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -257,6 +302,34 @@ export default function UploadScreen() {
         progress={progress}
         status={analysisStatus}
       />
+
+      {/* Video guidance popup */}
+      <Portal>
+        <Dialog visible={videoInfoVisible} onDismiss={() => setVideoInfoVisible(false)}>
+          <Dialog.Title style={{ fontSize: getResponsiveFontSize(18) }}>
+            {getVideoGuidance().title}
+          </Dialog.Title>
+          <Dialog.ScrollArea>
+            <ScrollView contentContainerStyle={styles.dialogContent}>
+              <Text style={[styles.dialogIntro, { color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(13) }]}>
+                For the most accurate analysis, please make sure your video follows these guidelines:
+              </Text>
+              <Divider style={styles.dialogDivider} />
+              {getVideoGuidance().points.map((point, index) => (
+                <View key={index} style={styles.dialogPointRow}>
+                  <Text style={[styles.dialogBullet, { color: theme.colors.primary, fontSize: getResponsiveFontSize(13) }]}>•</Text>
+                  <Text style={[styles.dialogPoint, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(13) }]}>
+                    {point}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
+          </Dialog.ScrollArea>
+          <Dialog.Actions>
+            <PremiumButton title="Got it" onPress={() => setVideoInfoVisible(false)} variant="primary" size="medium" />
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
 
       <ScrollView 
         style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -595,10 +668,20 @@ export default function UploadScreen() {
         {/* Video Selection */}
         <Animated.View entering={FadeInUp.delay(500).springify()}>
           <PremiumCard variant="elevated" padding="large" style={styles.card}>
-            <Text style={[styles.cardTitle, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(17) }]}>
-              Select Video
-            </Text>
-            
+            <View style={styles.cardTitleRow}>
+              <Text style={[styles.cardTitle, styles.cardTitleNoMargin, { color: theme.colors.onSurface, fontSize: getResponsiveFontSize(17) }]}>
+                Select Video
+              </Text>
+              <IconButton
+                icon="information-outline"
+                size={getResponsiveSize(22)}
+                iconColor={theme.colors.primary}
+                onPress={() => setVideoInfoVisible(true)}
+                style={styles.infoButton}
+                accessibilityLabel="What video should I upload?"
+              />
+            </View>
+
             {!selectedVideo ? (
               <TouchableOpacity
                 style={[styles.uploadButton, { borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryContainer + '20' }]}
@@ -706,6 +789,42 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: getResponsiveSize(spacing.md),
     letterSpacing: 0.2,
+    // fontSize set dynamically
+  },
+  cardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  cardTitleNoMargin: {
+    marginBottom: 0,
+    flexShrink: 1,
+  },
+  infoButton: {
+    margin: 0,
+  },
+  dialogContent: {
+    paddingVertical: getResponsiveSize(spacing.sm),
+  },
+  dialogIntro: {
+    lineHeight: getResponsiveSize(19),
+    // fontSize set dynamically
+  },
+  dialogDivider: {
+    marginVertical: getResponsiveSize(spacing.md),
+  },
+  dialogPointRow: {
+    flexDirection: 'row',
+    marginBottom: getResponsiveSize(spacing.sm),
+  },
+  dialogBullet: {
+    marginRight: getResponsiveSize(spacing.sm),
+    lineHeight: getResponsiveSize(20),
+    // fontSize set dynamically
+  },
+  dialogPoint: {
+    flex: 1,
+    lineHeight: getResponsiveSize(20),
     // fontSize set dynamically
   },
   radioGroup: {

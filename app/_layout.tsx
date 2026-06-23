@@ -148,6 +148,46 @@ function ThemedApp() {
               headerTintColor: theme.colors.onSurface,
             }}
           />
+          <Stack.Screen
+            name="monitor/wellness"
+            options={{
+              headerShown: true,
+              title: 'Daily Wellness',
+              headerBackTitle: 'Back',
+              headerStyle: { backgroundColor: theme.colors.surface },
+              headerTintColor: theme.colors.onSurface,
+            }}
+          />
+          <Stack.Screen
+            name="monitor/workload"
+            options={{
+              headerShown: true,
+              title: 'Training Workload',
+              headerBackTitle: 'Back',
+              headerStyle: { backgroundColor: theme.colors.surface },
+              headerTintColor: theme.colors.onSurface,
+            }}
+          />
+          <Stack.Screen
+            name="monitor/fitness"
+            options={{
+              headerShown: true,
+              title: 'Fitness Tests',
+              headerBackTitle: 'Back',
+              headerStyle: { backgroundColor: theme.colors.surface },
+              headerTintColor: theme.colors.onSurface,
+            }}
+          />
+          <Stack.Screen
+            name="monitor/injury"
+            options={{
+              headerShown: true,
+              title: 'Injury & Rehab',
+              headerBackTitle: 'Back',
+              headerStyle: { backgroundColor: theme.colors.surface },
+              headerTintColor: theme.colors.onSurface,
+            }}
+          />
         </Stack>
         <Toast />
         <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
