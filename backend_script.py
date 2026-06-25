@@ -916,6 +916,27 @@ def require_auth(f):
 pose_detection_model = None
 movenet_signature = None
 keypoints_names = ["nose", "left_eye", "right_eye", "left_ear", "right_ear", "left_shoulder", "right_shoulder", "left_elbow", "right_elbow", "left_wrist", "right_wrist", "left_hip", "right_hip", "left_knee", "right_knee", "left_ankle", "right_ankle"]
+
+
+def keypoints_to_compact(data, ndigits=4):
+    """Serialize keypoint rows as compact CSV text: header once, then one line per frame.
+
+    Floats are rounded to `ndigits` to cut token count. Near-lossless for normalized
+    [0,1] coordinates (4 decimals ~ sub-pixel resolution). This replaces
+    json.dumps(list-of-dicts), which repeated every column name (and JSON
+    punctuation) on every frame.
+    """
+    if not data:
+        return ""
+    cols = list(data[0].keys())
+    lines = [",".join(cols)]
+    for row in data:
+        vals = []
+        for c in cols:
+            v = row.get(c, "")
+            vals.append(f"{round(v, ndigits)}" if isinstance(v, float) else str(v))
+        lines.append(",".join(vals))
+    return "\n".join(lines)
 # keypoints_names = [
 #     # Head & Spine
 #     "head_top", "forehead", "chin",
@@ -1879,7 +1900,7 @@ def get_feedback_from_gpt_for_bowling(keypoint_csv_path, bowler_type='fast_bowle
         logger.error(f"Failed to read CSV file: {e}", exc_info=True)
         return {"error": "Failed to read CSV file", "raw_content": str(e)}
     
-    csv_json = json.dumps(data)
+    csv_json = keypoints_to_compact(data)
     bowling_type = bowler_type.split("_")[0]
     logger.debug(f"Bowling type extracted: {bowling_type}")
 
@@ -1906,8 +1927,11 @@ def get_feedback_from_gpt_for_bowling(keypoint_csv_path, bowler_type='fast_bowle
             Bowling Type: {bowling_type}   # fast | spin
             Bowler Style: {bowler_type}   # right-arm / left-arm / overarm / off-spin / leg-spin
 
-            Each row of the input represents one video frame containing
-            body joint coordinates.
+            The data is in CSV format. The first line lists column names; each
+            subsequent line is one video frame, with values in the same column
+            order. Columns are `frame` plus `<keypoint>_x`, `<keypoint>_y`,
+            `<keypoint>_conf` for each of the 17 pose keypoints (coordinates
+            normalized to [0,1]).
 
             ────────────────────────
             INPUT DATA
@@ -2406,7 +2430,7 @@ def get_feedback_from_gpt_for_keeping(keypoint_csv_path, keeping_type='standing_
         logger.error(f"Failed to read CSV file: {e}", exc_info=True)
         return {"error": "Failed to read CSV file", "raw_content": str(e)}
     
-    csv_json = json.dumps(data)
+    csv_json = keypoints_to_compact(data)
     logger.debug(f"Keeping type: {keeping_type}")
 
 # ================================
@@ -2431,8 +2455,11 @@ def get_feedback_from_gpt_for_keeping(keypoint_csv_path, keeping_type='standing_
             ────────────────────────
             Keeping Type: {keeping_type}   # standing_up | standing_back | diving_catch | stumping
 
-            Each row of the input represents one video frame containing
-            body joint coordinates.
+            The data is in CSV format. The first line lists column names; each
+            subsequent line is one video frame, with values in the same column
+            order. Columns are `frame` plus `<keypoint>_x`, `<keypoint>_y`,
+            `<keypoint>_conf` for each of the 17 pose keypoints (coordinates
+            normalized to [0,1]).
 
             ────────────────────────
             INPUT DATA
@@ -3363,7 +3390,7 @@ def get_feedback_from_gpt(action_type, keypoint_csv_path, player_level='intermed
         logger.error(f"Failed to read CSV file: {e}", exc_info=True)
         return {"error": "Failed to read CSV file", "raw_content": str(e)}
     
-    csv_json = json.dumps(data)
+    csv_json = keypoints_to_compact(data)
 
 # ================================
 # PROMPT A — BIOMECHANICAL ANALYST
@@ -3394,8 +3421,10 @@ def get_feedback_from_gpt(action_type, keypoint_csv_path, player_level='intermed
     ────────────────────────
     Shot Type: {action_type}
 
-    Each row of the input represents one video frame containing
-    body joint coordinates and bat reference points (if available).
+    The data is in CSV format. The first line lists column names; each
+    subsequent line is one video frame, with values in the same column order.
+    Columns are `frame` plus `<keypoint>_x`, `<keypoint>_y`, `<keypoint>_conf`
+    for each of the 17 pose keypoints (coordinates normalized to [0,1]).
 
     ────────────────────────
     INPUT DATA
