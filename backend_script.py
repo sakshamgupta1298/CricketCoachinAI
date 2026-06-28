@@ -270,6 +270,24 @@ def init_database():
     ''')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_injuries_user ON injuries(user_id)')
 
+    # AI-generated weekly monitoring report: one row per user per ISO week.
+    # UNIQUE(user_id, week_start) so a re-run for the same week upserts.
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS weekly_reports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            week_start TEXT NOT NULL,
+            week_end TEXT NOT NULL,
+            report_md TEXT NOT NULL,
+            model TEXT,
+            total_tokens INTEGER,
+            generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, week_start),
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_weekly_reports_user ON weekly_reports(user_id, week_start)')
+
     # Backfill entitlements rows for existing users (idempotent)
     try:
         cursor.execute('SELECT id FROM users')
@@ -289,6 +307,8 @@ def init_database():
 
     # Kick off the daily per-account usage report scheduler.
     start_daily_report_scheduler()
+    # Kick off the weekly per-athlete monitoring report scheduler.
+    start_weekly_report_scheduler()
 
 def get_db_connection():
     """Get database connection"""
@@ -323,6 +343,13 @@ def _ist_today():
 # Optional shared secret to manually trigger the report via the admin endpoint.
 ADMIN_REPORT_TOKEN = os.getenv('ADMIN_REPORT_TOKEN', '')
 _daily_report_scheduler_started = False
+
+# ---- Weekly athlete monitoring report schedule (IST) ----
+# Day-of-week: Monday=0 .. Sunday=6 (matches datetime.weekday()).
+WEEKLY_REPORT_DOW = int(os.getenv('WEEKLY_REPORT_DOW', '0'))     # default Monday
+WEEKLY_REPORT_HOUR = int(os.getenv('WEEKLY_REPORT_HOUR', '7'))   # IST hour
+WEEKLY_REPORT_MINUTE = int(os.getenv('WEEKLY_REPORT_MINUTE', '0'))  # IST minute
+_weekly_report_scheduler_started = False
 
 
 def log_video_analysis(user_id, username, filename, player_type, job_id=None):
@@ -748,6 +775,71 @@ def start_daily_report_scheduler():
         f"Daily analysis report scheduler started "
         f"(daily at {DAILY_REPORT_HOUR:02d}:{DAILY_REPORT_MINUTE:02d} IST; includes "
         f"rolling {RETURNING_WINDOW_DAYS}-day returning-users section; to {ADMIN_REPORT_RECIPIENTS})"
+    )
+
+
+def _run_weekly_reports_batch(week_start, week_end):
+    """Generate weekly reports for every user with monitoring activity in [week_start, week_end].
+    Each user is isolated so one failure (or Gemini error) doesn't stop the batch."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        '''SELECT DISTINCT user_id FROM (
+               SELECT user_id FROM wellness_entries WHERE date >= ? AND date <= ?
+               UNION
+               SELECT user_id FROM workload_sessions WHERE date >= ? AND date <= ?
+           )''',
+        (week_start, week_end, week_start, week_end),
+    )
+    user_ids = [r['user_id'] for r in cur.fetchall()]
+    conn.close()
+
+    ok = 0
+    for uid in user_ids:
+        try:
+            if generate_weekly_report_for_user(uid, week_start, week_end):
+                ok += 1
+        except Exception as e:
+            logger.error(f"Weekly report failed for user {uid}: {e}", exc_info=True)
+    logger.info(f"Weekly report batch done: {ok}/{len(user_ids)} reports for {week_start}..{week_end}")
+    return ok
+
+
+def _weekly_report_scheduler():
+    """Background loop that generates per-athlete weekly reports at the configured IST time/day."""
+    while True:
+        try:
+            now_ist = datetime.utcnow() + IST_OFFSET
+            target_ist = now_ist.replace(hour=WEEKLY_REPORT_HOUR, minute=WEEKLY_REPORT_MINUTE,
+                                         second=0, microsecond=0)
+            # Advance to the next configured weekday (today if it's still in the future).
+            days_ahead = (WEEKLY_REPORT_DOW - target_ist.weekday()) % 7
+            target_ist += timedelta(days=days_ahead)
+            if target_ist <= now_ist:
+                target_ist += timedelta(days=7)
+            time.sleep(max(1, (target_ist - now_ist).total_seconds()))
+            # Report on the week that just completed: the 7 days ending yesterday (IST).
+            end = (datetime.utcnow() + IST_OFFSET).date() - timedelta(days=1)
+            start = end - timedelta(days=6)
+            _run_weekly_reports_batch(start.strftime('%Y-%m-%d'), end.strftime('%Y-%m-%d'))
+        except Exception as e:
+            logger.error(f"Weekly report scheduler error: {e}", exc_info=True)
+            time.sleep(60)  # avoid a tight crash loop
+
+
+def start_weekly_report_scheduler():
+    """Start the weekly athlete-report background thread once."""
+    global _weekly_report_scheduler_started
+    if _weekly_report_scheduler_started:
+        return
+    _weekly_report_scheduler_started = True
+    t = threading.Thread(target=_weekly_report_scheduler, daemon=True)
+    t.start()
+    dow_names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+    logger.info(
+        f"Weekly athlete-monitoring report scheduler started "
+        f"(weekly on {dow_names[WEEKLY_REPORT_DOW % 7]} at "
+        f"{WEEKLY_REPORT_HOUR:02d}:{WEEKLY_REPORT_MINUTE:02d} IST)"
     )
 
 
@@ -5037,6 +5129,199 @@ def _compute_workload_summary(rows):
     }
 
 
+# ==================== WEEKLY AI MONITORING REPORT ====================
+# Synthesizes the last 7 days of an athlete's monitoring data (wellness, workload
+# + ACWR, fitness, injuries) into a coach-style markdown report via Gemini.
+WEEKLY_REPORT_MODEL = "gemini-2.5-pro"
+
+
+def _weekly_report_to_dict(r):
+    return {
+        'id': str(r['id']),
+        'week_start': r['week_start'],
+        'week_end': r['week_end'],
+        'report_md': r['report_md'],
+        'model': r['model'],
+        'total_tokens': r['total_tokens'],
+        'generated_at': r['generated_at'],
+    }
+
+
+def _gather_weekly_monitoring_data(user_id, week_start, week_end):
+    """Pull a compact snapshot of one athlete's monitoring data for [week_start, week_end]
+    (inclusive, 'YYYY-MM-DD'). ACWR is computed over the trailing 28 days so the risk
+    ratio stays meaningful; everything else is the 7-day window."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        'SELECT * FROM wellness_entries WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date ASC',
+        (user_id, week_start, week_end),
+    )
+    wellness = [_wellness_to_dict(r) for r in cur.fetchall()]
+
+    cur.execute(
+        'SELECT * FROM workload_sessions WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date ASC, id ASC',
+        (user_id, week_start, week_end),
+    )
+    workload = [_workload_to_dict(r) for r in cur.fetchall()]
+
+    chronic_cutoff = (datetime.strptime(week_end, '%Y-%m-%d').date()
+                      - timedelta(days=ACWR_CHRONIC_DAYS)).strftime('%Y-%m-%d')
+    cur.execute(
+        'SELECT date, type, duration_min, rpe, balls_bowled, load FROM workload_sessions WHERE user_id = ? AND date >= ?',
+        (user_id, chronic_cutoff),
+    )
+    workload_summary = _compute_workload_summary(cur.fetchall())
+
+    cur.execute(
+        "SELECT * FROM injuries WHERE user_id = ? AND (status IS NULL OR status != 'fit') ORDER BY date_reported DESC",
+        (user_id,),
+    )
+    injuries = [_injury_to_dict(r) for r in cur.fetchall()]
+
+    # Latest result per fitness metric (most recent test for each metric).
+    cur.execute(
+        'SELECT * FROM fitness_tests WHERE user_id = ? ORDER BY metric ASC, date DESC, id DESC',
+        (user_id,),
+    )
+    latest_fitness = {}
+    for r in cur.fetchall():
+        if r['metric'] not in latest_fitness:
+            latest_fitness[r['metric']] = _fitness_to_dict(r)
+    conn.close()
+
+    scores = [w['score'] for w in wellness if w.get('score') is not None]
+    loads = [s['load'] for s in workload if s.get('load') is not None]
+    rpes = [s['rpe'] for s in workload if s.get('rpe') is not None]
+    aggregates = {
+        'days_logged_wellness': len(wellness),
+        'avg_wellness_score': round(sum(scores) / len(scores), 1) if scores else None,
+        'session_count': len(workload),
+        'total_load': round(sum(loads)) if loads else 0,
+        'avg_session_load': round(sum(loads) / len(loads)) if loads else 0,
+        'avg_rpe': round(sum(rpes) / len(rpes), 1) if rpes else None,
+        'total_balls_bowled': sum(int(s.get('balls_bowled') or 0) for s in workload),
+    }
+
+    return {
+        'week_start': week_start,
+        'week_end': week_end,
+        'wellness': wellness,
+        'workload': workload,
+        'workload_summary': workload_summary,
+        'injuries': injuries,
+        'latest_fitness': list(latest_fitness.values()),
+        'aggregates': aggregates,
+        'has_activity': bool(wellness or workload),
+    }
+
+
+def _build_weekly_report_prompt(username, data):
+    """Frame Gemini as a cricket sports-science coach and ask for a grounded markdown report."""
+    data_json = json.dumps(data, indent=2, default=str)
+    return f"""You are an elite cricket strength & conditioning / sports-science coach writing a
+weekly monitoring report for an athlete named {username}.
+
+You are given the athlete's monitoring data for the past week as JSON. It contains:
+- wellness: daily check-ins. All 1-5 scales where 5 is best (sleep_quality, soreness=5 means no soreness,
+  fatigue=5 means fresh, stress=5 means relaxed, mood). sleep_hours is in hours. score is a 0-100 daily readiness score.
+- workload: training/match sessions. load = RPE x duration_min (sRPE). rpe is 1-10.
+- workload_summary: acute_load (7-day load), chronic_load (28-day weekly average), acwr (acute:chronic ratio),
+  and flag (low <0.8, optimal 0.8-1.3, high >1.3). High ACWR = elevated injury risk; very low = undertraining/detraining.
+- injuries: currently active/unresolved injuries with status and rehab notes.
+- latest_fitness: most recent result for each fitness metric.
+- aggregates: convenience weekly totals/averages.
+
+DATA (JSON):
+{data_json}
+
+Write a concise, motivating, practical report in **GitHub-flavored markdown** with EXACTLY these
+sections (use ## headings, keep each tight):
+
+## Summary
+2-3 sentences on the week overall.
+
+## Workload & Injury Risk (ACWR)
+Interpret acwr/flag and the week's load vs the recent average. State the injury-risk implication plainly.
+
+## Wellness Trends
+Call out sleep, fatigue, soreness, stress, mood trends using the numbers.
+
+## Fitness
+Brief note on latest fitness results, or "No fitness tests logged recently" if empty.
+
+## Flags / Watch-outs
+Bullet list of concrete concerns (e.g. high ACWR, poor sleep, active injury). If none, say so.
+
+## This Week's Recommendations
+3-5 specific, actionable bullets (training load, recovery, rehab) the athlete can act on.
+
+STRICT RULES:
+- Ground EVERY claim in the supplied numbers; cite the actual figures. Do not invent data.
+- If a data category is empty, say so briefly rather than speculating.
+- Do NOT give medical diagnoses or prescribe treatment; for injuries, advise consulting a physio.
+- Keep it to roughly 300-450 words. Address the athlete directly ("you").
+"""
+
+
+def generate_weekly_report_for_user(user_id, week_start=None, week_end=None):
+    """Generate (and upsert) the weekly monitoring report for one user. Defaults to the
+    trailing 7 days ending today. Returns the report dict, or None if there's no activity."""
+    end = (datetime.strptime(week_end, '%Y-%m-%d').date() if week_end else datetime.now().date())
+    start = (datetime.strptime(week_start, '%Y-%m-%d').date() if week_start else (end - timedelta(days=6)))
+    ws, we = start.strftime('%Y-%m-%d'), end.strftime('%Y-%m-%d')
+
+    data = _gather_weekly_monitoring_data(user_id, ws, we)
+    if not data['has_activity']:
+        logger.info(f"Weekly report skipped for user {user_id}: no monitoring activity {ws}..{we}")
+        return None
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute('SELECT username FROM users WHERE id = ?', (user_id,))
+    urow = cur.fetchone()
+    conn.close()
+    username = (urow['username'] if urow else None) or 'Athlete'
+
+    prompt = _build_weekly_report_prompt(username, data)
+    resp = gemini.generate_content(
+        model=WEEKLY_REPORT_MODEL,
+        label="weekly-monitor-report",
+        contents=[prompt],
+        config={"temperature": 0.4},
+    )
+    report_md = (getattr(resp, 'text', '') or '').strip()
+    if not report_md:
+        logger.error(f"Weekly report generation returned empty text for user {user_id}")
+        return None
+    total_tokens = 0
+    try:
+        total_tokens = (getattr(resp, '_token_usage', {}) or {}).get('total_tokens', 0)
+    except Exception:
+        pass
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        '''INSERT INTO weekly_reports (user_id, week_start, week_end, report_md, model, total_tokens)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(user_id, week_start) DO UPDATE SET
+             week_end=excluded.week_end,
+             report_md=excluded.report_md,
+             model=excluded.model,
+             total_tokens=excluded.total_tokens,
+             generated_at=CURRENT_TIMESTAMP''',
+        (user_id, ws, we, report_md, WEEKLY_REPORT_MODEL, total_tokens),
+    )
+    conn.commit()
+    cur.execute('SELECT * FROM weekly_reports WHERE user_id = ? AND week_start = ?', (user_id, ws))
+    row = cur.fetchone()
+    conn.close()
+    logger.info(f"Weekly report generated for user {user_id} ({ws}..{we}), {total_tokens} tokens")
+    return _weekly_report_to_dict(row)
+
+
 # ---- Daily wellness ----
 @app.route('/api/monitor/wellness', methods=['GET'])
 @require_auth
@@ -5305,6 +5590,64 @@ def monitor_update_injury(injury_id):
     except Exception as e:
         logger.error(f"Update injury failed: {e}", exc_info=True)
         return jsonify({'error': 'Failed to update injury'}), 500
+
+
+# ---- Weekly AI monitoring report ----
+@app.route('/api/monitor/weekly-report', methods=['GET'])
+@require_auth
+def monitor_get_weekly_report():
+    """Latest stored weekly report for the authenticated user (or null)."""
+    try:
+        user_id = int(request.user['user_id'])
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            'SELECT * FROM weekly_reports WHERE user_id = ? ORDER BY week_start DESC LIMIT 1',
+            (user_id,),
+        )
+        row = cur.fetchone()
+        conn.close()
+        return jsonify({'report': _weekly_report_to_dict(row) if row else None})
+    except Exception as e:
+        logger.error(f"Get weekly report failed: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to load weekly report'}), 500
+
+
+@app.route('/api/monitor/weekly-report/list', methods=['GET'])
+@require_auth
+def monitor_list_weekly_reports():
+    """Recent weekly reports (newest first) for history."""
+    try:
+        user_id = int(request.user['user_id'])
+        limit = max(1, min(int(request.args.get('limit', 8)), 52))
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            'SELECT * FROM weekly_reports WHERE user_id = ? ORDER BY week_start DESC LIMIT ?',
+            (user_id, limit),
+        )
+        rows = cur.fetchall()
+        conn.close()
+        return jsonify({'reports': [_weekly_report_to_dict(r) for r in rows]})
+    except Exception as e:
+        logger.error(f"List weekly reports failed: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to load weekly reports'}), 500
+
+
+@app.route('/api/monitor/weekly-report/generate', methods=['POST'])
+@require_auth
+def monitor_generate_weekly_report():
+    """On-demand generation of the weekly report (trailing 7 days) for the current user."""
+    try:
+        user_id = int(request.user['user_id'])
+        report = generate_weekly_report_for_user(user_id)
+        if not report:
+            return jsonify({'report': None,
+                            'message': 'Not enough monitoring data this week to generate a report.'}), 200
+        return jsonify({'report': report})
+    except Exception as e:
+        logger.error(f"Generate weekly report failed: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to generate weekly report'}), 500
 
 
 @app.route('/api/history/clear', methods=['DELETE'])

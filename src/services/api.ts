@@ -3,7 +3,7 @@ import axios, { AxiosInstance } from 'axios';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 import { currentConfig } from '../../config';
-import { AnalysisResult, ApiResponse, FitnessTest, InjuryRecord, JobStatusResponse, UploadFormData, UploadJobResponse, WellnessEntry, WorkloadEntry, WorkloadSummary } from '../types';
+import { AnalysisResult, ApiResponse, FitnessTest, InjuryRecord, JobStatusResponse, UploadFormData, UploadJobResponse, WeeklyReport, WellnessEntry, WorkloadEntry, WorkloadSummary } from '../types';
 
 class ApiService {
   private api: AxiosInstance;
@@ -1102,6 +1102,49 @@ class ApiService {
       return { success: true, data: response.data?.injury ?? response.data };
     } catch (error: any) {
       console.error('Update Injury Error:', error);
+      return { success: false, error: error.response?.data?.error || error.message };
+    }
+  }
+
+  // --- Weekly AI monitoring report ---
+  // Returns the latest stored report, or null if none has been generated yet.
+  async getWeeklyReport(): Promise<ApiResponse<WeeklyReport | null>> {
+    try {
+      const response = await this.jsonApi.get('/api/monitor/weekly-report');
+      if (response.status !== 200) {
+        return { success: false, error: response.data?.error || `Failed to load weekly report (${response.status})` };
+      }
+      return { success: true, data: response.data?.report ?? null };
+    } catch (error: any) {
+      console.error('Get Weekly Report Error:', error);
+      return { success: false, error: error.response?.data?.error || error.message };
+    }
+  }
+
+  async getWeeklyReports(limit: number = 8): Promise<ApiResponse<WeeklyReport[]>> {
+    try {
+      const response = await this.jsonApi.get('/api/monitor/weekly-report/list', { params: { limit } });
+      if (response.status !== 200) {
+        return { success: false, error: response.data?.error || `Failed to load weekly reports (${response.status})` };
+      }
+      const reports = response.data?.reports ?? response.data;
+      return { success: true, data: Array.isArray(reports) ? reports : [] };
+    } catch (error: any) {
+      console.error('Get Weekly Reports Error:', error);
+      return { success: false, error: error.response?.data?.error || error.message };
+    }
+  }
+
+  // On-demand generation (trailing 7 days). data is null when there isn't enough activity.
+  async generateWeeklyReport(): Promise<ApiResponse<WeeklyReport | null>> {
+    try {
+      const response = await this.jsonApi.post('/api/monitor/weekly-report/generate');
+      if (response.status >= 400) {
+        return { success: false, error: response.data?.error || `Failed to generate weekly report (${response.status})` };
+      }
+      return { success: true, data: response.data?.report ?? null };
+    } catch (error: any) {
+      console.error('Generate Weekly Report Error:', error);
       return { success: false, error: error.response?.data?.error || error.message };
     }
   }

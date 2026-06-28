@@ -233,6 +233,17 @@ export interface InjuryRecord {
   resolved_date?: string; // ISO yyyy-mm-dd
 }
 
+// AI-generated weekly monitoring report (markdown), one per athlete per week.
+export interface WeeklyReport {
+  id: string;
+  week_start: string; // ISO yyyy-mm-dd
+  week_end: string; // ISO yyyy-mm-dd
+  report_md: string; // GitHub-flavored markdown body
+  model?: string;
+  total_tokens?: number;
+  generated_at?: string;
+}
+
 export interface VideoInfo {
   uri: string;
   name: string;

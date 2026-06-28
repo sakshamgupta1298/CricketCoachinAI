@@ -100,6 +100,7 @@ export default function MonitorScreen() {
     { title: 'Workload', subtitle: 'Log a session', icon: '🏋️', color: colors.cricket.green, route: '/monitor/workload' },
     { title: 'Fitness', subtitle: 'Test results', icon: '⚡', color: colors.cricket.orange, route: '/monitor/fitness' },
     { title: 'Injury', subtitle: 'Status & rehab', icon: '🩹', color: colors.cricket.red, route: '/monitor/injury' },
+    { title: 'Weekly Report', subtitle: 'AI summary', icon: '📋', color: colors.cricket.blue, route: '/monitor/report' },
   ];
 
   return (

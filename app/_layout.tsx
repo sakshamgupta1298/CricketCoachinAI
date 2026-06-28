@@ -188,6 +188,16 @@ function ThemedApp() {
               headerTintColor: theme.colors.onSurface,
             }}
           />
+          <Stack.Screen
+            name="monitor/report"
+            options={{
+              headerShown: true,
+              title: 'Weekly Report',
+              headerBackTitle: 'Back',
+              headerStyle: { backgroundColor: theme.colors.surface },
+              headerTintColor: theme.colors.onSurface,
+            }}
+          />
         </Stack>
         <Toast />
         <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
