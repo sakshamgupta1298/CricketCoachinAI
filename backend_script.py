@@ -398,8 +398,18 @@ def init_database():
     start_weekly_report_scheduler()
 
 def get_db_connection():
-    """Get database connection"""
-    conn = sqlite3.connect(DATABASE_PATH)
+    """Get database connection.
+
+    isolation_level=None puts the connection in autocommit mode so that each
+    statement commits on its own and explicit `BEGIN IMMEDIATE ... COMMIT`
+    blocks (e.g. consume_one_analysis_credit / apply_subscription_tier) run as
+    real, self-contained transactions. Without this, sqlite3's implicit
+    transaction (opened by the prior INSERT in _ensure_entitlements_row) makes
+    a following `BEGIN IMMEDIATE` raise "cannot start a transaction within a
+    transaction", which rolled back a new user's seeded credits and made every
+    upload report "you've used all your video analyses".
+    """
+    conn = sqlite3.connect(DATABASE_PATH, isolation_level=None)
     conn.row_factory = sqlite3.Row
     return conn
 

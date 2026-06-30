@@ -1,5 +1,5 @@
-import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, Platform, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Avatar, Text, useTheme } from 'react-native-paper';
 import Toast from 'react-native-toast-message';
@@ -12,7 +12,7 @@ import { getResponsiveFontSize, getResponsiveSize } from '../../src/utils/respon
 export default function ProfileScreen() {
   const theme = useTheme();
   const { user: contextUser, logout: authLogout } = useAuth();
-  const { entitlements } = useEntitlements();
+  const { entitlements, refresh: refreshEntitlements } = useEntitlements();
 
   const planLabel = (() => {
     switch (entitlements?.plan_tier) {
@@ -41,7 +41,7 @@ export default function ProfileScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadUserData();
+    await Promise.all([loadUserData(), refreshEntitlements()]);
     setRefreshing(false);
   };
 
@@ -49,6 +49,15 @@ export default function ProfileScreen() {
   useEffect(() => {
     loadUserData();
   }, [contextUser]);
+
+  // Re-fetch entitlements whenever the Profile tab regains focus so the
+  // credit count / plan tier never shows a stale value (e.g. after an upload
+  // consumes a credit on another screen).
+  useFocusEffect(
+    useCallback(() => {
+      void refreshEntitlements();
+    }, [refreshEntitlements])
+  );
 
   // Get username - handle both 'name' and 'username' fields
   const username = user?.username || user?.name || 'N/A';
