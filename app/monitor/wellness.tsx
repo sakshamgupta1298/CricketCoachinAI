@@ -1,8 +1,9 @@
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { Text, TextInput, useTheme } from 'react-native-paper';
 import Toast from 'react-native-toast-message';
+import { useEntitlements } from '../../src/context/EntitlementsContext';
 import { PremiumButton } from '../../src/components/ui/PremiumButton';
 import { PremiumCard } from '../../src/components/ui/PremiumCard';
 import { ScoreSelector } from '../../src/components/ui/ScoreSelector';
@@ -16,6 +17,7 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 
 export default function WellnessScreen() {
   const theme = useTheme();
+  const { hasFeature } = useEntitlements();
   const [sleepQuality, setSleepQuality] = useState(3);
   const [sleepHours, setSleepHours] = useState('8');
   const [soreness, setSoreness] = useState(3);
@@ -55,6 +57,18 @@ export default function WellnessScreen() {
   });
 
   const handleSave = async () => {
+    // Logging athlete-monitoring data is a Serious Professional (₹450) feature.
+    if (!hasFeature('feature_monitoring')) {
+      Alert.alert(
+        'Upgrade required',
+        'Saving wellness check-ins is part of Athlete Monitoring on the Serious Professional plan.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'See plans', onPress: () => router.push('/plans') },
+        ]
+      );
+      return;
+    }
     setSaving(true);
     const entry: Omit<WellnessEntry, 'id'> = {
       date: todayISO(),

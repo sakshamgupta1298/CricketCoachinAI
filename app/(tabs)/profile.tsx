@@ -4,6 +4,7 @@ import { Alert, Platform, RefreshControl, ScrollView, StyleSheet, TouchableOpaci
 import { Avatar, Text, useTheme } from 'react-native-paper';
 import Toast from 'react-native-toast-message';
 import { useAuth } from '../../src/context/AuthContext';
+import { useEntitlements } from '../../src/context/EntitlementsContext';
 import apiService from '../../src/services/api';
 import { borderRadius, shadows, spacing } from '../../src/theme';
 import { getResponsiveFontSize, getResponsiveSize } from '../../src/utils/responsive';
@@ -11,6 +12,15 @@ import { getResponsiveFontSize, getResponsiveSize } from '../../src/utils/respon
 export default function ProfileScreen() {
   const theme = useTheme();
   const { user: contextUser, logout: authLogout } = useAuth();
+  const { entitlements } = useEntitlements();
+
+  const planLabel = (() => {
+    switch (entitlements?.plan_tier) {
+      case 'pro_350': return 'New Professional · ₹350/mo';
+      case 'pro_450': return 'Serious Professional · ₹450/mo';
+      default: return 'Free Trial';
+    }
+  })();
   const [user, setUser] = useState<any>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -352,6 +362,35 @@ export default function ProfileScreen() {
             description="Get detailed statistics and track your cricket journey"
             iconColor="#F97316"
           />
+        </View>
+      </View>
+
+      {/* Subscription */}
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.onBackground, fontSize: getResponsiveFontSize(17) }]}>
+          Subscription
+        </Text>
+        <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+          <TouchableOpacity
+            style={[styles.actionItem, { backgroundColor: theme.colors.surface }]}
+            onPress={() => router.push('/plans')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.actionItemLeft}>
+              <Text style={[styles.actionIcon, { fontSize: getResponsiveSize(18) }]}>💎</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[{ color: theme.colors.onSurface, fontSize: getResponsiveFontSize(14), fontWeight: '600' }]}>
+                  {planLabel}
+                </Text>
+                <Text style={[{ color: theme.colors.onSurfaceVariant, fontSize: getResponsiveFontSize(11), marginTop: 2 }]}>
+                  {entitlements?.analysis_credits_remaining ?? 0} analyses left · Tap to view plans
+                </Text>
+              </View>
+            </View>
+            <Text style={[{ color: theme.colors.primary, fontSize: getResponsiveFontSize(13), fontWeight: '700' }]}>
+              {entitlements?.plan_tier === 'pro_450' ? 'Manage' : 'Upgrade'}
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
 

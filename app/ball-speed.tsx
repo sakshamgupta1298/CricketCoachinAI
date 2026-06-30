@@ -8,6 +8,8 @@ import { Text, TextInput, useTheme } from 'react-native-paper';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PremiumCard } from '../src/components/ui/PremiumCard';
+import { LockedFeatureScreen } from '../src/components/ui/UpgradeGate';
+import { useEntitlements } from '../src/context/EntitlementsContext';
 import apiService from '../src/services/api';
 import { borderRadius, colors, spacing } from '../src/theme';
 import { getResponsiveFontSize, getResponsiveSize } from '../src/utils/responsive';
@@ -17,6 +19,7 @@ const DEFAULT_FPS = 30;
 
 export default function BallSpeedScreen() {
   const theme = useTheme();
+  const { hasFeature, loading: entLoading } = useEntitlements();
   const videoRef = useRef<Video>(null);
 
   const [videoUri, setVideoUri] = useState<string | null>(null);
@@ -323,6 +326,16 @@ export default function BallSpeedScreen() {
       // ignore
     }
   };
+
+  // Ball speed + bat-ball contact is a Serious Professional (₹450) feature.
+  if (!entLoading && !hasFeature('feature_ball_speed')) {
+    return (
+      <LockedFeatureScreen
+        title="Ball Speed & Bat-Ball Contact"
+        description="Measure ball speed and bat-ball contact with the Serious Professional plan."
+      />
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>

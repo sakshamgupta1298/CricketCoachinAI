@@ -133,17 +133,40 @@ def init_database():
     except sqlite3.OperationalError:
         pass  # Column already exists
 
-    # Entitlements (analysis credits + feature flags)
+    # Entitlements (analysis credits + feature flags + subscription state)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_entitlements (
             user_id INTEGER PRIMARY KEY,
-            analysis_credits_remaining INTEGER NOT NULL DEFAULT 20,
+            analysis_credits_remaining INTEGER NOT NULL DEFAULT 5,
             feature_compare INTEGER NOT NULL DEFAULT 0,
             feature_ball_speed INTEGER NOT NULL DEFAULT 0,
+            feature_monitoring INTEGER NOT NULL DEFAULT 0,
+            feature_hindi INTEGER NOT NULL DEFAULT 1,
+            feature_priority INTEGER NOT NULL DEFAULT 0,
+            feature_full_history INTEGER NOT NULL DEFAULT 0,
+            plan_tier TEXT NOT NULL DEFAULT 'free',
+            subscription_id TEXT,
+            subscription_status TEXT NOT NULL DEFAULT 'none',
+            current_period_end TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
         )
     ''')
+    # Idempotent migrations for databases created before the subscription model.
+    for _col, _decl in (
+        ('feature_monitoring', 'INTEGER NOT NULL DEFAULT 0'),
+        ('feature_hindi', 'INTEGER NOT NULL DEFAULT 1'),
+        ('feature_priority', 'INTEGER NOT NULL DEFAULT 0'),
+        ('feature_full_history', 'INTEGER NOT NULL DEFAULT 0'),
+        ('plan_tier', "TEXT NOT NULL DEFAULT 'free'"),
+        ('subscription_id', 'TEXT'),
+        ('subscription_status', "TEXT NOT NULL DEFAULT 'none'"),
+        ('current_period_end', 'TIMESTAMP'),
+    ):
+        try:
+            cursor.execute(f'ALTER TABLE user_entitlements ADD COLUMN {_col} {_decl}')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
 
     # Razorpay orders/payments
     cursor.execute('''
@@ -161,6 +184,24 @@ def init_database():
             FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
         )
     ''')
+
+    # Razorpay recurring subscriptions (auto-renewing monthly plans)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS razorpay_subscriptions (
+            subscription_id TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            plan_id TEXT NOT NULL,
+            razorpay_plan_id TEXT,
+            status TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            current_period_end TIMESTAMP,
+            last_payment_id TEXT,
+            charge_count INTEGER NOT NULL DEFAULT 0,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_rzp_subs_user ON razorpay_subscriptions(user_id)')
 
     # Per-analysis log (used for daily "videos analyzed per account" report)
     cursor.execute('''
@@ -324,11 +365,28 @@ def init_database():
         for r in rows:
             uid = r[0]
             cursor.execute(
-                'INSERT OR IGNORE INTO user_entitlements (user_id, analysis_credits_remaining, feature_compare, feature_ball_speed) VALUES (?, 20, 0, 0)',
+                'INSERT OR IGNORE INTO user_entitlements (user_id, analysis_credits_remaining, feature_hindi) VALUES (?, 5, 1)',
                 (uid,)
             )
     except Exception as e:
         logger.warning(f"Entitlements backfill skipped: {e}")
+
+    # One-time correction: legacy free-trial users were seeded with the old
+    # 20-credit default. Cap never-subscribed free users at the new 5-credit
+    # free-trial limit. Paid/downgraded users (subscription_status != 'none')
+    # keep whatever they have. Safe to re-run.
+    try:
+        cursor.execute(
+            '''UPDATE user_entitlements
+                   SET analysis_credits_remaining = 5, updated_at = CURRENT_TIMESTAMP
+                 WHERE plan_tier = 'free'
+                   AND subscription_status = 'none'
+                   AND analysis_credits_remaining > 5'''
+        )
+        if cursor.rowcount:
+            logger.info(f"Capped {cursor.rowcount} legacy free-trial account(s) to 5 analyses")
+    except Exception as e:
+        logger.warning(f"Free-trial credit cap skipped: {e}")
 
     conn.commit()
     conn.close()
@@ -873,68 +931,148 @@ def start_weekly_report_scheduler():
 
 
 # ==================== SUBSCRIPTION / ENTITLEMENTS ====================
+# Three-tier model:
+#   free      -> 5 one-time analyses, last-5 history, view-only monitoring, Hindi TTS
+#   pro_350   -> 30 analyses/month (auto-renew), full history, Hindi TTS
+#   pro_450   -> 60 analyses/month (auto-renew), everything: monitoring, video
+#                comparison, ball speed + bat-ball contact, priority queue, Hindi TTS
+# Razorpay Plan IDs for the two recurring tiers are created in the Razorpay
+# dashboard and supplied via env so we never hard-code them.
+FREE_TRIAL_CREDITS = 5
+
+# All feature flag column names (also the keys returned to the client).
+FEATURE_FLAGS = (
+    "feature_compare",
+    "feature_ball_speed",
+    "feature_monitoring",
+    "feature_hindi",
+    "feature_priority",
+    "feature_full_history",
+)
+
 PLAN_DEFINITIONS = {
-    "plan1": {"price_inr": 199, "amount_paise": 199 * 100, "analysis_credits": 40, "feature_compare": 0, "feature_ball_speed": 0},
-    "plan2": {"price_inr": 299, "amount_paise": 299 * 100, "analysis_credits": 100, "feature_compare": 1, "feature_ball_speed": 0},
-    "plan3": {"price_inr": 399, "amount_paise": 399 * 100, "analysis_credits": 210, "feature_compare": 1, "feature_ball_speed": 1},
+    "free": {
+        "tier": "free",
+        "name": "Free Trial",
+        "price_inr": 0,
+        "amount_paise": 0,
+        "monthly_credits": FREE_TRIAL_CREDITS,
+        "recurring": False,
+        "razorpay_plan_id": "",
+        "features": {
+            "feature_compare": 0,
+            "feature_ball_speed": 0,
+            "feature_monitoring": 0,   # view-only is enforced per-endpoint (GET allowed)
+            "feature_hindi": 1,
+            "feature_priority": 0,
+            "feature_full_history": 0,
+        },
+    },
+    "pro_350": {
+        "tier": "pro_350",
+        "name": "New Professional",
+        "price_inr": 350,
+        "amount_paise": 350 * 100,
+        "monthly_credits": 30,
+        "recurring": True,
+        "razorpay_plan_id": os.getenv("RAZORPAY_PLAN_350", ""),
+        "features": {
+            "feature_compare": 0,
+            "feature_ball_speed": 0,
+            "feature_monitoring": 0,
+            "feature_hindi": 1,
+            "feature_priority": 0,
+            "feature_full_history": 1,
+        },
+    },
+    "pro_450": {
+        "tier": "pro_450",
+        "name": "Serious Professional",
+        "price_inr": 450,
+        "amount_paise": 450 * 100,
+        "monthly_credits": 60,
+        "recurring": True,
+        "razorpay_plan_id": os.getenv("RAZORPAY_PLAN_450", ""),
+        "features": {
+            "feature_compare": 1,
+            "feature_ball_speed": 1,
+            "feature_monitoring": 1,
+            "feature_hindi": 1,
+            "feature_priority": 1,
+            "feature_full_history": 1,
+        },
+    },
 }
+
+# Map a Razorpay plan id back to our internal plan id (for webhook handling).
+def plan_id_from_razorpay(razorpay_plan_id: str):
+    if not razorpay_plan_id:
+        return None
+    for pid, plan in PLAN_DEFINITIONS.items():
+        if plan.get("razorpay_plan_id") and plan["razorpay_plan_id"] == razorpay_plan_id:
+            return pid
+    return None
 
 
 def _ensure_entitlements_row(conn, user_id: int):
     cur = conn.cursor()
     cur.execute(
-        'INSERT OR IGNORE INTO user_entitlements (user_id, analysis_credits_remaining, feature_compare, feature_ball_speed) VALUES (?, 20, 0, 0)',
-        (user_id,)
+        'INSERT OR IGNORE INTO user_entitlements (user_id, analysis_credits_remaining, feature_hindi) VALUES (?, ?, 1)',
+        (user_id, FREE_TRIAL_CREDITS)
     )
 
 
-def get_entitlements(user_id: int):
+def _row_to_entitlements(row) -> dict:
+    if not row:
+        return {
+            "analysis_credits_remaining": 0,
+            "plan_tier": "free",
+            "subscription_status": "none",
+            "current_period_end": None,
+            **{f: (True if f == "feature_hindi" else False) for f in FEATURE_FLAGS},
+        }
+    ent = {
+        "analysis_credits_remaining": int(row["analysis_credits_remaining"] or 0),
+        "plan_tier": row["plan_tier"] if "plan_tier" in row.keys() else "free",
+        "subscription_status": row["subscription_status"] if "subscription_status" in row.keys() else "none",
+        "current_period_end": row["current_period_end"] if "current_period_end" in row.keys() else None,
+    }
+    for f in FEATURE_FLAGS:
+        ent[f] = bool(row[f]) if f in row.keys() else False
+    return ent
+
+
+def get_entitlements(user_id: int) -> dict:
     conn = get_db_connection()
     try:
         _ensure_entitlements_row(conn, user_id)
         cur = conn.cursor()
-        cur.execute('SELECT analysis_credits_remaining, feature_compare, feature_ball_speed FROM user_entitlements WHERE user_id = ?', (user_id,))
-        row = cur.fetchone()
-        if not row:
-            return {"analysis_credits_remaining": 0, "feature_compare": False, "feature_ball_speed": False}
-        return {
-            "analysis_credits_remaining": int(row["analysis_credits_remaining"] or 0),
-            "feature_compare": bool(row["feature_compare"]),
-            "feature_ball_speed": bool(row["feature_ball_speed"]),
-        }
+        cur.execute('SELECT * FROM user_entitlements WHERE user_id = ?', (user_id,))
+        return _row_to_entitlements(cur.fetchone())
     finally:
         conn.close()
 
 
-def consume_one_analysis_credit(user_id: int) -> (bool, dict):
+def consume_one_analysis_credit(user_id: int):
     """Atomically consume 1 analysis credit. Returns (ok, entitlements_after)."""
     conn = get_db_connection()
     try:
         _ensure_entitlements_row(conn, user_id)
         cur = conn.cursor()
         cur.execute('BEGIN IMMEDIATE')
-        cur.execute('SELECT analysis_credits_remaining, feature_compare, feature_ball_speed FROM user_entitlements WHERE user_id = ?', (user_id,))
+        cur.execute('SELECT analysis_credits_remaining FROM user_entitlements WHERE user_id = ?', (user_id,))
         row = cur.fetchone()
         remaining = int(row["analysis_credits_remaining"] or 0) if row else 0
         if remaining <= 0:
             conn.rollback()
-            return False, {
-                "analysis_credits_remaining": remaining,
-                "feature_compare": bool(row["feature_compare"]) if row else False,
-                "feature_ball_speed": bool(row["feature_ball_speed"]) if row else False,
-            }
-
-        new_remaining = remaining - 1
+            return False, get_entitlements(user_id)
         cur.execute(
             'UPDATE user_entitlements SET analysis_credits_remaining = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
-            (new_remaining, user_id)
+            (remaining - 1, user_id)
         )
         conn.commit()
-        return True, {
-            "analysis_credits_remaining": new_remaining,
-            "feature_compare": bool(row["feature_compare"]),
-            "feature_ball_speed": bool(row["feature_ball_speed"]),
-        }
+        cur.execute('SELECT * FROM user_entitlements WHERE user_id = ?', (user_id,))
+        return True, _row_to_entitlements(cur.fetchone())
     except Exception as e:
         try:
             conn.rollback()
@@ -946,37 +1084,102 @@ def consume_one_analysis_credit(user_id: int) -> (bool, dict):
         conn.close()
 
 
-def apply_plan_purchase(user_id: int, plan_id: str) -> dict:
+def refund_one_analysis_credit(user_id: int):
+    """Give back one credit (used when an upload fails after consuming)."""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            'UPDATE user_entitlements SET analysis_credits_remaining = analysis_credits_remaining + 1, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
+            (user_id,)
+        )
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Failed to refund credit for user {user_id}: {e}", exc_info=True)
+    finally:
+        conn.close()
+
+
+def apply_subscription_tier(user_id: int, plan_id: str, *, reset_credits: bool = True,
+                            subscription_id: str = None, status: str = "active",
+                            current_period_end=None) -> dict:
+    """Set a user's plan tier, feature flags and (optionally) reset monthly credits.
+
+    Used on first subscription activation and on every renewal (subscription.charged),
+    where reset_credits=True restores the monthly allotment (30 / 60).
+    """
     plan = PLAN_DEFINITIONS.get(plan_id)
     if not plan:
         raise ValueError("Invalid plan_id")
+    feats = plan["features"]
     conn = get_db_connection()
     try:
         _ensure_entitlements_row(conn, user_id)
         cur = conn.cursor()
         cur.execute('BEGIN IMMEDIATE')
-        cur.execute('SELECT analysis_credits_remaining, feature_compare, feature_ball_speed FROM user_entitlements WHERE user_id = ?', (user_id,))
-        row = cur.fetchone()
-        remaining = int(row["analysis_credits_remaining"] or 0) if row else 0
-        feature_compare = max(int(row["feature_compare"] or 0), int(plan["feature_compare"]))
-        feature_ball_speed = max(int(row["feature_ball_speed"] or 0), int(plan["feature_ball_speed"]))
-        new_remaining = remaining + int(plan["analysis_credits"])
-        cur.execute(
-            'UPDATE user_entitlements SET analysis_credits_remaining = ?, feature_compare = ?, feature_ball_speed = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
-            (new_remaining, feature_compare, feature_ball_speed, user_id)
-        )
+        if reset_credits:
+            cur.execute(
+                f'''UPDATE user_entitlements SET
+                        analysis_credits_remaining = ?,
+                        feature_compare = ?, feature_ball_speed = ?, feature_monitoring = ?,
+                        feature_hindi = ?, feature_priority = ?, feature_full_history = ?,
+                        plan_tier = ?, subscription_id = ?, subscription_status = ?,
+                        current_period_end = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE user_id = ?''',
+                (int(plan["monthly_credits"]),
+                 feats["feature_compare"], feats["feature_ball_speed"], feats["feature_monitoring"],
+                 feats["feature_hindi"], feats["feature_priority"], feats["feature_full_history"],
+                 plan["tier"], subscription_id, status, current_period_end, user_id)
+            )
+        else:
+            cur.execute(
+                f'''UPDATE user_entitlements SET
+                        feature_compare = ?, feature_ball_speed = ?, feature_monitoring = ?,
+                        feature_hindi = ?, feature_priority = ?, feature_full_history = ?,
+                        plan_tier = ?, subscription_id = ?, subscription_status = ?,
+                        current_period_end = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE user_id = ?''',
+                (feats["feature_compare"], feats["feature_ball_speed"], feats["feature_monitoring"],
+                 feats["feature_hindi"], feats["feature_priority"], feats["feature_full_history"],
+                 plan["tier"], subscription_id, status, current_period_end, user_id)
+            )
         conn.commit()
-        return {
-            "analysis_credits_remaining": new_remaining,
-            "feature_compare": bool(feature_compare),
-            "feature_ball_speed": bool(feature_ball_speed),
-        }
+        cur.execute('SELECT * FROM user_entitlements WHERE user_id = ?', (user_id,))
+        return _row_to_entitlements(cur.fetchone())
     except Exception:
         try:
             conn.rollback()
         except Exception:
             pass
         raise
+    finally:
+        conn.close()
+
+
+def downgrade_to_free(user_id: int, status: str = "cancelled") -> dict:
+    """Revoke premium features (e.g. on cancellation / failed renewal).
+
+    Leftover credits are kept; only the paid feature flags and tier are reset.
+    Hindi TTS stays on because it is available on every tier.
+    """
+    free = PLAN_DEFINITIONS["free"]["features"]
+    conn = get_db_connection()
+    try:
+        _ensure_entitlements_row(conn, user_id)
+        cur = conn.cursor()
+        cur.execute(
+            '''UPDATE user_entitlements SET
+                   feature_compare = ?, feature_ball_speed = ?, feature_monitoring = ?,
+                   feature_hindi = ?, feature_priority = ?, feature_full_history = ?,
+                   plan_tier = 'free', subscription_status = ?, updated_at = CURRENT_TIMESTAMP
+               WHERE user_id = ?''',
+            (free["feature_compare"], free["feature_ball_speed"], free["feature_monitoring"],
+             free["feature_hindi"], free["feature_priority"], free["feature_full_history"],
+             status, user_id)
+        )
+        conn.commit()
+        cur.execute('SELECT * FROM user_entitlements WHERE user_id = ?', (user_id,))
+        return _row_to_entitlements(cur.fetchone())
     finally:
         conn.close()
 
@@ -1029,8 +1232,32 @@ def require_auth(f):
             return jsonify({'error': 'Invalid authorization header format'}), 401
         except Exception as e:
             return jsonify({'error': 'Authentication failed'}), 401
-    
+
     return decorated_function
+
+
+def require_feature(flag, label=None):
+    """Decorator: 403 with upgrade_required unless the user's entitlements have `flag`.
+
+    Must be placed *below* @require_auth so request.user is populated.
+    """
+    def deco(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            try:
+                user_id = int(request.user['user_id'])
+            except Exception:
+                return jsonify({'error': 'Authentication required'}), 401
+            ent = get_entitlements(user_id)
+            if not ent.get(flag):
+                return jsonify({
+                    'error': f"{label or 'This feature'} is not available on your current plan.",
+                    'upgrade_required': True,
+                    'feature': flag,
+                }), 403
+            return f(*args, **kwargs)
+        return wrapper
+    return deco
 
 # Global model variables - loaded once at startup
 # shot_prediction_model = None  # Commented out - users will select shot type manually
@@ -1633,10 +1860,10 @@ FILE_ID = "1SRsNEUv4a4FLisMZGM0-BH1J4RlqT0HN"
 DOWNLOAD_URL = f"https://drive.google.com/uc?id={FILE_ID}"
 
 # Automatically download the model if it's missing
-if not os.path.exists(MODEL_PATH):
-    logger.info("Model not found locally. Downloading from Google Drive...")
-    gdown.download(DOWNLOAD_URL, MODEL_PATH, quiet=False)
-    logger.info(f"Model downloaded successfully to {MODEL_PATH}")
+# if not os.path.exists(MODEL_PATH):
+#     logger.info("Model not found locally. Downloading from Google Drive...")
+#     gdown.download(DOWNLOAD_URL, MODEL_PATH, quiet=False)
+#     logger.info(f"Model downloaded successfully to {MODEL_PATH}")
 
 CHECKPOINT_PATH = MODEL_PATH
 # BATTER_SIDE = "right"
@@ -4560,6 +4787,16 @@ def api_upload_file():
                 logger.warning("Shot type not provided by user")
                 return jsonify({'error': 'Shot type is required. Please select a shot type.'}), 400
 
+        # Block early (before any S3 work) if the user has no analysis credits left.
+        _ent = get_entitlements(user_id)
+        if int(_ent.get('analysis_credits_remaining', 0)) <= 0:
+            logger.info(f"Upload blocked: user {username} (ID: {user_id}) out of analysis credits")
+            return jsonify({
+                'error': "You've used all your video analyses. Upgrade your plan to analyze more.",
+                'upgrade_required': True,
+                'analysis_credits_remaining': 0,
+            }), 402
+
         filename = secure_filename(file.filename)
 
         # Create job id early so we can use it for unique S3 keys / local temp names
@@ -4622,6 +4859,22 @@ def api_upload_file():
 
         expo_push_token = request.form.get('expo_push_token') or request.form.get('push_token')
 
+        # Consume one analysis credit now that the upload is validated and stored.
+        # Atomic, so it also closes the race against parallel uploads.
+        ok, ent_after = consume_one_analysis_credit(user_id)
+        if not ok:
+            logger.info(f"Upload blocked at enqueue: user {username} (ID: {user_id}) out of credits")
+            try:
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+            except Exception:
+                pass
+            return jsonify({
+                'error': "You've used all your video analyses. Upgrade your plan to analyze more.",
+                'upgrade_required': True,
+                'analysis_credits_remaining': 0,
+            }), 402
+
         job = {
             "job_id": job_id,
             "status": "queued",
@@ -4635,21 +4888,29 @@ def api_upload_file():
             "video_s3_key": s3_info.get("key"),
             "video_s3_uri": s3_info.get("uri"),
         }
-        save_job(user_id, job)
 
-        worker = threading.Thread(
-            target=process_analysis_job,
-            args=(job_id, user_id, username, filepath, filename, dict(request.form), expo_push_token),
-            daemon=True,
-        )
-        worker.start()
+        try:
+            save_job(user_id, job)
+            worker = threading.Thread(
+                target=process_analysis_job,
+                args=(job_id, user_id, username, filepath, filename, dict(request.form), expo_push_token),
+                daemon=True,
+            )
+            worker.start()
+        except Exception as e:
+            # Enqueue failed after we charged a credit — give it back.
+            refund_one_analysis_credit(user_id)
+            logger.error(f"❌ Failed to enqueue job for {username}; credit refunded: {e}", exc_info=True)
+            return jsonify({"error": "Failed to start analysis. Your credit was not used.", "details": str(e)}), 500
 
-        logger.info(f"🧵 [JOB {job_id}] Enqueued analysis for {username} file {filename}")
+        logger.info(f"🧵 [JOB {job_id}] Enqueued analysis for {username} file {filename} "
+                    f"(credits left: {ent_after.get('analysis_credits_remaining')})")
         return jsonify({
             "success": True,
             "job_id": job_id,
             "filename": filename,
             "status": "queued",
+            "analysis_credits_remaining": ent_after.get('analysis_credits_remaining'),
             "video_s3_bucket": s3_info.get("bucket"),
             "video_s3_key": s3_info.get("key"),
         })
@@ -4859,7 +5120,7 @@ def api_health():
 @app.route('/api/me/entitlements', methods=['GET'])
 @require_auth
 def me_entitlements():
-    """Return current user's analysis credits and feature flags."""
+    """Return current user's analysis credits, feature flags and plan tier."""
     try:
         user_id = int(request.user['user_id'])
         ent = get_entitlements(user_id)
@@ -4869,9 +5130,30 @@ def me_entitlements():
         return jsonify({"success": False, "error": "Failed to load entitlements"}), 500
 
 
+def _public_plan(pid: str) -> dict:
+    """Plan info safe to expose to the client (no internal Razorpay ids)."""
+    p = PLAN_DEFINITIONS[pid]
+    return {
+        "plan_id": pid,
+        "tier": p["tier"],
+        "name": p["name"],
+        "price_inr": p["price_inr"],
+        "monthly_credits": p["monthly_credits"],
+        "recurring": p["recurring"],
+        "features": p["features"],
+    }
+
+
+@app.route('/api/plans', methods=['GET'])
+def list_plans():
+    """Public catalog of plans for the paywall / plan picker."""
+    return jsonify({"plans": [_public_plan(pid) for pid in PLAN_DEFINITIONS]})
+
+
 def _get_razorpay_client():
-    key_id = "rzp_test_Sb5yJF2AjR63PO"
-    key_secret = "V78s4WUtReKfFgBpO9M1NWG1"
+    # Prefer env-configured keys; fall back to the existing test keys for dev.
+    key_id = os.getenv("RAZORPAY_KEY_ID") or "rzp_test_Sb5yJF2AjR63PO"
+    key_secret = os.getenv("RAZORPAY_KEY_SECRET") or "V78s4WUtReKfFgBpO9M1NWG1"
     if not key_id or not key_secret:
         raise RuntimeError("Razorpay keys not configured")
     if razorpay is None:
@@ -4879,110 +5161,239 @@ def _get_razorpay_client():
     return razorpay.Client(auth=(key_id, key_secret)), key_id, key_secret
 
 
-@app.route('/api/payments/razorpay/create-order', methods=['POST'])
+@app.route('/api/payments/razorpay/create-subscription', methods=['POST'])
 @require_auth
-def razorpay_create_order():
-    """Create a Razorpay order for a plan purchase."""
+def razorpay_create_subscription():
+    """Create an auto-renewing Razorpay subscription for a paid plan."""
     try:
         user_id = int(request.user['user_id'])
         data = request.get_json(silent=True) or {}
         plan_id = (data.get("plan_id") or "").strip()
-        if plan_id not in PLAN_DEFINITIONS:
-            return jsonify({"error": "Invalid plan_id"}), 400
 
-        plan = PLAN_DEFINITIONS[plan_id]
+        plan = PLAN_DEFINITIONS.get(plan_id)
+        if not plan or not plan.get("recurring"):
+            return jsonify({"error": "Invalid or non-subscription plan_id"}), 400
+
+        rzp_plan_id = plan.get("razorpay_plan_id")
+        if not rzp_plan_id:
+            logger.error(f"No Razorpay plan id configured for {plan_id} (set RAZORPAY_PLAN_* env)")
+            return jsonify({"error": "Subscriptions are not configured yet. Please try again later."}), 503
+
         client, key_id, _secret = _get_razorpay_client()
 
-        order = client.order.create({
-            "amount": int(plan["amount_paise"]),
-            "currency": "INR",
-            "payment_capture": 1,
+        # total_count = number of billing cycles. 12 monthly cycles = ~1 year, then
+        # the subscription completes (the user can re-subscribe). Adjust as needed.
+        subscription = client.subscription.create({
+            "plan_id": rzp_plan_id,
+            "total_count": 12,
+            "customer_notify": 1,
             "notes": {
                 "user_id": str(user_id),
                 "plan_id": plan_id,
-            }
+            },
         })
 
-        order_id = order.get("id")
-        if not order_id:
-            raise RuntimeError("Razorpay order creation failed")
+        subscription_id = subscription.get("id")
+        if not subscription_id:
+            raise RuntimeError("Razorpay subscription creation failed")
 
         conn = get_db_connection()
         try:
             cur = conn.cursor()
             cur.execute(
-                'INSERT OR REPLACE INTO razorpay_transactions (order_id, user_id, plan_id, amount_paise, currency, status) VALUES (?, ?, ?, ?, ?, ?)',
-                (order_id, user_id, plan_id, int(plan["amount_paise"]), "INR", "created")
+                '''INSERT OR REPLACE INTO razorpay_subscriptions
+                       (subscription_id, user_id, plan_id, razorpay_plan_id, status)
+                   VALUES (?, ?, ?, ?, ?)''',
+                (subscription_id, user_id, plan_id, rzp_plan_id, subscription.get("status", "created"))
             )
             conn.commit()
         finally:
             conn.close()
 
         return jsonify({
-            "order_id": order_id,
-            "amount": int(plan["amount_paise"]),
-            "currency": "INR",
+            "subscription_id": subscription_id,
             "key_id": key_id,
             "plan_id": plan_id,
+            "amount": int(plan["amount_paise"]),
+            "currency": "INR",
+            "name": plan["name"],
         })
     except Exception as e:
-        logger.error(f"Create order failed: {e}", exc_info=True)
+        logger.error(f"Create subscription failed: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 
-@app.route('/api/payments/razorpay/verify', methods=['POST'])
+@app.route('/api/payments/razorpay/verify-subscription', methods=['POST'])
 @require_auth
-def razorpay_verify_payment():
-    """Verify Razorpay payment signature and apply plan entitlements."""
+def razorpay_verify_subscription():
+    """Verify the subscription-authorization payment and activate the plan."""
     try:
         user_id = int(request.user['user_id'])
         data = request.get_json(silent=True) or {}
-        plan_id = (data.get("plan_id") or "").strip()
-        order_id = (data.get("razorpay_order_id") or "").strip()
+        subscription_id = (data.get("razorpay_subscription_id") or "").strip()
         payment_id = (data.get("razorpay_payment_id") or "").strip()
         signature = (data.get("razorpay_signature") or "").strip()
 
-        if plan_id not in PLAN_DEFINITIONS:
-            return jsonify({"error": "Invalid plan_id"}), 400
-        if not order_id or not payment_id or not signature:
+        if not subscription_id or not payment_id or not signature:
             return jsonify({"error": "Missing payment fields"}), 400
 
         _client, _key_id, key_secret = _get_razorpay_client()
 
-        # Verify signature: HMAC_SHA256(order_id|payment_id, key_secret)
-        payload = f"{order_id}|{payment_id}".encode("utf-8")
+        # For subscriptions, signature = HMAC_SHA256(payment_id|subscription_id, secret)
+        payload = f"{payment_id}|{subscription_id}".encode("utf-8")
         expected = hmac.new(key_secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
         if not hmac.compare_digest(expected, signature):
             return jsonify({"error": "Invalid payment signature"}), 400
 
-        # Ensure order belongs to this user and is not already verified
         conn = get_db_connection()
         try:
             cur = conn.cursor()
-            cur.execute('SELECT user_id, plan_id, status FROM razorpay_transactions WHERE order_id = ?', (order_id,))
+            cur.execute('SELECT user_id, plan_id, status FROM razorpay_subscriptions WHERE subscription_id = ?', (subscription_id,))
             row = cur.fetchone()
             if not row:
-                return jsonify({"error": "Order not found"}), 404
+                return jsonify({"error": "Subscription not found"}), 404
             if int(row["user_id"]) != user_id:
                 return jsonify({"error": "Access denied"}), 403
-            if row["status"] == "verified":
-                ent = get_entitlements(user_id)
-                return jsonify({"success": True, "entitlements": ent})
-
-            # Mark verified
+            plan_id = row["plan_id"]
             cur.execute(
-                'UPDATE razorpay_transactions SET status = ?, verified_at = CURRENT_TIMESTAMP, payment_id = ?, signature = ? WHERE order_id = ?',
-                ("verified", payment_id, signature, order_id)
+                '''UPDATE razorpay_subscriptions
+                       SET status = 'active', last_payment_id = ?, charge_count = charge_count + 1,
+                           updated_at = CURRENT_TIMESTAMP
+                       WHERE subscription_id = ?''',
+                (payment_id, subscription_id)
             )
             conn.commit()
         finally:
             conn.close()
 
-        ent = apply_plan_purchase(user_id, plan_id)
+        ent = apply_subscription_tier(
+            user_id, plan_id, reset_credits=True,
+            subscription_id=subscription_id, status="active",
+        )
         return jsonify({"success": True, "entitlements": ent})
     except Exception as e:
-        logger.error(f"Verify payment failed: {e}", exc_info=True)
+        logger.error(f"Verify subscription failed: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/payments/razorpay/webhook', methods=['POST'])
+def razorpay_webhook():
+    """Handle Razorpay subscription lifecycle events.
+
+    Configure the webhook URL + secret in the Razorpay dashboard and set
+    RAZORPAY_WEBHOOK_SECRET. We verify the X-Razorpay-Signature header against
+    the raw request body before acting on any event.
+    """
+    try:
+        webhook_secret = os.getenv("RAZORPAY_WEBHOOK_SECRET", "")
+        raw_body = request.get_data()  # bytes, exactly as sent
+        sent_sig = request.headers.get("X-Razorpay-Signature", "")
+
+        if not webhook_secret:
+            logger.error("Razorpay webhook received but RAZORPAY_WEBHOOK_SECRET is not set")
+            return jsonify({"error": "Webhook not configured"}), 503
+
+        expected = hmac.new(webhook_secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected, sent_sig):
+            logger.warning("Razorpay webhook signature mismatch")
+            return jsonify({"error": "Invalid signature"}), 400
+
+        event = request.get_json(silent=True) or {}
+        event_type = event.get("event", "")
+        sub_entity = (((event.get("payload") or {}).get("subscription") or {}).get("entity")) or {}
+        subscription_id = sub_entity.get("id")
+        payment_entity = (((event.get("payload") or {}).get("payment") or {}).get("entity")) or {}
+        payment_id = payment_entity.get("id")
+        current_end = sub_entity.get("current_end")  # unix ts (seconds) or None
+
+        logger.info(f"Razorpay webhook: {event_type} sub={subscription_id}")
+
+        if not subscription_id:
+            return jsonify({"status": "ignored"}), 200
+
+        # Look up which user/plan this subscription belongs to.
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                'SELECT user_id, plan_id, last_payment_id FROM razorpay_subscriptions WHERE subscription_id = ?',
+                (subscription_id,)
+            )
+            row = cur.fetchone()
+            if not row:
+                # Fall back to notes if the row was never persisted.
+                notes = sub_entity.get("notes") or {}
+                user_id = int(notes["user_id"]) if notes.get("user_id") else None
+                plan_id = notes.get("plan_id")
+                last_payment_id = None
+            else:
+                user_id = int(row["user_id"])
+                plan_id = row["plan_id"]
+                last_payment_id = row["last_payment_id"]
+
+            if user_id is None or plan_id not in PLAN_DEFINITIONS:
+                conn.close()
+                return jsonify({"status": "ignored"}), 200
+
+            period_end_iso = None
+            if current_end:
+                try:
+                    period_end_iso = datetime.utcfromtimestamp(int(current_end)).isoformat() + "Z"
+                except Exception:
+                    period_end_iso = None
+
+            if event_type == "subscription.charged":
+                # Renewal (or first charge). Dedupe duplicate webhook deliveries by payment id.
+                if payment_id and payment_id == last_payment_id:
+                    logger.info(f"Duplicate subscription.charged for {subscription_id}; skipping reset")
+                else:
+                    apply_subscription_tier(
+                        user_id, plan_id, reset_credits=True,
+                        subscription_id=subscription_id, status="active",
+                        current_period_end=period_end_iso,
+                    )
+                    cur.execute(
+                        '''UPDATE razorpay_subscriptions
+                               SET status = 'active', last_payment_id = ?, charge_count = charge_count + 1,
+                                   current_period_end = ?, updated_at = CURRENT_TIMESTAMP
+                               WHERE subscription_id = ?''',
+                        (payment_id, period_end_iso, subscription_id)
+                    )
+                    conn.commit()
+
+            elif event_type == "subscription.activated":
+                apply_subscription_tier(
+                    user_id, plan_id, reset_credits=False,
+                    subscription_id=subscription_id, status="active",
+                    current_period_end=period_end_iso,
+                )
+                cur.execute(
+                    "UPDATE razorpay_subscriptions SET status = 'active', current_period_end = ?, updated_at = CURRENT_TIMESTAMP WHERE subscription_id = ?",
+                    (period_end_iso, subscription_id)
+                )
+                conn.commit()
+
+            elif event_type in ("subscription.cancelled", "subscription.halted",
+                                 "subscription.completed", "subscription.expired",
+                                 "subscription.paused"):
+                downgrade_to_free(user_id, status=event_type.split(".")[-1])
+                cur.execute(
+                    "UPDATE razorpay_subscriptions SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE subscription_id = ?",
+                    (event_type.split(".")[-1], subscription_id)
+                )
+                conn.commit()
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+        return jsonify({"status": "ok"}), 200
+    except Exception as e:
+        logger.error(f"Razorpay webhook error: {e}", exc_info=True)
+        # Return 200 so Razorpay doesn't hammer retries on our internal errors;
+        # the signature check above already rejected forged calls.
+        return jsonify({"status": "error"}), 200
 
 
 @app.route('/api/history', methods=['GET'])
@@ -5038,8 +5449,21 @@ def get_analysis_history():
         
         # Sort by creation time (newest first)
         history.sort(key=lambda x: x['created'], reverse=True)
-        print(f"Found {len(history)} analysis results for user {username}")
-        return jsonify({'history': history})
+
+        # Free tier sees only their most recent 5 analyses; paid tiers see all.
+        ent = get_entitlements(user_id)
+        total_count = len(history)
+        history_limited = False
+        if not ent.get('feature_full_history'):
+            history = history[:5]
+            history_limited = total_count > 5
+
+        print(f"Found {total_count} analysis results for user {username} (returned {len(history)})")
+        return jsonify({
+            'history': history,
+            'total_count': total_count,
+            'history_limited': history_limited,
+        })
     except Exception as e:
         logging.exception("Failed to get analysis history")
         return jsonify({'error': f'Error retrieving history: {str(e)}'}), 500
@@ -5757,6 +6181,7 @@ def monitor_get_wellness():
 
 @app.route('/api/monitor/wellness', methods=['POST'])
 @require_auth
+@require_feature('feature_monitoring', 'Athlete monitoring')
 def monitor_log_wellness():
     try:
         user_id = int(request.user['user_id'])
@@ -5816,6 +6241,7 @@ def monitor_get_workload():
 
 @app.route('/api/monitor/workload', methods=['POST'])
 @require_auth
+@require_feature('feature_monitoring', 'Athlete monitoring')
 def monitor_log_workload():
     try:
         user_id = int(request.user['user_id'])
@@ -5895,6 +6321,7 @@ def monitor_get_fitness():
 
 @app.route('/api/monitor/fitness', methods=['POST'])
 @require_auth
+@require_feature('feature_monitoring', 'Athlete monitoring')
 def monitor_log_fitness():
     try:
         user_id = int(request.user['user_id'])
@@ -5942,6 +6369,7 @@ def monitor_get_injuries():
 
 @app.route('/api/monitor/injuries', methods=['POST'])
 @require_auth
+@require_feature('feature_monitoring', 'Athlete monitoring')
 def monitor_log_injury():
     try:
         user_id = int(request.user['user_id'])
@@ -5972,6 +6400,7 @@ def monitor_log_injury():
 
 @app.route('/api/monitor/injuries/<injury_id>', methods=['PATCH'])
 @require_auth
+@require_feature('feature_monitoring', 'Athlete monitoring')
 def monitor_update_injury(injury_id):
     try:
         user_id = int(request.user['user_id'])
@@ -6047,6 +6476,7 @@ def monitor_list_weekly_reports():
 
 @app.route('/api/monitor/weekly-report/generate', methods=['POST'])
 @require_auth
+@require_feature('feature_monitoring', 'Weekly monitoring report')
 def monitor_generate_weekly_report():
     """On-demand generation of the current week's report for the user.
     One report per calendar week: if it already exists, return it (no regeneration)."""
@@ -6541,6 +6971,7 @@ def get_training_plan(filename):
 
 @app.route('/api/compare', methods=['POST'])
 @require_auth
+@require_feature('feature_compare', 'Video comparison')
 def compare_videos():
     """Compare two video analyses using Gemini"""
     try:

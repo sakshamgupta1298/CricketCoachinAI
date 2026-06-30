@@ -139,6 +139,9 @@ export interface ApiResponse<T = any> {
   data?: T;
   error?: string;
   message?: string;
+  /** Set when the server rejected the request because the user's plan lacks the
+   *  required feature or analysis credits (HTTP 402/403 with upgrade_required). */
+  upgradeRequired?: boolean;
 }
 
 export interface LoadingState {
@@ -163,6 +166,43 @@ export type PlayerType = 'batsman' | 'bowler' | 'keeper';
 export type PlayerSide = 'left' | 'right';
 export type BowlerType = 'fast_bowler' | 'spin_bowler';
 export type KeepingType = 'standing_up' | 'standing_back' | 'diving_catch' | 'stumping';
+
+// ---------------------------------------------------------------------------
+// Subscription / entitlements
+// ---------------------------------------------------------------------------
+export type PlanTier = 'free' | 'pro_350' | 'pro_450';
+
+export interface PlanFeatures {
+  feature_compare: number;
+  feature_ball_speed: number;
+  feature_monitoring: number;
+  feature_hindi: number;
+  feature_priority: number;
+  feature_full_history: number;
+}
+
+export interface Plan {
+  plan_id: string;
+  tier: PlanTier;
+  name: string;
+  price_inr: number;
+  monthly_credits: number;
+  recurring: boolean;
+  features: PlanFeatures;
+}
+
+export interface Entitlements {
+  analysis_credits_remaining: number;
+  plan_tier: PlanTier;
+  subscription_status: string;
+  current_period_end: string | null;
+  feature_compare: boolean;
+  feature_ball_speed: boolean;
+  feature_monitoring: boolean;
+  feature_hindi: boolean;
+  feature_priority: boolean;
+  feature_full_history: boolean;
+}
 
 // ---------------------------------------------------------------------------
 // Athlete Monitoring (NCA-style): wellness, workload, fitness tests, injuries.

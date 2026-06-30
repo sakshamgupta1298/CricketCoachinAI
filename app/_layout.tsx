@@ -10,6 +10,7 @@ import Toast from 'react-native-toast-message';
 
 // Import context
 import { AuthProvider } from '../src/context/AuthContext';
+import { EntitlementsProvider } from '../src/context/EntitlementsContext';
 import { UploadProvider } from '../src/context/UploadContext';
 
 // Import theme
@@ -32,6 +33,7 @@ function ThemedApp() {
   return (
     <PaperProvider theme={theme}>
       <AuthProvider>
+        <EntitlementsProvider>
         <UploadProvider>
           <Stack
             screenOptions={{
@@ -62,6 +64,16 @@ function ThemedApp() {
             }} 
           />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="plans"
+            options={{
+              headerShown: true,
+              title: 'Plans & Subscription',
+              headerBackTitle: 'Back',
+              headerStyle: { backgroundColor: theme.colors.surface },
+              headerTintColor: theme.colors.onSurface,
+            }}
+          />
           <Stack.Screen 
             name="results" 
             options={{
@@ -212,6 +224,7 @@ function ThemedApp() {
         <Toast />
         <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
         </UploadProvider>
+        </EntitlementsProvider>
       </AuthProvider>
     </PaperProvider>
   );

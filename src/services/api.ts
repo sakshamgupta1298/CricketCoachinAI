@@ -3,7 +3,7 @@ import axios, { AxiosInstance } from 'axios';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 import { currentConfig } from '../../config';
-import { AnalysisResult, ApiResponse, FitnessTest, InjuryRecord, JobStatusResponse, ShotCategory, ShotReport, StreakInfo, UploadFormData, UploadJobResponse, WeeklyReport, WellnessEntry, WorkloadEntry, WorkloadSummary } from '../types';
+import { AnalysisResult, ApiResponse, Entitlements, FitnessTest, InjuryRecord, JobStatusResponse, Plan, ShotCategory, ShotReport, StreakInfo, UploadFormData, UploadJobResponse, WeeklyReport, WellnessEntry, WorkloadEntry, WorkloadSummary } from '../types';
 
 class ApiService {
   private api: AxiosInstance;
@@ -505,12 +505,14 @@ class ApiService {
         // Check if response is ok
         if (!fetchResponse.ok) {
           let errorMessage = `Upload failed with status ${fetchResponse.status}`;
+          let upgradeRequired = false;
           try {
             const errorText = await fetchResponse.text();
             console.error('❌ [UPLOAD] Error response text:', errorText);
             try {
               const errorData = JSON.parse(errorText);
               errorMessage = errorData.error || errorData.message || errorMessage;
+              upgradeRequired = !!errorData.upgrade_required;
               console.error('❌ [UPLOAD] Error response JSON:', errorData);
             } catch (parseError) {
               // If not JSON, use the text as error message
@@ -518,6 +520,11 @@ class ApiService {
             }
           } catch (textError) {
             console.error('❌ [UPLOAD] Failed to read error response:', textError);
+          }
+          // Out of credits / plan-gated: surface a structured result so the UI
+          // can route the user to the paywall instead of showing a raw error.
+          if (fetchResponse.status === 402 || upgradeRequired) {
+            return { success: false, error: errorMessage, upgradeRequired: true };
           }
           throw new Error(errorMessage);
         }
@@ -849,18 +856,63 @@ class ApiService {
     }
   }
 
-  // Fetch the user's entitlements (used to gate paid features like on-device
-  // ball speed, which never hits the upload endpoint).
-  async getEntitlements(): Promise<ApiResponse<{
-    analysis_credits_remaining: number;
-    feature_compare: boolean;
-    feature_ball_speed: boolean;
-  }>> {
+  // Fetch the user's entitlements: credits, feature flags and subscription tier.
+  async getEntitlements(): Promise<ApiResponse<Entitlements>> {
     try {
       const response = await this.jsonApi.get('/api/me/entitlements');
       return { success: true, data: response.data.entitlements };
     } catch (error: any) {
       console.error('Get Entitlements Error:', error);
+      return { success: false, error: error.response?.data?.error || error.message };
+    }
+  }
+
+  // Public catalog of subscription plans for the paywall / plan picker.
+  async getPlans(): Promise<ApiResponse<Plan[]>> {
+    try {
+      const response = await this.jsonApi.get('/api/plans');
+      return { success: true, data: response.data.plans };
+    } catch (error: any) {
+      console.error('Get Plans Error:', error);
+      return { success: false, error: error.response?.data?.error || error.message };
+    }
+  }
+
+  // Create an auto-renewing Razorpay subscription for a paid plan.
+  async createSubscription(planId: string): Promise<ApiResponse<{
+    subscription_id: string;
+    key_id: string;
+    plan_id: string;
+    amount: number;
+    currency: string;
+    name: string;
+  }>> {
+    try {
+      const response = await this.jsonApi.post('/api/payments/razorpay/create-subscription', { plan_id: planId });
+      if (response.status >= 400) {
+        return { success: false, error: response.data?.error || 'Failed to create subscription' };
+      }
+      return { success: true, data: response.data };
+    } catch (error: any) {
+      console.error('Create Subscription Error:', error);
+      return { success: false, error: error.response?.data?.error || error.message };
+    }
+  }
+
+  // Verify the subscription authorization payment and activate the plan.
+  async verifySubscription(payload: {
+    razorpay_payment_id: string;
+    razorpay_subscription_id: string;
+    razorpay_signature: string;
+  }): Promise<ApiResponse<Entitlements>> {
+    try {
+      const response = await this.jsonApi.post('/api/payments/razorpay/verify-subscription', payload);
+      if (response.status >= 400 || !response.data?.success) {
+        return { success: false, error: response.data?.error || 'Payment verification failed' };
+      }
+      return { success: true, data: response.data.entitlements };
+    } catch (error: any) {
+      console.error('Verify Subscription Error:', error);
       return { success: false, error: error.response?.data?.error || error.message };
     }
   }

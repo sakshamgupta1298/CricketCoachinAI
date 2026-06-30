@@ -8,6 +8,7 @@ import Toast from 'react-native-toast-message';
 import AnalysisScreen from '../../src/components/AnalysisScreen';
 import { PremiumButton } from '../../src/components/ui/PremiumButton';
 import { PremiumCard } from '../../src/components/ui/PremiumCard';
+import { useEntitlements } from '../../src/context/EntitlementsContext';
 import { useUpload } from '../../src/context/UploadContext';
 import { hasAiConsent, setAiConsentStatus } from '../../src/services/aiConsent';
 import apiService from '../../src/services/api';
@@ -18,6 +19,7 @@ import { getResponsiveFontSize, getResponsiveSize } from '../../src/utils/respon
 export default function UploadScreen() {
   const theme = useTheme();
   const { isUploading, progress, startUpload, updateProgress, completeUpload } = useUpload();
+  const { creditsRemaining, refresh: refreshEntitlements } = useEntitlements();
 
   const [playerType, setPlayerType] = useState<PlayerType>('batsman');
   const [playerSide, setPlayerSide] = useState<PlayerSide>('right');
@@ -139,6 +141,28 @@ export default function UploadScreen() {
   const performUpload = async () => {
     if (!selectedVideo) return;
 
+    // Gate on remaining analysis credits before doing any upload work. The
+    // backend enforces this too (HTTP 402), but checking here lets us route the
+    // user straight to the paywall instead of failing mid-upload.
+    try {
+      const entRes = await apiService.getEntitlements();
+      const credits = entRes.data?.analysis_credits_remaining ?? creditsRemaining;
+      if (credits <= 0) {
+        Alert.alert(
+          'No analyses left',
+          "You've used all your video analyses. Upgrade your plan to analyze more videos.",
+          [
+            { text: 'Not now', style: 'cancel' },
+            { text: 'See plans', onPress: () => router.push('/plans') },
+          ]
+        );
+        return;
+      }
+    } catch (e) {
+      // If the check fails (e.g. offline), fall through and let the backend decide.
+      console.log('⚠️ [UPLOAD] entitlement pre-check skipped:', (e as any)?.message ?? e);
+    }
+
     try {
       const formData: UploadFormData = {
         player_type: playerType,
@@ -178,6 +202,8 @@ export default function UploadScreen() {
       const result = await startUpload(formData);
 
       if (result) {
+        // A credit was consumed server-side; refresh the cached count.
+        void refreshEntitlements();
         Toast.show({
           type: 'success',
           text1: 'Analysis Complete!',

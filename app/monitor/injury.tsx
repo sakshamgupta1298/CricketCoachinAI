@@ -1,7 +1,9 @@
+import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Text, TextInput, useTheme } from 'react-native-paper';
 import Toast from 'react-native-toast-message';
+import { useEntitlements } from '../../src/context/EntitlementsContext';
 import { PremiumButton } from '../../src/components/ui/PremiumButton';
 import { PremiumCard } from '../../src/components/ui/PremiumCard';
 import { borderRadius, colors, spacing } from '../../src/theme';
@@ -23,7 +25,21 @@ const statusColor = (s: InjuryStatus) =>
 
 export default function InjuryScreen() {
   const theme = useTheme();
+  const { hasFeature } = useEntitlements();
   const [injuries, setInjuries] = useState<InjuryRecord[]>([]);
+
+  const requireMonitoring = () => {
+    if (hasFeature('feature_monitoring')) return true;
+    Alert.alert(
+      'Upgrade required',
+      'Injury & rehab tracking is part of Athlete Monitoring on the Serious Professional plan.',
+      [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'See plans', onPress: () => router.push('/plans') },
+      ]
+    );
+    return false;
+  };
   const [bodyPart, setBodyPart] = useState('');
   const [injuryType, setInjuryType] = useState('');
   const [severity, setSeverity] = useState<InjurySeverity>('minor');
@@ -41,6 +57,7 @@ export default function InjuryScreen() {
   }, []);
 
   const handleAdd = async () => {
+    if (!requireMonitoring()) return;
     if (!bodyPart.trim()) {
       Toast.show({ type: 'error', text1: 'Enter the affected body part' });
       return;
@@ -71,6 +88,7 @@ export default function InjuryScreen() {
   };
 
   const changeStatus = async (record: InjuryRecord, status: InjuryStatus) => {
+    if (!requireMonitoring()) return;
     // Optimistic update for snappy UI; revert on failure.
     const prev = injuries;
     setInjuries((list) => list.map((i) => (i.id === record.id ? { ...i, status } : i)));

@@ -3,6 +3,8 @@ import React, { useEffect, useState } from 'react';
 import { Alert, FlatList, RefreshControl, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { ActivityIndicator, Card, Chip, Surface, Text, useTheme } from 'react-native-paper';
 import Toast from 'react-native-toast-message';
+import { LockedFeatureScreen } from '../src/components/ui/UpgradeGate';
+import { useEntitlements } from '../src/context/EntitlementsContext';
 import apiService from '../src/services/api';
 import { borderRadius, colors, shadows, spacing } from '../src/theme';
 import { HistoryItem } from '../src/types';
@@ -10,6 +12,7 @@ import { getResponsiveFontSize, getResponsiveSize } from '../src/utils/responsiv
 
 export default function CompareScreen() {
   const theme = useTheme();
+  const { hasFeature, loading: entLoading } = useEntitlements();
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedVideo1, setSelectedVideo1] = useState<HistoryItem | null>(null);
@@ -251,6 +254,16 @@ export default function CompareScreen() {
           </Text>
         </View>
       </View>
+    );
+  }
+
+  // Video comparison is a Serious Professional (₹450) feature.
+  if (!entLoading && !hasFeature('feature_compare')) {
+    return (
+      <LockedFeatureScreen
+        title="Video Comparison"
+        description="Compare two analyses side by side to track progress with the Serious Professional plan."
+      />
     );
   }
 

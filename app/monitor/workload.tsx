@@ -1,8 +1,9 @@
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Text, TextInput, useTheme } from 'react-native-paper';
 import Toast from 'react-native-toast-message';
+import { useEntitlements } from '../../src/context/EntitlementsContext';
 import { PremiumButton } from '../../src/components/ui/PremiumButton';
 import { PremiumCard } from '../../src/components/ui/PremiumCard';
 import { ScoreSelector } from '../../src/components/ui/ScoreSelector';
@@ -25,6 +26,7 @@ const SESSION_TYPES: { value: SessionType; label: string }[] = [
 
 export default function WorkloadScreen() {
   const theme = useTheme();
+  const { hasFeature } = useEntitlements();
   const [type, setType] = useState<SessionType>('batting');
   const [duration, setDuration] = useState('60');
   const [rpe, setRpe] = useState(5);
@@ -52,6 +54,17 @@ export default function WorkloadScreen() {
     flagInfo.tone === 'success' ? colors.success : flagInfo.tone === 'error' ? colors.error : colors.warning;
 
   const handleSave = async () => {
+    if (!hasFeature('feature_monitoring')) {
+      Alert.alert(
+        'Upgrade required',
+        'Logging training workload is part of Athlete Monitoring on the Serious Professional plan.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'See plans', onPress: () => router.push('/plans') },
+        ]
+      );
+      return;
+    }
     if (!duration || Number(duration) <= 0) {
       Toast.show({ type: 'error', text1: 'Enter a duration' });
       return;

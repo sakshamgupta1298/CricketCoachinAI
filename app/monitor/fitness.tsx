@@ -1,8 +1,9 @@
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Text, TextInput, useTheme } from 'react-native-paper';
 import Toast from 'react-native-toast-message';
+import { useEntitlements } from '../../src/context/EntitlementsContext';
 import { PremiumButton } from '../../src/components/ui/PremiumButton';
 import { PremiumCard } from '../../src/components/ui/PremiumCard';
 import { TrendChart, TrendPoint } from '../../src/components/ui/TrendChart';
@@ -27,6 +28,7 @@ const METRICS: { key: string; label: string; unit: string }[] = [
 
 export default function FitnessScreen() {
   const theme = useTheme();
+  const { hasFeature } = useEntitlements();
   const [metric, setMetric] = useState(METRICS[0].key);
   const [unit, setUnit] = useState(METRICS[0].unit);
   const [value, setValue] = useState('');
@@ -49,6 +51,17 @@ export default function FitnessScreen() {
   };
 
   const handleSave = async () => {
+    if (!hasFeature('feature_monitoring')) {
+      Alert.alert(
+        'Upgrade required',
+        'Logging fitness tests is part of Athlete Monitoring on the Serious Professional plan.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'See plans', onPress: () => router.push('/plans') },
+        ]
+      );
+      return;
+    }
     if (!value || Number.isNaN(Number(value))) {
       Toast.show({ type: 'error', text1: 'Enter a value' });
       return;

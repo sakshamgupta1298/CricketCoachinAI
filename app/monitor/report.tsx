@@ -1,9 +1,11 @@
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Text, useTheme } from 'react-native-paper';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import Toast from 'react-native-toast-message';
+import { useEntitlements } from '../../src/context/EntitlementsContext';
 import { PremiumButton } from '../../src/components/ui/PremiumButton';
 import { PremiumCard } from '../../src/components/ui/PremiumCard';
 import { colors, spacing } from '../../src/theme';
@@ -117,6 +119,7 @@ const currentWeekStartISO = () => {
 
 export default function WeeklyReportScreen() {
   const theme = useTheme();
+  const { hasFeature } = useEntitlements();
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [report, setReport] = useState<WeeklyReport | null>(null);
@@ -133,6 +136,17 @@ export default function WeeklyReportScreen() {
   }, []);
 
   const handleGenerate = async () => {
+    if (!hasFeature('feature_monitoring')) {
+      Alert.alert(
+        'Upgrade required',
+        'The weekly AI monitoring report is part of Athlete Monitoring on the Serious Professional plan.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'See plans', onPress: () => router.push('/plans') },
+        ]
+      );
+      return;
+    }
     setGenerating(true);
     const res = await apiService.generateWeeklyReport();
     setGenerating(false);
