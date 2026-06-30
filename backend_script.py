@@ -388,6 +388,50 @@ def init_database():
     except Exception as e:
         logger.warning(f"Free-trial credit cap skipped: {e}")
 
+    # One-time backfill: enforce the 5-analysis LIFETIME free-tier limit on
+    # existing accounts. Until now every account was seeded with a flat 5
+    # credits, so legacy users who had already analysed many videos still got a
+    # fresh 5. Reconcile each free (never-subscribed) user to
+    #     analysis_credits_remaining = max(0, 5 - videos_already_analysed)
+    # using analysis_log as the lifetime usage record. Guarded by app_migrations
+    # so it runs exactly once and never claws back credits on later restarts.
+    try:
+        cursor.execute(
+            '''CREATE TABLE IF NOT EXISTS app_migrations (
+                   key TEXT PRIMARY KEY,
+                   applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+               )'''
+        )
+        cursor.execute("SELECT 1 FROM app_migrations WHERE key = 'free_tier_lifetime_5_v1'")
+        if not cursor.fetchone():
+            # Ensure every user has an entitlements row, pre-seeded with their
+            # remaining lifetime credits (so old users who never had a row don't
+            # get a flat 5 on their next entitlements read).
+            cursor.execute(
+                '''INSERT OR IGNORE INTO user_entitlements (user_id, analysis_credits_remaining)
+                       SELECT u.id,
+                              MAX(0, 5 - (SELECT COUNT(*) FROM analysis_log al WHERE al.user_id = u.id))
+                         FROM users u'''
+            )
+            # Reconcile existing free, never-subscribed users to the lifetime cap.
+            cursor.execute(
+                '''UPDATE user_entitlements
+                       SET analysis_credits_remaining =
+                               MAX(0, 5 - (SELECT COUNT(*) FROM analysis_log al
+                                            WHERE al.user_id = user_entitlements.user_id)),
+                           updated_at = CURRENT_TIMESTAMP
+                     WHERE plan_tier = 'free'
+                       AND subscription_status = 'none' '''
+            )
+            reconciled = cursor.rowcount
+            cursor.execute("INSERT INTO app_migrations (key) VALUES ('free_tier_lifetime_5_v1')")
+            logger.info(
+                f"Free-tier lifetime backfill applied: reconciled {reconciled} free account(s) "
+                f"to max(0, 5 - lifetime analyses)"
+            )
+    except Exception as e:
+        logger.warning(f"Free-tier lifetime backfill skipped: {e}")
+
     conn.commit()
     conn.close()
     logger.info("Database initialized successfully")
