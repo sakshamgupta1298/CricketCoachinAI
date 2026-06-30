@@ -77,6 +77,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="monitor"
         options={{
+          // Hidden from the footer tab bar; route stays reachable via navigation.
+          href: null,
           title: 'Monitor',
           tabBarIcon: ({ color, focused }) => <TabBarIcon name="monitor" color={color} focused={focused} />,
         }}

@@ -244,6 +244,56 @@ export interface WeeklyReport {
   generated_at?: string;
 }
 
+// Weekly shot-progress report: compares the same shot across the week
+// (common flaws + improvement % per video). report_md is rendered markdown;
+// stats holds the pre-computed numbers (also reflected in the markdown).
+// Shot-progress reports are scoped to one discipline.
+export type ShotCategory = 'batting' | 'bowling' | 'keeping';
+
+export interface ShotReportStats {
+  week_start: string;
+  week_end: string;
+  category?: ShotCategory;
+  total_videos: number;
+  shots_practiced: number;
+  shot_groups: {
+    shot: string;
+    video_count: number;
+    avg_score: number;
+    net_improvement_pct: number | null;
+    common_flaws: { feature: string; count: number; of: number }[];
+    videos: {
+      filename: string;
+      date: string;
+      score: number;
+      improvement_vs_first_pct: number | null;
+      improvement_vs_prev_pct: number | null;
+      flaws: { feature: string; observed?: any; ideal_range?: string; issue?: string }[];
+    }[];
+  }[];
+}
+
+export interface ShotReport {
+  id: string;
+  week_start: string;
+  week_end: string;
+  category?: ShotCategory;
+  report_md: string;
+  stats?: ShotReportStats | null;
+  model?: string;
+  total_tokens?: number;
+  generated_at?: string;
+}
+
+// Daily video-analysis streak (consecutive days with >=1 analysis).
+export interface StreakInfo {
+  current_streak: number;
+  longest_streak: number;
+  active_today: boolean;
+  total_active_days: number;
+  last_active: string | null;
+}
+
 export interface VideoInfo {
   uri: string;
   name: string;

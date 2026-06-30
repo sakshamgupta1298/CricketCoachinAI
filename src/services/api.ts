@@ -3,7 +3,7 @@ import axios, { AxiosInstance } from 'axios';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 import { currentConfig } from '../../config';
-import { AnalysisResult, ApiResponse, FitnessTest, InjuryRecord, JobStatusResponse, UploadFormData, UploadJobResponse, WeeklyReport, WellnessEntry, WorkloadEntry, WorkloadSummary } from '../types';
+import { AnalysisResult, ApiResponse, FitnessTest, InjuryRecord, JobStatusResponse, ShotCategory, ShotReport, StreakInfo, UploadFormData, UploadJobResponse, WeeklyReport, WellnessEntry, WorkloadEntry, WorkloadSummary } from '../types';
 
 class ApiService {
   private api: AxiosInstance;
@@ -1145,6 +1145,66 @@ class ApiService {
       return { success: true, data: response.data?.report ?? null };
     } catch (error: any) {
       console.error('Generate Weekly Report Error:', error);
+      return { success: false, error: error.response?.data?.error || error.message };
+    }
+  }
+
+  // --- Daily analysis streak ---
+  async getStreak(): Promise<ApiResponse<StreakInfo>> {
+    try {
+      const response = await this.jsonApi.get('/api/streak');
+      if (response.status !== 200) {
+        return { success: false, error: response.data?.error || `Failed to load streak (${response.status})` };
+      }
+      return { success: true, data: response.data as StreakInfo };
+    } catch (error: any) {
+      console.error('Get Streak Error:', error);
+      return { success: false, error: error.response?.data?.error || error.message };
+    }
+  }
+
+  // --- Weekly shot-progress report (scoped to batting/bowling/keeping) ---
+  // Returns the latest stored report for the category, or null if none yet.
+  async getShotReport(category: ShotCategory = 'batting'): Promise<ApiResponse<ShotReport | null>> {
+    try {
+      const response = await this.jsonApi.get('/api/monitor/shot-report', { params: { category } });
+      if (response.status !== 200) {
+        return { success: false, error: response.data?.error || `Failed to load shot report (${response.status})` };
+      }
+      return { success: true, data: response.data?.report ?? null };
+    } catch (error: any) {
+      console.error('Get Shot Report Error:', error);
+      return { success: false, error: error.response?.data?.error || error.message };
+    }
+  }
+
+  async getShotReports(category?: ShotCategory, limit: number = 8): Promise<ApiResponse<ShotReport[]>> {
+    try {
+      const params: any = { limit };
+      if (category) params.category = category;
+      const response = await this.jsonApi.get('/api/monitor/shot-report/list', { params });
+      if (response.status !== 200) {
+        return { success: false, error: response.data?.error || `Failed to load shot reports (${response.status})` };
+      }
+      const reports = response.data?.reports ?? response.data;
+      return { success: true, data: Array.isArray(reports) ? reports : [] };
+    } catch (error: any) {
+      console.error('Get Shot Reports Error:', error);
+      return { success: false, error: error.response?.data?.error || error.message };
+    }
+  }
+
+  // On-demand generation for one discipline (current calendar week).
+  // data is null when no videos of that category were analyzed this week.
+  async generateShotReport(category: ShotCategory = 'batting'): Promise<ApiResponse<ShotReport | null>> {
+    try {
+      const response = await this.jsonApi.post('/api/monitor/shot-report/generate', { category });
+      if (response.status >= 400) {
+        return { success: false, error: response.data?.error || `Failed to generate shot report (${response.status})` };
+      }
+      return { success: true, data: response.data?.report ?? null };
+    } catch (error: any) {
+      console.error('Generate Shot Report Error:', error);
       return { success: false, error: error.response?.data?.error || error.message };
     }
   }

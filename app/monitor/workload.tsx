@@ -1,5 +1,5 @@
-import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Text, TextInput, useTheme } from 'react-native-paper';
 import Toast from 'react-native-toast-message';
@@ -33,14 +33,17 @@ export default function WorkloadScreen() {
   const [saving, setSaving] = useState(false);
   const [sessions, setSessions] = useState<WorkloadEntry[]>([]);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const list = await apiService.getWorkload(30);
     setSessions(list.success && list.data ? list.data : []);
-  };
-
-  useEffect(() => {
-    load();
   }, []);
+
+  // Reload whenever the screen regains focus so newly logged sessions show up.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
   const previewLoad = (Number(duration) || 0) * rpe;
   const summary = computeWorkloadSummary(sessions);

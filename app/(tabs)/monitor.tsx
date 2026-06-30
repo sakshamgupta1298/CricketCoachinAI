@@ -1,14 +1,14 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Modal, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Text, useTheme } from 'react-native-paper';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { PremiumCard } from '../../src/components/ui/PremiumCard';
 import { TrendChart, TrendPoint } from '../../src/components/ui/TrendChart';
 import apiService from '../../src/services/api';
 import { colors, spacing } from '../../src/theme';
-import { FitnessTest, InjuryRecord, WellnessEntry, WorkloadEntry, WorkloadSummary } from '../../src/types';
+import { FitnessTest, InjuryRecord, StreakInfo, WellnessEntry, WorkloadEntry, WorkloadSummary } from '../../src/types';
 import { getResponsiveFontSize, getResponsiveSize } from '../../src/utils/responsive';
 import { computeWorkloadSummary, wellnessScore, workloadFlagInfo } from '../../src/utils/workload';
 
@@ -42,21 +42,37 @@ export default function MonitorScreen() {
   const [fitness, setFitness] = useState<FitnessTest[]>([]);
   const [injuries, setInjuries] = useState<InjuryRecord[]>([]);
   const [summary, setSummary] = useState<WorkloadSummary | null>(null);
+  const [streak, setStreak] = useState<StreakInfo | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [infoVisible, setInfoVisible] = useState(false);
+
+  // Plain-language explanation of what each part of the Athlete Monitor does.
+  const infoItems = [
+    { icon: '😴', title: 'Wellness', body: 'A quick daily check-in on sleep, soreness, mood, stress and energy. It gives you a simple 0–100 readiness score so you can see how recovered you feel.' },
+    { icon: '🏋️', title: 'Workload', body: 'Log each training or match session (type, how long, and how hard it felt). The app adds up your training load so you can see if you are doing too much or too little.' },
+    { icon: '📈', title: 'ACWR (workload ratio)', body: 'Compares this week\'s load to your recent average. Around 0.8–1.3 is the safe zone; much higher means injury risk is rising. You need a few weeks of sessions before it becomes accurate.' },
+    { icon: '⚡', title: 'Fitness', body: 'Save fitness test results (like Yo-Yo, sprints, jumps or weight) and watch them improve over time.' },
+    { icon: '🩹', title: 'Injury', body: 'Track any injuries, their status and rehab notes so nothing gets forgotten.' },
+    { icon: '📋', title: 'Weekly Report', body: 'An AI coach reads your week of data and writes a simple summary with what went well and what to focus on next.' },
+    { icon: '🏏', title: 'Shot Progress', body: 'A weekly AI report that compares every shot you analyzed this week — it finds flaws that keep recurring and shows your improvement percentage from one video to the next for the same shot.' },
+    { icon: '🔥', title: 'Streak', body: 'Analyze at least one video every day to build a streak. Miss a day and it resets — a simple nudge to keep practising.' },
+  ];
 
   const loadAll = useCallback(async () => {
-    const [w, l, f, inj, s] = await Promise.all([
+    const [w, l, f, inj, s, st] = await Promise.all([
       apiService.getWellness(30),
       apiService.getWorkload(30),
       apiService.getFitnessTests(),
       apiService.getInjuries(),
       apiService.getWorkloadSummary(),
+      apiService.getStreak(),
     ]);
     const workloadEntries = l.success && l.data ? l.data : [];
     setWellness(w.success && w.data ? w.data : []);
     setWorkload(workloadEntries);
     setFitness(f.success && f.data ? f.data : []);
     setInjuries(inj.success && inj.data ? inj.data : []);
+    setStreak(st.success && st.data ? st.data : null);
     // Prefer the server summary; fall back to local computation if unavailable.
     setSummary(s.success && s.data ? s.data : computeWorkloadSummary(workloadEntries));
   }, []);
@@ -101,6 +117,7 @@ export default function MonitorScreen() {
     { title: 'Fitness', subtitle: 'Test results', icon: '⚡', color: colors.cricket.orange, route: '/monitor/fitness' },
     { title: 'Injury', subtitle: 'Status & rehab', icon: '🩹', color: colors.cricket.red, route: '/monitor/injury' },
     { title: 'Weekly Report', subtitle: 'AI summary', icon: '📋', color: colors.cricket.blue, route: '/monitor/report' },
+    { title: 'Shot Progress', subtitle: 'Weekly shot report', icon: '🏏', color: colors.cricket.orange, route: '/monitor/shot-report' },
   ];
 
   return (
@@ -120,8 +137,55 @@ export default function MonitorScreen() {
           <Text style={[styles.subtitle, { fontSize: getResponsiveFontSize(14) }]}>
             Track wellness, workload, fitness & injuries over time
           </Text>
+          {streak ? (
+            <View style={styles.streakChip}>
+              <Text style={styles.streakChipText}>
+                🔥 {streak.current_streak} day{streak.current_streak === 1 ? '' : 's'} streak
+                {streak.active_today ? '' : ' — analyze today!'}
+              </Text>
+            </View>
+          ) : null}
         </Animated.View>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => setInfoVisible(true)}
+          style={styles.infoButton}
+          accessibilityLabel="What is the Athlete Monitor?"
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Text style={styles.infoButtonText}>i</Text>
+        </TouchableOpacity>
       </LinearGradient>
+
+      {/* Plain-language explainer */}
+      <Modal visible={infoVisible} transparent animationType="fade" onRequestClose={() => setInfoVisible(false)}>
+        <TouchableOpacity activeOpacity={1} style={styles.modalOverlay} onPress={() => setInfoVisible(false)}>
+          <TouchableOpacity activeOpacity={1} style={[styles.modalCard, { backgroundColor: theme.colors.surface }]}>
+            <Text style={[styles.modalTitle, { color: theme.colors.onSurface }]}>What is this screen?</Text>
+            <Text style={[styles.modalIntro, { color: theme.colors.onSurfaceVariant }]}>
+              The Athlete Monitor helps you keep an eye on how your body is coping with training, in plain numbers.
+            </Text>
+            <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+              {infoItems.map((item) => (
+                <View key={item.title} style={styles.infoRow}>
+                  <Text style={styles.infoIcon}>{item.icon}</Text>
+                  <View style={styles.infoTextWrap}>
+                    <Text style={[styles.infoTitle, { color: theme.colors.onSurface }]}>{item.title}</Text>
+                    <Text style={[styles.infoBody, { color: theme.colors.onSurfaceVariant }]}>{item.body}</Text>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => setInfoVisible(false)}
+              style={[styles.modalClose, { backgroundColor: theme.colors.primary }]}
+            >
+              <Text style={styles.modalCloseText}>Got it</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Today's status */}
       <View style={styles.section}>
@@ -266,6 +330,15 @@ const styles = StyleSheet.create({
   headerContent: { paddingBottom: getResponsiveSize(spacing.md) },
   greeting: { fontWeight: '700', marginBottom: getResponsiveSize(spacing.xs), color: 'white', letterSpacing: -0.5 },
   subtitle: { color: 'rgba(255,255,255,0.9)', fontWeight: '500' },
+  streakChip: {
+    alignSelf: 'flex-start',
+    marginTop: getResponsiveSize(spacing.sm),
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 14,
+    paddingHorizontal: getResponsiveSize(spacing.md),
+    paddingVertical: getResponsiveSize(spacing.xs),
+  },
+  streakChipText: { color: 'white', fontWeight: '700', fontSize: 13 },
   section: { paddingHorizontal: getResponsiveSize(spacing.lg), paddingTop: getResponsiveSize(spacing.lg) },
   sectionTight: { paddingHorizontal: getResponsiveSize(spacing.lg), paddingTop: getResponsiveSize(spacing.md) },
   sectionTitle: { fontWeight: '700', marginBottom: getResponsiveSize(spacing.md), letterSpacing: -0.3 },
@@ -304,4 +377,30 @@ const styles = StyleSheet.create({
   },
   fitnessMetric: { fontWeight: '600', fontSize: 14, textTransform: 'capitalize' },
   fitnessValue: { fontSize: 14, fontWeight: '500' },
+  infoButton: {
+    position: 'absolute',
+    top: getResponsiveSize(spacing.xxl + 20),
+    right: getResponsiveSize(spacing.lg),
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
+  infoButtonText: { color: 'white', fontSize: 16, fontWeight: '700', fontStyle: 'italic' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: spacing.lg },
+  modalCard: { borderRadius: 20, padding: spacing.lg, maxHeight: '80%' },
+  modalTitle: { fontWeight: '700', fontSize: 20, marginBottom: spacing.xs },
+  modalIntro: { fontSize: 14, lineHeight: 20, marginBottom: spacing.md },
+  modalScroll: { flexGrow: 0 },
+  infoRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.md },
+  infoIcon: { fontSize: 22, width: 28, textAlign: 'center' },
+  infoTextWrap: { flex: 1 },
+  infoTitle: { fontWeight: '700', fontSize: 15, marginBottom: 2 },
+  infoBody: { fontSize: 13, lineHeight: 19 },
+  modalClose: { marginTop: spacing.sm, borderRadius: 12, paddingVertical: spacing.md, alignItems: 'center' },
+  modalCloseText: { color: 'white', fontWeight: '700', fontSize: 15 },
 });

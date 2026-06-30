@@ -288,6 +288,35 @@ def init_database():
     ''')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_weekly_reports_user ON weekly_reports(user_id, week_start)')
 
+    # AI-generated weekly SHOT-PROGRESS report: compares the same shot played across
+    # the week (common flaws + improvement % per video). Separate from the monitoring
+    # weekly_reports above. Scoped to a category (batting/bowling/keeping): one row
+    # per user per ISO week per category (UNIQUE upsert), so a user can have a
+    # separate report for each discipline in the same week.
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS shot_reports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            week_start TEXT NOT NULL,
+            week_end TEXT NOT NULL,
+            category TEXT NOT NULL DEFAULT 'batting',
+            report_md TEXT NOT NULL,
+            stats_json TEXT,
+            model TEXT,
+            total_tokens INTEGER,
+            generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, week_start, category),
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    ''')
+    # Add category column for any DB created before per-category reports existed.
+    try:
+        cursor.execute("ALTER TABLE shot_reports ADD COLUMN category TEXT NOT NULL DEFAULT 'batting'")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_shot_reports_user ON shot_reports(user_id, week_start)')
+    cursor.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_shot_reports_unique ON shot_reports(user_id, week_start, category)')
+
     # Backfill entitlements rows for existing users (idempotent)
     try:
         cursor.execute('SELECT id FROM users')
@@ -5269,7 +5298,12 @@ def generate_weekly_report_for_user(user_id, week_start=None, week_end=None):
     """Generate (and upsert) the weekly monitoring report for one user. Defaults to the
     trailing 7 days ending today. Returns the report dict, or None if there's no activity."""
     end = (datetime.strptime(week_end, '%Y-%m-%d').date() if week_end else datetime.now().date())
-    start = (datetime.strptime(week_start, '%Y-%m-%d').date() if week_start else (end - timedelta(days=6)))
+    if week_start:
+        start = datetime.strptime(week_start, '%Y-%m-%d').date()
+    else:
+        # Default to the Monday of the current calendar week so there is exactly
+        # one report per (user, week): re-running mid-week upserts the same row.
+        start = end - timedelta(days=end.weekday())
     ws, we = start.strftime('%Y-%m-%d'), end.strftime('%Y-%m-%d')
 
     data = _gather_weekly_monitoring_data(user_id, ws, we)
@@ -5320,6 +5354,383 @@ def generate_weekly_report_for_user(user_id, week_start=None, week_end=None):
     conn.close()
     logger.info(f"Weekly report generated for user {user_id} ({ws}..{we}), {total_tokens} tokens")
     return _weekly_report_to_dict(row)
+
+
+# ==================== ANALYSIS STREAK ====================
+# A "streak" counts consecutive calendar days on which the user analyzed at least
+# one video. Derived from analysis_log.analyzed_at (no extra table needed).
+
+def _user_analysis_days(user_id):
+    """Set of 'YYYY-MM-DD' dates on which the user analyzed >=1 video."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT DISTINCT date(analyzed_at, 'localtime') AS d FROM analysis_log WHERE user_id = ? AND analyzed_at IS NOT NULL",
+        (user_id,),
+    )
+    days = {r['d'] for r in cur.fetchall() if r['d']}
+    conn.close()
+    return days
+
+
+def compute_streak(user_id):
+    """Current/longest consecutive-day analysis streak for a user.
+    Returns a dict the frontend can render directly."""
+    days = _user_analysis_days(user_id)
+    today = datetime.now().date()
+
+    # Current streak: walk back from today (or yesterday, so a not-yet-active
+    # today doesn't break a streak the user can still continue).
+    current = 0
+    if days:
+        anchor = today if today.strftime('%Y-%m-%d') in days else today - timedelta(days=1)
+        d = anchor
+        while d.strftime('%Y-%m-%d') in days:
+            current += 1
+            d -= timedelta(days=1)
+
+    # Longest streak across all history.
+    longest = 0
+    if days:
+        sorted_days = sorted(datetime.strptime(x, '%Y-%m-%d').date() for x in days)
+        run = 1
+        longest = 1
+        for i in range(1, len(sorted_days)):
+            if (sorted_days[i] - sorted_days[i - 1]).days == 1:
+                run += 1
+            else:
+                run = 1
+            longest = max(longest, run)
+
+    return {
+        'current_streak': current,
+        'longest_streak': longest,
+        'active_today': today.strftime('%Y-%m-%d') in days,
+        'total_active_days': len(days),
+        'last_active': max(days) if days else None,
+    }
+
+
+# ==================== WEEKLY SHOT-PROGRESS REPORT ====================
+# Compares the same shot played across the week: common flaws and an
+# improvement % per video. Improvement is grounded in a deterministic
+# per-video technique score computed in Python (Gemini only narrates).
+
+# Shot-report categories and the player_type each one maps to.
+SHOT_REPORT_CATEGORIES = {
+    'batting': 'batsman',
+    'bowling': 'bowler',
+    'keeping': 'keeper',
+}
+
+
+def _normalize_shot_category(value):
+    """Coerce a requested category to one of batting/bowling/keeping (default batting)."""
+    c = (value or 'batting').strip().lower()
+    # Tolerate a few synonyms the client might send.
+    alias = {'batsman': 'batting', 'bat': 'batting', 'bowler': 'bowling',
+             'bowl': 'bowling', 'keeper': 'keeping', 'wicketkeeping': 'keeping'}
+    c = alias.get(c, c)
+    return c if c in SHOT_REPORT_CATEGORIES else 'batting'
+
+
+def _shot_report_to_dict(r):
+    stats = None
+    if r['stats_json']:
+        try:
+            stats = json.loads(r['stats_json'])
+        except Exception:
+            stats = None
+    return {
+        'id': str(r['id']),
+        'week_start': r['week_start'],
+        'week_end': r['week_end'],
+        'category': r['category'] if 'category' in r.keys() else 'batting',
+        'report_md': r['report_md'],
+        'stats': stats,
+        'model': r['model'],
+        'total_tokens': r['total_tokens'],
+        'generated_at': r['generated_at'],
+    }
+
+
+def _parse_ideal_range(ideal_range):
+    """Parse an 'ideal_range' string like '120 - 145', '>30', '< 10', '15-20 deg'
+    into (low, high). Returns (None, None) if not parseable."""
+    if ideal_range is None:
+        return None, None
+    s = str(ideal_range)
+    nums = re.findall(r'-?\d+\.?\d*', s)
+    nums = [float(n) for n in nums]
+    if len(nums) >= 2:
+        return min(nums[0], nums[1]), max(nums[0], nums[1])
+    if len(nums) == 1:
+        if '<' in s or '≤' in s:
+            return None, nums[0]
+        if '>' in s or '≥' in s:
+            return nums[0], None
+        return nums[0], nums[0]
+    return None, None
+
+
+def _flaw_severity(flaw):
+    """Severity of a single flaw in 0..1. Uses how far 'observed' falls outside
+    'ideal_range' when both are numeric; otherwise falls back to a medium value."""
+    observed = flaw.get('observed')
+    low, high = _parse_ideal_range(flaw.get('ideal_range'))
+    try:
+        obs = float(observed)
+    except (TypeError, ValueError):
+        return 0.5  # unknown magnitude -> medium severity
+
+    if low is None and high is None:
+        return 0.5
+    # Distance outside the range, normalized by the range width (or by the bound).
+    if low is not None and high is not None:
+        if low <= obs <= high:
+            return 0.0
+        width = (high - low) or abs(high) or 1.0
+        dist = (low - obs) if obs < low else (obs - high)
+        return max(0.0, min(1.0, dist / width))
+    bound = high if high is not None else low
+    over = obs > bound if high is not None else obs < bound
+    if not over:
+        return 0.0
+    denom = abs(bound) or 1.0
+    return max(0.0, min(1.0, abs(obs - bound) / denom))
+
+
+def _video_technique_score(flaws):
+    """Deterministic 0-100 technique score for one video from its flaws.
+    Starts at 100 and subtracts up to 15 points per flaw scaled by severity."""
+    if not flaws:
+        return 100.0
+    penalty = sum(5 + 10 * _flaw_severity(f) for f in flaws)  # 5-15 per flaw
+    return round(max(0.0, 100.0 - penalty), 1)
+
+
+def _flaw_feature_label(flaw):
+    return (flaw.get('feature') or flaw.get('issue') or 'unspecified').strip()
+
+
+def _gather_weekly_shot_data(user_id, week_start, week_end, category='batting'):
+    """Collect this week's analyzed videos for a user in ONE category
+    (batting/bowling/keeping), grouped by shot/skill, with a computed technique
+    score and improvement % per video. Returns (data_dict, has_videos)."""
+    category = _normalize_shot_category(category)
+    want_player_type = SHOT_REPORT_CATEGORIES[category]
+    user_folder = get_user_upload_folder(user_id)
+    start_d = datetime.strptime(week_start, '%Y-%m-%d').date()
+    end_d = datetime.strptime(week_end, '%Y-%m-%d').date()
+
+    videos = []
+    if os.path.exists(user_folder):
+        for fname in os.listdir(user_folder):
+            if not (fname.startswith('results_') and fname.endswith('.json')):
+                continue
+            fpath = os.path.join(user_folder, fname)
+            try:
+                with open(fpath, 'r', encoding='utf-8') as f:
+                    res = json.load(f)
+            except Exception:
+                continue
+            if res.get('user_id') != user_id:
+                continue
+            # Only videos for the requested discipline.
+            if res.get('player_type') != want_player_type:
+                continue
+            created = datetime.fromtimestamp(os.stat(fpath).st_ctime)
+            if not (start_d <= created.date() <= end_d):
+                continue
+
+            fb = res.get('gpt_feedback')
+            flaws = fb.get('flaws', []) if isinstance(fb, dict) else []
+            # The shot/skill key: batting shot_type, else bowling/keeping type.
+            skill = (res.get('shot_type') or res.get('bowler_type')
+                     or res.get('keeping_type') or 'unspecified')
+            videos.append({
+                'filename': res.get('filename') or fname,
+                'player_type': res.get('player_type', 'unknown'),
+                'shot': skill,
+                'date': created.strftime('%Y-%m-%d'),
+                'created_ts': created.timestamp(),
+                'score': _video_technique_score(flaws),
+                'flaws': [{
+                    'feature': _flaw_feature_label(fl),
+                    'observed': fl.get('observed'),
+                    'ideal_range': fl.get('ideal_range'),
+                    'issue': fl.get('issue'),
+                } for fl in flaws],
+            })
+
+    # Group by shot, ordered chronologically within each group.
+    groups = {}
+    for v in videos:
+        groups.setdefault(v['shot'], []).append(v)
+
+    shot_groups = []
+    for shot, vids in groups.items():
+        vids.sort(key=lambda x: x['created_ts'])
+        first_score = vids[0]['score'] or 0.0
+        for i, v in enumerate(vids):
+            base = first_score if first_score > 0 else None
+            v['improvement_vs_first_pct'] = (
+                round((v['score'] - first_score) / base * 100, 1) if base else None
+            )
+            if i == 0:
+                v['improvement_vs_prev_pct'] = None
+            else:
+                prev = vids[i - 1]['score'] or 0.0
+                v['improvement_vs_prev_pct'] = (
+                    round((v['score'] - prev) / prev * 100, 1) if prev > 0 else None
+                )
+
+        # Common flaws: features seen in >=2 videos of this shot.
+        feat_counts = {}
+        for v in vids:
+            for feat in {fl['feature'] for fl in v['flaws']}:
+                feat_counts[feat] = feat_counts.get(feat, 0) + 1
+        common_flaws = sorted(
+            [{'feature': f, 'count': c, 'of': len(vids)} for f, c in feat_counts.items() if c >= 2],
+            key=lambda x: x['count'], reverse=True,
+        )
+
+        net_improvement = (
+            round((vids[-1]['score'] - vids[0]['score']) / first_score * 100, 1)
+            if len(vids) > 1 and first_score > 0 else None
+        )
+        shot_groups.append({
+            'shot': shot,
+            'video_count': len(vids),
+            'avg_score': round(sum(v['score'] for v in vids) / len(vids), 1),
+            'net_improvement_pct': net_improvement,
+            'common_flaws': common_flaws,
+            'videos': [{k: v[k] for k in (
+                'filename', 'date', 'score', 'improvement_vs_first_pct',
+                'improvement_vs_prev_pct', 'flaws')} for v in vids],
+        })
+
+    shot_groups.sort(key=lambda g: g['video_count'], reverse=True)
+    data = {
+        'week_start': week_start,
+        'week_end': week_end,
+        'category': category,
+        'total_videos': len(videos),
+        'shots_practiced': len(shot_groups),
+        'shot_groups': shot_groups,
+    }
+    return data, bool(videos)
+
+
+def _build_shot_report_prompt(username, data):
+    """Frame Gemini as a technique coach narrating pre-computed shot stats."""
+    category = data.get('category', 'batting')
+    discipline = {'batting': 'batting', 'bowling': 'bowling',
+                  'keeping': 'wicket-keeping'}.get(category, category)
+    unit = {'batting': 'shot', 'bowling': 'bowling type', 'keeping': 'keeping skill'}.get(category, 'shot')
+    data_json = json.dumps(data, indent=2, default=str)
+    return f"""You are an elite cricket {discipline} coach writing a weekly {discipline.upper()}-PROGRESS report
+for a player named {username}. This report covers ONLY their {discipline} this week.
+
+You are given JSON of every {discipline} video the player analyzed this week, grouped by the {unit}
+played. The numbers are ALREADY COMPUTED for you — do not recompute or invent them:
+- score: a 0-100 technique score for that video (higher is better).
+- improvement_vs_first_pct: % change in score vs the player's FIRST attempt of that shot this week.
+- improvement_vs_prev_pct: % change vs the immediately previous attempt of the same shot.
+- net_improvement_pct: overall % change from first to last attempt of that shot this week.
+- common_flaws: technical faults that recurred across multiple videos of the same shot
+  ("count" of "of" videos).
+
+DATA (JSON):
+{data_json}
+
+Write a concise, motivating, practical report in **GitHub-flavored markdown** with these sections
+(use ## headings):
+
+## Summary
+2-3 sentences: how many videos, how many shots practiced, and the standout improvement or concern.
+
+## Shot-by-Shot Progress
+For EACH shot in shot_groups, a ### sub-heading with the shot name, then:
+- State the number of videos and the net improvement % (cite net_improvement_pct).
+- A short per-video progression line citing each video's score and improvement_vs_prev_pct.
+- Call out the **common flaws** for that shot (cite "count of of"), or note "No recurring flaws" if none.
+
+## Common Flaws Across the Week
+Bullet the faults that appeared most often overall and one concrete fix for each.
+
+## Focus for Next Week
+3-5 specific, actionable bullets prioritizing the shots/flaws with least improvement.
+
+STRICT RULES:
+- Ground EVERY claim in the supplied numbers; cite the actual figures. Never invent data.
+- If a shot has only one video, say there's no week-over-week comparison yet for it.
+- Keep it to roughly 300-450 words. Address the player directly ("you").
+"""
+
+
+def generate_shot_report_for_user(user_id, category='batting', week_start=None, week_end=None):
+    """Generate (and upsert) the weekly shot-progress report for one category
+    (batting/bowling/keeping). Defaults to the current calendar week. Returns the
+    report dict, or None if no videos of that category were analyzed."""
+    category = _normalize_shot_category(category)
+    end = (datetime.strptime(week_end, '%Y-%m-%d').date() if week_end else datetime.now().date())
+    if week_start:
+        start = datetime.strptime(week_start, '%Y-%m-%d').date()
+    else:
+        start = end - timedelta(days=end.weekday())  # Monday of this week
+    ws, we = start.strftime('%Y-%m-%d'), end.strftime('%Y-%m-%d')
+
+    data, has_videos = _gather_weekly_shot_data(user_id, ws, we, category)
+    if not has_videos:
+        logger.info(f"Shot report skipped for user {user_id} ({category}): no videos {ws}..{we}")
+        return None
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute('SELECT username FROM users WHERE id = ?', (user_id,))
+    urow = cur.fetchone()
+    conn.close()
+    username = (urow['username'] if urow else None) or 'Player'
+
+    prompt = _build_shot_report_prompt(username, data)
+    resp = gemini.generate_content(
+        model=WEEKLY_REPORT_MODEL,
+        label="weekly-shot-report",
+        contents=[prompt],
+        config={"temperature": 0.4},
+    )
+    report_md = (getattr(resp, 'text', '') or '').strip()
+    if not report_md:
+        logger.error(f"Shot report generation returned empty text for user {user_id}")
+        return None
+    total_tokens = 0
+    try:
+        total_tokens = (getattr(resp, '_token_usage', {}) or {}).get('total_tokens', 0)
+    except Exception:
+        pass
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        '''INSERT INTO shot_reports (user_id, week_start, week_end, category, report_md, stats_json, model, total_tokens)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(user_id, week_start, category) DO UPDATE SET
+             week_end=excluded.week_end,
+             report_md=excluded.report_md,
+             stats_json=excluded.stats_json,
+             model=excluded.model,
+             total_tokens=excluded.total_tokens,
+             generated_at=CURRENT_TIMESTAMP''',
+        (user_id, ws, we, category, report_md, json.dumps(data, default=str), WEEKLY_REPORT_MODEL, total_tokens),
+    )
+    conn.commit()
+    cur.execute('SELECT * FROM shot_reports WHERE user_id = ? AND week_start = ? AND category = ?',
+                (user_id, ws, category))
+    row = cur.fetchone()
+    conn.close()
+    logger.info(f"Shot report generated for user {user_id} ({category}, {ws}..{we}), {total_tokens} tokens")
+    return _shot_report_to_dict(row)
 
 
 # ---- Daily wellness ----
@@ -5637,9 +6048,22 @@ def monitor_list_weekly_reports():
 @app.route('/api/monitor/weekly-report/generate', methods=['POST'])
 @require_auth
 def monitor_generate_weekly_report():
-    """On-demand generation of the weekly report (trailing 7 days) for the current user."""
+    """On-demand generation of the current week's report for the user.
+    One report per calendar week: if it already exists, return it (no regeneration)."""
     try:
         user_id = int(request.user['user_id'])
+        today = datetime.now().date()
+        week_start = (today - timedelta(days=today.weekday())).strftime('%Y-%m-%d')
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            'SELECT * FROM weekly_reports WHERE user_id = ? AND week_start = ?',
+            (user_id, week_start),
+        )
+        existing = cur.fetchone()
+        conn.close()
+        if existing:
+            return jsonify({'report': _weekly_report_to_dict(existing), 'already_generated': True}), 200
         report = generate_weekly_report_for_user(user_id)
         if not report:
             return jsonify({'report': None,
@@ -5648,6 +6072,106 @@ def monitor_generate_weekly_report():
     except Exception as e:
         logger.error(f"Generate weekly report failed: {e}", exc_info=True)
         return jsonify({'error': 'Failed to generate weekly report'}), 500
+
+
+# ---- Analysis streak ----
+@app.route('/api/streak', methods=['GET'])
+@require_auth
+def get_streak():
+    """Current/longest daily video-analysis streak for the authenticated user."""
+    try:
+        user_id = int(request.user['user_id'])
+        return jsonify(compute_streak(user_id))
+    except Exception as e:
+        logger.error(f"Get streak failed: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to load streak'}), 500
+
+
+# ---- Weekly shot-progress report ----
+@app.route('/api/monitor/shot-report', methods=['GET'])
+@require_auth
+def monitor_get_shot_report():
+    """Latest stored shot-progress report for the authenticated user, optionally
+    scoped to ?category=batting|bowling|keeping (defaults to batting)."""
+    try:
+        user_id = int(request.user['user_id'])
+        category = _normalize_shot_category(request.args.get('category'))
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            'SELECT * FROM shot_reports WHERE user_id = ? AND category = ? ORDER BY week_start DESC LIMIT 1',
+            (user_id, category),
+        )
+        row = cur.fetchone()
+        conn.close()
+        return jsonify({'report': _shot_report_to_dict(row) if row else None})
+    except Exception as e:
+        logger.error(f"Get shot report failed: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to load shot report'}), 500
+
+
+@app.route('/api/monitor/shot-report/list', methods=['GET'])
+@require_auth
+def monitor_list_shot_reports():
+    """Recent shot-progress reports (newest first) for history. Optionally
+    filtered by ?category=batting|bowling|keeping."""
+    try:
+        user_id = int(request.user['user_id'])
+        limit = max(1, min(int(request.args.get('limit', 8)), 52))
+        raw_cat = request.args.get('category')
+        conn = get_db_connection()
+        cur = conn.cursor()
+        if raw_cat:
+            cur.execute(
+                'SELECT * FROM shot_reports WHERE user_id = ? AND category = ? ORDER BY week_start DESC LIMIT ?',
+                (user_id, _normalize_shot_category(raw_cat), limit),
+            )
+        else:
+            cur.execute(
+                'SELECT * FROM shot_reports WHERE user_id = ? ORDER BY week_start DESC LIMIT ?',
+                (user_id, limit),
+            )
+        rows = cur.fetchall()
+        conn.close()
+        return jsonify({'reports': [_shot_report_to_dict(r) for r in rows]})
+    except Exception as e:
+        logger.error(f"List shot reports failed: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to load shot reports'}), 500
+
+
+@app.route('/api/monitor/shot-report/generate', methods=['POST'])
+@require_auth
+def monitor_generate_shot_report():
+    """On-demand generation of the current week's shot-progress report for the
+    chosen category (batting/bowling/keeping), taken from the JSON body
+    {"category": ...}. One report per calendar week per category: if it already
+    exists, it is returned as-is (no regeneration)."""
+    try:
+        user_id = int(request.user['user_id'])
+        body = request.get_json(silent=True) or {}
+        category = _normalize_shot_category(body.get('category') or request.args.get('category'))
+        today = datetime.now().date()
+        week_start = (today - timedelta(days=today.weekday())).strftime('%Y-%m-%d')
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            'SELECT * FROM shot_reports WHERE user_id = ? AND week_start = ? AND category = ?',
+            (user_id, week_start, category),
+        )
+        existing = cur.fetchone()
+        conn.close()
+        if existing:
+            return jsonify({'report': _shot_report_to_dict(existing), 'already_generated': True}), 200
+        report = generate_shot_report_for_user(user_id, category)
+        if not report:
+            label = {'batting': 'batting shots', 'bowling': 'bowling',
+                     'keeping': 'keeping'}.get(category, category)
+            return jsonify({'report': None, 'category': category,
+                            'message': f'No {label} videos analyzed this week yet. Analyze one to build your report.'}), 200
+        return jsonify({'report': report})
+    except Exception as e:
+        logger.error(f"Generate shot report failed: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to generate shot report'}), 500
 
 
 @app.route('/api/history/clear', methods=['DELETE'])
@@ -6077,96 +6601,100 @@ def compare_videos():
             comparison_context = f"Bowling Type: {results1.get('bowler_type', 'unknown')}, Playing Side: {results1.get('bowler_side', 'right')}"
         
         prompt = f"""
-You are an **Expert Cricket Performance Analyst** specializing in comparative analysis of cricket techniques.
+You are an **Expert Cricket Biomechanics Analyst**. You will compare two analyses of the
+SAME action ({comparison_context}, Player Type: {player_type}) and quantify how much the
+technique changed from the older video to the newer one.
 
-Your task is to compare two cricket performance analyses and provide accurate, percentage-based insights for all relevant performance metrics.
+Video 1 = OLDER / baseline.
+Video 2 = NEWER / current (the one we want to know improved or not).
 
 ────────────────────────
-CONTEXT
+DATA YOU ARE GIVEN
 ────────────────────────
-{comparison_context}
-Player Type: {player_type}
+Each analysis is JSON that may contain:
+- "analysis_summary": prose overview
+- "flaws": list of {{ feature, observed (number), ideal_range (string like "120-140"),
+                      issue, recommendation, deviation }}
+- "injury_risk_assessment": list of {{ body_part, risk_level (Low|Moderate|High), reason }}
+- "general_tips": list of strings
 
 Video 1: {filename1}
-Video 2: {filename2}
-
-────────────────────────
-ANALYSIS DATA
-────────────────────────
 VIDEO 1 ANALYSIS:
 {json.dumps(results1, indent=2)}
 
+Video 2: {filename2}
 VIDEO 2 ANALYSIS:
 {json.dumps(results2, indent=2)}
 
 ────────────────────────
-YOUR TASK
+HOW TO COMPARE (be objective, do not invent numbers)
 ────────────────────────
-Video 1 is the OLDER/LAST video (baseline).
-Video 2 is the NEWER/CURRENT video (being compared).
-
-1. Compare both analyses across all relevant performance metrics
-2. Calculate IMPROVEMENT PERCENTAGE from Video 1 to Video 2 for each metric
-   - If Video 2 is better: show positive improvement percentage (e.g., +15%)
-   - If Video 2 is worse: show negative improvement percentage (e.g., -10%)
-   - If similar: show 0% or minimal change
-3. Calculate overall improvement percentage from Video 1 to Video 2
-4. Identify which performance is better for each metric
-5. Highlight key areas where Video 2 improved compared to Video 1
+1. Match flaws by "feature" name across both videos. Only compare features that exist in
+   both. For each matched feature:
+   - Parse "ideal_range" into a low–high band.
+   - Measure how far each video's "observed" value sits outside that band
+     (0 = inside the ideal range = perfect).
+   - "improvement_percentage" = how much closer Video 2's observed moved toward the ideal
+     band versus Video 1. Closer to ideal = positive. Further from ideal = negative.
+     Inside the band in both videos = ~0 (already good).
+   - Set "video1_value"/"video2_value" to the actual observed numbers plus the ideal_range.
+2. Treat FEWER and LESS-SEVERE flaws in Video 2 as improvement; new flaws as decline.
+3. Treat lower injury risk in Video 2 (High→Moderate→Low, or a risk disappearing) as
+   improvement; higher or new risk as decline.
+4. Derive each video's 0–100 score from how many features are inside their ideal ranges and
+   how severe the remaining deviations and injury risks are — do NOT guess a round number.
+5. Base every statement only on the data above. If a metric is missing in one video, say so
+   in the analysis text and exclude it from the percentage math rather than assuming a value.
 
 ────────────────────────
-REQUIRED OUTPUT FORMAT (JSON)
+REQUIRED OUTPUT — valid JSON only, no markdown, no commentary
 ────────────────────────
 {{
     "overall_comparison": {{
         "video1_score": 0-100,
         "video2_score": 0-100,
         "improvement_percentage": -100 to +100,
-        "improvement_summary": "Overall improvement from Video 1 to Video 2",
+        "improvement_summary": "Plain-language overall change from Video 1 to Video 2",
         "winner": "video1" | "video2" | "tie",
-        "overall_summary": "Brief summary of overall comparison"
+        "overall_summary": "Brief, specific summary citing the main features that moved"
     }},
     "metric_comparisons": [
         {{
-            "metric_name": "Metric name",
-            "video1_value": "Value or description",
-            "video2_value": "Value or description",
+            "metric_name": "feature name",
+            "video1_value": "observed value (ideal: ideal_range)",
+            "video2_value": "observed value (ideal: ideal_range)",
             "improvement_percentage": -100 to +100,
             "improvement_direction": "improved" | "declined" | "similar",
             "better_performance": "video1" | "video2" | "similar",
-            "analysis": "Detailed comparison analysis focusing on improvement"
+            "analysis": "Why it changed, referencing observed vs ideal_range"
         }}
     ],
     "key_insights": [
-        "Key insight 1 focusing on improvement",
-        "Key insight 2"
+        "Specific, data-backed insight about the change"
     ],
     "improvement_summary": {{
-        "overall_improvement": "Overall improvement summary from Video 1 to Video 2",
-        "top_improvements": ["Improvement 1", "Improvement 2", "Improvement 3"],
-        "areas_still_needing_work": ["Area 1", "Area 2"]
+        "overall_improvement": "Summary of net improvement from Video 1 to Video 2",
+        "top_improvements": ["feature that improved most", "..."],
+        "areas_still_needing_work": ["feature still outside ideal in Video 2", "..."]
     }},
     "improvement_areas": {{
-        "video1": ["Area 1", "Area 2"],
-        "video2": ["Area 1", "Area 2"]
+        "video1": ["features outside ideal in Video 1"],
+        "video2": ["features still outside ideal in Video 2"]
     }},
     "strengths": {{
-        "video1": ["Strength 1", "Strength 2"],
-        "video2": ["Strength 1", "Strength 2"]
+        "video1": ["features inside ideal in Video 1"],
+        "video2": ["features inside ideal in Video 2"]
     }}
 }}
 
 ────────────────────────
 RULES
 ────────────────────────
-- Calculate improvement percentage as: ((video2_score - video1_score) / video1_score) * 100
-- For metrics where higher is better: positive percentage = improvement
-- For metrics where lower is better (e.g., errors): positive percentage = improvement (less errors)
-- Provide accurate percentage-based comparisons
-- Be objective and data-driven
-- Focus on measurable metrics and improvement from Video 1 to Video 2
-- Highlight areas where Video 2 shows improvement compared to Video 1
-- Respond ONLY in valid JSON format
+- Use ONLY the supplied analysis data. Never fabricate metrics, values, or ideal ranges.
+- "Improvement" always means moving toward the ideal range / fewer flaws / lower injury risk.
+- A feature inside its ideal range in both videos is "similar", not an improvement.
+- If the two analyses are nearly identical, say so honestly with winner = "tie".
+- Respond ONLY with the JSON object above.
 """
         
         logger.info("Sending comparison request to Gemini...")
